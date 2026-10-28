@@ -61,7 +61,7 @@ func TestPublicVerificationVocabulariesAreClosed(t *testing.T) {
 
 	statuses := []SignatureStatus{
 		SignatureStatusPASS, SignatureStatusFAIL, SignatureStatusPERMERROR,
-		SignatureStatusTEMPERROR, SignatureStatusIgnored,
+		SignatureStatusTEMPERROR,
 	}
 	for _, status := range statuses {
 		if !status.Known() {

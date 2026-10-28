@@ -506,7 +506,7 @@ local signature_set_algorithms = {
   ['rsa-sha256'] = true, ['ed25519-sha256'] = true, mldsa44 = true, unknown = true,
 }
 local signature_set_states = {
-  pass = true, fail = true, permerror = true, temperror = true, ignored = true,
+  pass = true, fail = true, permerror = true, temperror = true,
 }
 local policy_modes = { strict = true, permissive = true, testing = true }
 local feedback_history_states = {

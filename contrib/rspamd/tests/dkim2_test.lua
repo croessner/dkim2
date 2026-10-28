@@ -571,4 +571,25 @@ for _, case in ipairs({
   end
 end
 
+-- Draft-08 Section 14.6 step 4: an unknown algorithm is a permerror set with
+-- unsupported_algorithm; the removed ignored status is no longer admitted.
+for _, case in ipairs({
+  { status = 'permerror', valid = true },
+  { status = 'ignored', valid = false },
+}) do
+  pending_response = response('PASS', 'accept', 'first_seen', {
+    { type = 'add_header', name = 'Authentication-Results', value = 'mx.example.test; dkim2=pass' },
+  })
+  pending_response.verification.signature_sets = {
+    { algorithm = 'rsa-sha256', status = 'pass', reason = 'none' },
+    {
+      algorithm = 'unknown', status = case.status, reason = 'unsupported_algorithm',
+      selector = 'future.example',
+    },
+  }
+  local unknown_task = new_task({ ['DKIM2-Signature'] = true })
+  callback(unknown_task)
+  assert((unknown_task.pre_result == nil) == case.valid, 'unexpected unknown-set admission: ' .. case.status)
+end
+
 print('dkim2 Rspamd Lua contract tests: PASS')

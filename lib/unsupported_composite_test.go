@@ -157,7 +157,7 @@ func TestVerifierCompositeBesideEd25519DependsOnSeparator(t *testing.T) {
 		sets := result.SignatureSets()
 		if len(sets) != 2 ||
 			sets[0].Algorithm() != AlgorithmEd25519SHA256 || sets[0].Status() != SignatureStatusPASS || sets[0].Reason() != ReasonNone ||
-			sets[1].Algorithm() != AlgorithmUnknown || sets[1].Status() != SignatureStatusIgnored || sets[1].Reason() != ReasonUnsupportedAlgorithm {
+			sets[1].Algorithm() != AlgorithmUnknown || sets[1].Status() != SignatureStatusPERMERROR || sets[1].Reason() != ReasonUnsupportedAlgorithm {
 			t.Fatalf("%q: signature sets = %#v", test.separator, sets)
 		}
 		for _, owner := range transport.queried {
@@ -181,7 +181,7 @@ func TestVerifierRejectsCompositeOnlySignature(t *testing.T) {
 		t.Fatalf("Verify() = %q/%q", result.State(), result.PrimaryReason())
 	}
 	sets := result.SignatureSets()
-	if len(sets) != 1 || sets[0].Algorithm() != AlgorithmUnknown || sets[0].Status() != SignatureStatusIgnored ||
+	if len(sets) != 1 || sets[0].Algorithm() != AlgorithmUnknown || sets[0].Status() != SignatureStatusPERMERROR ||
 		sets[0].Reason() != ReasonUnsupportedAlgorithm {
 		t.Fatalf("signature sets = %#v", sets)
 	}

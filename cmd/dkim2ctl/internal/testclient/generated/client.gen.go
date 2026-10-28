@@ -1037,7 +1037,6 @@ func (e SignatureSetResultAlgorithm) Valid() bool {
 // Defines values for SignatureSetResultStatus.
 const (
 	SignatureSetResultStatusFail      SignatureSetResultStatus = "fail"
-	SignatureSetResultStatusIgnored   SignatureSetResultStatus = "ignored"
 	SignatureSetResultStatusPass      SignatureSetResultStatus = "pass"
 	SignatureSetResultStatusPermerror SignatureSetResultStatus = "permerror"
 	SignatureSetResultStatusTemperror SignatureSetResultStatus = "temperror"
@@ -1047,8 +1046,6 @@ const (
 func (e SignatureSetResultStatus) Valid() bool {
 	switch e {
 	case SignatureSetResultStatusFail:
-		return true
-	case SignatureSetResultStatusIgnored:
 		return true
 	case SignatureSetResultStatusPass:
 		return true
@@ -2036,7 +2033,7 @@ type SignatureSetResult struct {
 	Algorithm SignatureSetResultAlgorithm `json:"algorithm"`
 	Reason    VerificationReason          `json:"reason"`
 
-	// Selector Draft-08 Section 14.6 step 8. The parsed, DNS-label-validated selector of every set whose status is not pass: fail, permerror (key errors and unknown or locally disabled algorithms), temperror, and ignored. Absent for pass and for an internal_contract fact that names no parsed set. Never copied from raw header bytes.
+	// Selector Draft-08 Section 14.6 step 8. The parsed, DNS-label-validated selector of every set whose status is not pass: fail, permerror (key errors and unknown or locally disabled algorithms, which are the Section 14.6 step 4 PERMERROR intermediate unsupported_algorithm), and temperror. Absent for pass and for an internal_contract fact that names no parsed set. Never copied from raw header bytes.
 	Selector *string                  `json:"selector,omitempty"`
 	Status   SignatureSetResultStatus `json:"status"`
 }

@@ -170,8 +170,9 @@ but disabled by local policy is also PERMERROR `unsupported_algorithm`, after
 a reproducer for the current `PolicyRejected` to `internal_contract` mapping,
 with an observation label separating "disabled locally" from "unknown". Key
 results keep their specific reasons. The public reason of a non-PASS overall
-result is the reason of the first set in field order whose intermediate equals
-the overall result. Hash combinations never yield TEMPERROR. Section 14.6
+result is the reason of the decisive set: the first set in field order whose
+intermediate equals the overall result inside the first group whose group
+result equals it. Hash combinations never yield TEMPERROR. Section 14.6
 step 8: non-passing per-set results name their selector; only the
 Authentication-Results comment keeps its closed reason vocabulary (see
 Section 12).
@@ -392,8 +393,18 @@ The `Area` columns of Sections 3 and 4 refer to this list.
   and body hash match, FAIL otherwise, PERMERROR for an unimplemented
   algorithm; `hash-all` all PASS, any FAIL, else PERMERROR; `hash-any` any
   PASS, any FAIL, else PERMERROR; a single set is its intermediate; hashes
-  never yield TEMPERROR. The outcome names the decisive set: the first set in
-  field order whose intermediate equals the overall result.
+  never yield TEMPERROR. The outcome names the decisive set: the first group
+  whose group result equals the overall result, and in it the first set in
+  field order whose intermediate equals that result. A set in a group with a
+  different result never decides (for `a,b|c` with FAIL, TEMPERROR,
+  TEMPERROR the overall TEMPERROR is decided by `c`, not by `b` inside the
+  FAIL group). Only TEMPERROR and PASS can differ from the earlier "first
+  matching set overall" rule: a FAIL set always makes its group FAIL, and an
+  overall PERMERROR means every group is PERMERROR, so for those results the
+  first matching set already lies in a matching group. The public reason,
+  revision precedence, and policy
+  recomputation, which consult the decisive set only for PERMERROR (and the
+  hash path only for FAIL), are unchanged.
 - Single owners in `verify`: `CombineSignatureSets` (per-set status to
   intermediate, then the algebra) and `evaluateInstanceHashes`. They serve
   the current target, inherited and revision signatures, historical
@@ -428,8 +439,18 @@ The `Area` columns of Sections 3 and 4 refer to this list.
 - Public reason of a non-PASS signature combination: FAIL is
   `signature_mismatch`, TEMPERROR is `provider_temporary`, PERMERROR is the
   decisive set's specific reason. The service mapping records per-set facts
-  without per-set severity and adds the one combined severity; per-set public
-  and REST reporting is unchanged (unknown algorithms stay `ignored` facts).
+  without per-set severity and adds the one combined severity. Per-set public
+  and REST reporting follows step 4: an unknown algorithm is reported as
+  `permerror` `unsupported_algorithm` with its selector, like a locally
+  disabled one. The former `ignored` status is removed from the service,
+  policy projection, root library, OpenAPI `SignatureSetResult.status`, the
+  generated clients, and the Rspamd verifier. The reproducer for this change
+  also showed that a locally disabled algorithm's per-set fact
+  (`permerror` `unsupported_algorithm` with a known algorithm) was rejected
+  by the policy fact coherence rule, so such results carried no policy
+  projection; the rule now admits `unsupported_algorithm` for every
+  algorithm and restricts `unknown` to `unsupported_algorithm` or
+  `internal_contract`.
   `verify.Result.SignatureLayout`, `policy.NewGroupedSelectedProjection`,
   and the sealed policy projection carry the layout, and policy validation
   recomputes the combination instead of the Draft-07 "PASS has no failing
@@ -570,7 +591,7 @@ The `Area` columns of Sections 3 and 4 refer to this list.
 - Section 14.6 step 8 ("human-readable text for any error SHOULD provide the
   relevant Selector values"): Section 14.6 step 8 is implemented through the per-set results: every
   non-passing signature set (fail, permerror including key errors and unknown or
-  locally disabled algorithms, temperror, ignored) carries its parsed selector in
+  locally disabled algorithms, temperror) carries its parsed selector in
   the library `SignatureSetFact.Selector` and the REST `SignatureSetResult.selector`.
   The remaining, narrow deviation is that the Authentication-Results comment keeps
   its closed `(reason=<code>)` vocabulary, which downstream parsers (Rspamd,

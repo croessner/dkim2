@@ -496,11 +496,13 @@ of `message`, `protocol`, `body_hash`, `header_hash`, `signature`, `key`,
 
 `SignatureSetResult` has exactly required `algorithm`, `status`, and `reason`
 plus the `selector`, present exactly for every non-passing set (fail,
-permerror, temperror, ignored) except an `internal_contract` fact, and absent
+permerror, temperror) except an `internal_contract` fact, and absent
 for pass (Draft-08 Section 14.6 step 8). `algorithm` is `rsa-sha256`,
-`ed25519-sha256`, or `unknown` (an unsupported algorithm such as the
-post-quantum `mldsa44-ed25519-sha512` is reported as `unknown`); `status` is `pass`,
-`fail`, `permerror`, `temperror`, or `ignored`; `reason` uses the
+`ed25519-sha256`, `mldsa44`, or `unknown` (an unimplemented algorithm such as
+the removed Draft-07 composite `mldsa44-ed25519-sha512` is reported as
+`unknown`); `status` is `pass`, `fail`, `permerror`, or `temperror`, and an
+unknown algorithm is `permerror` `unsupported_algorithm` (Draft-08 Section
+14.6 step 4); `reason` uses the
 verification reason enum. The former `key_policy` object
 (`testing_declared`, `strict_identity_declared`, `strict_identity_applicable`)
 and its `KeyPolicyResult` schema were removed: DNS-02 Section 3.4.1 retires

@@ -193,7 +193,7 @@ func boundedSetIndexDefect(sets []verify.SignatureSetResult) bool {
 	return false
 }
 
-// signatureAlgorithmCoherent restricts unknown algorithms to ignored unsupported facts.
+// signatureAlgorithmCoherent restricts unknown algorithms to unsupported-algorithm set results.
 func signatureAlgorithmCoherent(algorithm verify.Algorithm, status verify.SignatureSetStatus) bool {
 	if algorithm == verify.AlgorithmUnknown {
 		return status == verify.SignatureSetStatusUnsupportedAlgorithm
@@ -505,9 +505,10 @@ func (a *mappingAccumulator) mapSignatureSet(set verify.SignatureSetResult) {
 }
 
 // signatureSetFact projects one validated set result onto its bounded
-// per-set fact: PASS, FAIL, TEMPERROR, PERMERROR with its specific reason,
-// or an ignored unknown algorithm. Every non-passing fact names the parsed
-// selector (Draft-08 Section 14.6 step 8).
+// per-set fact: PASS, FAIL, TEMPERROR, or PERMERROR with its specific
+// reason. An unknown algorithm is the Draft-08 Section 14.6 step 4 PERMERROR
+// intermediate unsupported_algorithm, exactly like a locally disabled one.
+// Every non-passing fact names the parsed selector (Section 14.6 step 8).
 func signatureSetFact(algorithm Algorithm, set verify.SignatureSetResult) SignatureSetFact {
 	fact := SignatureSetFact{Algorithm: algorithm}
 	switch set.Status {
@@ -527,7 +528,7 @@ func signatureSetFact(algorithm Algorithm, set verify.SignatureSetResult) Signat
 		if set.KeyStatus != verify.KeyStatusUnsupportedAlgorithm || algorithm != AlgorithmUnknown {
 			fact.Status, fact.Reason = SignaturePERMERROR, ReasonInternalContract
 		} else {
-			fact.Status, fact.Reason = SignatureIgnored, ReasonUnsupportedAlgorithm
+			fact.Status, fact.Reason = SignaturePERMERROR, ReasonUnsupportedAlgorithm
 		}
 	case verify.SignatureSetStatusProviderTemporary:
 		fact.Status, fact.Reason = SignatureTEMPERROR, ReasonProviderTemporary
@@ -547,8 +548,8 @@ func signatureSetFact(algorithm Algorithm, set verify.SignatureSetResult) Signat
 // Section 14.6 combination of the per-set results under the parsed layout,
 // computed by the single verify owner. PASS adds nothing; TEMPERROR and FAIL
 // add provider_temporary and signature_mismatch; PERMERROR adds the reason of
-// the decisive set, the first set whose intermediate equals the combined
-// result, so the public reason is deterministic.
+// the decisive set, the first set carrying the combined result inside the
+// first group whose result equals it, so the public reason is deterministic.
 func (a *mappingAccumulator) applySignatureCombination(layout combine.Layout, sets []verify.SignatureSetResult) {
 	if len(sets) == 0 || a.hardOverflow {
 		return

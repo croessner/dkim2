@@ -109,6 +109,12 @@ and validation but change meaning or acceptance:
   reasons with `DKIM2_FAIL` instead of `DKIM2_PERMERROR`. Chain of Custody
   adjacency failures move from PERMERROR `malformed_protocol` to FAIL
   `custody_mismatch`.
+- Per-set status: `SignatureSetResult.status` no longer has the value
+  `ignored`. A set with an unknown algorithm is the Section 14.6 step 4
+  PERMERROR intermediate and reports `permerror` with reason
+  `unsupported_algorithm` and its selector, like a locally disabled
+  algorithm. The combined state and primary reason are unchanged; update
+  dashboards or scripts that matched `ignored`.
 - Per-set selectors: every non-passing `SignatureSetResult` carries its
   `selector`. The Authentication-Results comment keeps its closed
   `(reason=<code>)` vocabulary and never carries a selector.

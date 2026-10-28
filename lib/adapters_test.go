@@ -48,7 +48,7 @@ func TestPublicAdaptersCoverClosedServiceVocabularies(t *testing.T) {
 			t.Fatalf("algorithm %q mapped to %q/%t", algorithm, mapped, ok)
 		}
 	}
-	for _, status := range []service.SignatureStatus{service.SignaturePASS, service.SignatureFAIL, service.SignaturePERMERROR, service.SignatureTEMPERROR, service.SignatureIgnored} {
+	for _, status := range []service.SignatureStatus{service.SignaturePASS, service.SignatureFAIL, service.SignaturePERMERROR, service.SignatureTEMPERROR} {
 		if mapped, ok := adaptSignatureStatus(status); !ok || string(mapped) != string(status) {
 			t.Fatalf("signature status %q mapped to %q/%t", status, mapped, ok)
 		}

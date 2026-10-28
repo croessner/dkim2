@@ -1068,15 +1068,15 @@ document the exact blocker.
   a PERMERROR intermediate decided without a key lookup; per-set facts stay
   visible under the fixed `unknown` token. A `,` group passes only when every
   set passes, a `|` alternative passes when any group passes, and a non-PASS
-  result reports its decisive set (the first set whose intermediate equals
-  the combined result). A locally disabled algorithm maps to PERMERROR
+  result reports its decisive set (the first set carrying the combined
+  result inside the first group whose result equals it). A locally disabled algorithm maps to PERMERROR
   `unsupported_algorithm`; the bounded observation reason `policy`
   separates it from an unknown algorithm (`protocol`). The disabled
   classification carries `KeyStatusDisabledAlgorithm`; the earlier
   `policy_rejected` pairing surfaced as `internal_contract`.
 - Settled: Section 14.6 step 8 is implemented through the per-set results: every
   non-passing signature set (fail, permerror including key errors and unknown or
-  locally disabled algorithms, temperror, ignored) carries its parsed selector in
+  locally disabled algorithms, temperror) carries its parsed selector in
   the library `SignatureSetFact.Selector` and the REST `SignatureSetResult.selector`.
   The remaining, narrow deviation is that the Authentication-Results comment keeps
   its closed `(reason=<code>)` vocabulary, which downstream parsers (Rspamd,

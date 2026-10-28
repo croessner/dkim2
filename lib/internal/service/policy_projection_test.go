@@ -231,7 +231,8 @@ func TestPolicySignatureFactMappingRejectsIncoherentOutcomes(t *testing.T) {
 		{Algorithm: AlgorithmRSASHA256, Status: SignatureFAIL, Reason: ReasonSignatureMismatch},
 		{Algorithm: AlgorithmRSASHA256, Status: SignaturePERMERROR, Reason: ReasonInvalidKey},
 		{Algorithm: AlgorithmRSASHA256, Status: SignaturePERMERROR, Reason: ReasonMissingKey},
-		{Algorithm: AlgorithmUnknown, Status: SignatureIgnored, Reason: ReasonUnsupportedAlgorithm},
+		{Algorithm: AlgorithmUnknown, Status: SignaturePERMERROR, Reason: ReasonUnsupportedAlgorithm},
+		{Algorithm: AlgorithmEd25519SHA256, Status: SignaturePERMERROR, Reason: ReasonUnsupportedAlgorithm},
 		{Algorithm: AlgorithmRSASHA256, Status: SignatureTEMPERROR, Reason: ReasonProviderTemporary},
 	}
 	for _, fact := range valid {
@@ -241,7 +242,8 @@ func TestPolicySignatureFactMappingRejectsIncoherentOutcomes(t *testing.T) {
 	}
 	invalid := []SignatureSetFact{
 		{Algorithm: AlgorithmRSASHA256, Status: SignaturePASS, Reason: ReasonSignatureMismatch},
-		{Algorithm: AlgorithmRSASHA256, Status: SignatureIgnored, Reason: ReasonUnsupportedAlgorithm},
+		{Algorithm: AlgorithmRSASHA256, Status: SignatureStatus("ignored"), Reason: ReasonUnsupportedAlgorithm},
+		{Algorithm: AlgorithmUnknown, Status: SignaturePERMERROR, Reason: ReasonMissingKey},
 		{Algorithm: Algorithm("future"), Status: SignaturePASS, Reason: ReasonNone},
 	}
 	for _, fact := range invalid {

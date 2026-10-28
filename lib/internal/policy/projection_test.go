@@ -329,7 +329,7 @@ func TestPermanentProjectionRequiresACompatibleOutcomeDriver(t *testing.T) {
 	fail := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusFail, SetReasonSignatureMismatch)
 	missing := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey)
 	provider := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonProviderPermanent)
-	ignored := mustProjectionSignatureFact(t, SetAlgorithmUnknown, SetStatusIgnored, SetReasonUnsupportedAlgorithm)
+	ignored := mustProjectionSignatureFact(t, SetAlgorithmUnknown, SetStatusPermerror, SetReasonUnsupportedAlgorithm)
 	invalid := []struct {
 		name   string
 		reason VerificationReason
@@ -447,7 +447,11 @@ func TestSignatureFactStatusReasonAlgorithmMatrix(t *testing.T) {
 	}{
 		{SetAlgorithmRSA, SetStatusPass, SetReasonNone},
 		{SetAlgorithmEd25519, SetStatusFail, SetReasonSignatureMismatch},
-		{SetAlgorithmUnknown, SetStatusIgnored, SetReasonUnsupportedAlgorithm},
+		// Draft-08 Section 14.6 step 4: an unknown algorithm and a locally
+		// disabled known algorithm are both PERMERROR unsupported_algorithm.
+		{SetAlgorithmUnknown, SetStatusPermerror, SetReasonUnsupportedAlgorithm},
+		{SetAlgorithmEd25519, SetStatusPermerror, SetReasonUnsupportedAlgorithm},
+		{SetAlgorithmUnknown, SetStatusPermerror, SetReasonInternalContract},
 		{SetAlgorithmRSA, SetStatusTemperror, SetReasonProviderTemporary},
 	}
 	for _, reason := range []SetReason{
@@ -474,10 +478,10 @@ func TestSignatureFactStatusReasonAlgorithmMatrix(t *testing.T) {
 		{SetAlgorithmUnknown, SetStatusPass, SetReasonNone},
 		{SetAlgorithmRSA, SetStatusPass, SetReasonSignatureMismatch},
 		{SetAlgorithmUnknown, SetStatusFail, SetReasonSignatureMismatch},
-		{SetAlgorithmRSA, SetStatusIgnored, SetReasonUnsupportedAlgorithm},
+		{SetAlgorithmRSA, SetStatus("ignored"), SetReasonUnsupportedAlgorithm},
+		{SetAlgorithmUnknown, SetStatus("ignored"), SetReasonUnsupportedAlgorithm},
 		{SetAlgorithmUnknown, SetStatusPermerror, SetReasonMissingKey},
 		{SetAlgorithmRSA, SetStatusPermerror, SetReasonProviderTemporary},
-		{SetAlgorithmRSA, SetStatusPermerror, SetReasonUnsupportedAlgorithm},
 		{SetAlgorithm("future"), SetStatusPermerror, SetReasonInternalContract},
 	}
 	for _, row := range invalid {

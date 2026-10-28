@@ -2374,7 +2374,6 @@ components:
             - fail
             - permerror
             - temperror
-            - ignored
         reason:
           $ref: "#/components/schemas/VerificationReason"
         selector:
@@ -2382,8 +2381,9 @@ components:
           description: >-
             Draft-08 Section 14.6 step 8. The parsed, DNS-label-validated
             selector of every set whose status is not pass: fail, permerror
-            (key errors and unknown or locally disabled algorithms), temperror,
-            and ignored. Absent for pass and for an internal_contract fact that
+            (key errors and unknown or locally disabled algorithms, which are
+            the Section 14.6 step 4 PERMERROR intermediate
+            unsupported_algorithm), and temperror. Absent for pass and for an internal_contract fact that
             names no parsed set. Never copied from raw header bytes.
           minLength: 1
           maxLength: 253

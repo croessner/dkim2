@@ -23,7 +23,8 @@ func TestSignatureSelectorPresenceFollowsDraft08Step8(t *testing.T) {
 		{generated.SignatureSetResultStatusPermerror, generated.VerificationReasonMissingKey, &selector, true},
 		{generated.SignatureSetResultStatusPermerror, generated.VerificationReasonMissingKey, nil, false},
 		{generated.SignatureSetResultStatusTemperror, generated.VerificationReasonProviderTemporary, &selector, true},
-		{generated.SignatureSetResultStatusIgnored, generated.VerificationReasonUnsupportedAlgorithm, &selector, true},
+		{generated.SignatureSetResultStatusPermerror, generated.VerificationReasonUnsupportedAlgorithm, &selector, true},
+		{generated.SignatureSetResultStatusPermerror, generated.VerificationReasonUnsupportedAlgorithm, nil, false},
 		{generated.SignatureSetResultStatusPermerror, generated.VerificationReasonInternalContract, nil, true},
 		{generated.SignatureSetResultStatusPermerror, generated.VerificationReasonInternalContract, &selector, false},
 	}

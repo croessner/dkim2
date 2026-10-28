@@ -29,8 +29,8 @@ type SignatureSetFact struct {
 // presence (Draft-08 Section 14.6 step 8): a passing set carries no
 // selector, an internal-contract fact that names no parsed set carries none,
 // and every other non-passing set (fail, permerror including key and
-// unknown or disabled algorithm errors, temperror, ignored) carries its
-// bounded parsed selector.
+// unknown or disabled algorithm errors, temperror) carries its bounded
+// parsed selector.
 func SignatureSelectorCoherent(status SignatureStatus, reason Reason, selector string) bool {
 	if len(selector) > 253 {
 		return false

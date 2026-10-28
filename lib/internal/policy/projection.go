@@ -158,7 +158,7 @@ const (
 	SetAlgorithmEd25519 SetAlgorithm = "ed25519-sha256"
 	// SetAlgorithmMLDSA44 identifies pure ML-DSA-44.
 	SetAlgorithmMLDSA44 SetAlgorithm = "mldsa44"
-	// SetAlgorithmUnknown identifies an ignored unknown algorithm.
+	// SetAlgorithmUnknown identifies an unknown algorithm.
 	SetAlgorithmUnknown SetAlgorithm = "unknown"
 )
 
@@ -179,13 +179,11 @@ const (
 	SetStatusPermerror SetStatus = "permerror"
 	// SetStatusTemperror reports a temporary provider failure.
 	SetStatusTemperror SetStatus = "temperror"
-	// SetStatusIgnored reports an ignored unsupported algorithm.
-	SetStatusIgnored SetStatus = "ignored"
 )
 
 // Known reports whether status belongs to the closed vocabulary.
 func (s SetStatus) Known() bool {
-	return s == SetStatusPass || s == SetStatusFail || s == SetStatusPermerror || s == SetStatusTemperror || s == SetStatusIgnored
+	return s == SetStatusPass || s == SetStatusFail || s == SetStatusPermerror || s == SetStatusTemperror
 }
 
 // SetReason identifies a bounded signature-set reason.
@@ -249,11 +247,12 @@ func (f SignatureFact) Valid() bool {
 		return f.reason == SetReasonSignatureMismatch && f.algorithm != SetAlgorithmUnknown
 	case SetStatusTemperror:
 		return f.reason == SetReasonProviderTemporary && f.algorithm != SetAlgorithmUnknown
-	case SetStatusIgnored:
-		return f.reason == SetReasonUnsupportedAlgorithm && f.algorithm == SetAlgorithmUnknown
 	case SetStatusPermerror:
-		return f.reason != SetReasonNone && f.reason != SetReasonSignatureMismatch && f.reason != SetReasonUnsupportedAlgorithm && f.reason != SetReasonProviderTemporary &&
-			(f.algorithm != SetAlgorithmUnknown || f.reason == SetReasonInternalContract)
+		// Draft-08 Section 14.6 step 4: unsupported_algorithm is the
+		// PERMERROR of an unknown or locally disabled algorithm; an unknown
+		// algorithm has no key, so it admits no other set reason.
+		return f.reason != SetReasonNone && f.reason != SetReasonSignatureMismatch && f.reason != SetReasonProviderTemporary &&
+			(f.algorithm != SetAlgorithmUnknown || f.reason == SetReasonUnsupportedAlgorithm || f.reason == SetReasonInternalContract)
 	default:
 		return false
 	}
@@ -530,7 +529,7 @@ func (p Projection) validateChainFailure() error {
 
 // signatureOutcome recomputes the Draft-08 Section 14.6 combination of the
 // sealed set facts under their layout: PASS, FAIL, TEMPERROR, or PERMERROR
-// (a permanent error or an unknown, ignored algorithm).
+// (a permanent error, including an unknown or disabled algorithm).
 func (p Projection) signatureOutcome() combine.Outcome {
 	intermediates := make([]combine.Result, len(p.signatureFacts))
 	for index, fact := range p.signatureFacts {
@@ -577,8 +576,9 @@ func (p Projection) verificationReasonFactsCoherent() bool {
 }
 
 // eligiblePermanentPrimaryCoherent locks permanent reason precedence against
-// the decisive set (the first set whose intermediate equals the combined
-// result). Pre-target reasons cannot be selected.
+// the decisive set (the first set carrying the combined result inside the
+// first group whose result equals it). Pre-target reasons cannot be
+// selected.
 func (p Projection) eligiblePermanentPrimaryCoherent(outcome combine.Outcome) bool {
 	if p.verificationReason == VerificationReasonMalformedMessage || p.verificationReason == VerificationReasonMalformedProtocol ||
 		p.verificationReason == VerificationReasonDuplicateHashAlgorithm || p.verificationReason == VerificationReasonInvalidRecipeJSON ||

@@ -22,9 +22,11 @@ func (r Result) Known() bool {
 }
 
 // Outcome is the overall result of one combination plus the decisive set:
-// the first set in field order whose intermediate result equals the overall
-// result. Reporting uses the decisive set, so the public reason of a
-// non-PASS outcome is deterministic.
+// within the first group whose group result equals the overall result, the
+// first set in field order whose intermediate equals that result. A set of a
+// group with a different result never explains the outcome. Reporting uses
+// the decisive set, so the public reason of a non-PASS outcome is
+// deterministic.
 type Outcome struct {
 	result   Result
 	decisive int
@@ -34,8 +36,8 @@ type Outcome struct {
 // Result returns the overall combination result.
 func (o Outcome) Result() Result { return o.result }
 
-// Decisive returns the field-order index of the first set whose intermediate
-// equals the overall result.
+// Decisive returns the field-order index of the decisive set: the first set
+// carrying the overall result inside the first group whose result equals it.
 func (o Outcome) Decisive() int { return o.decisive }
 
 // Valid reports whether the outcome was computed from a coherent layout and
@@ -66,7 +68,10 @@ func Hashes(layout Layout, intermediates []Result) Outcome {
 }
 
 // combine applies one all-rule per group and one any-rule across groups,
-// then selects the decisive set.
+// then selects the decisive set: the first group whose own result equals the
+// overall result, and in that group the first set whose intermediate equals
+// it. Every all-rule result is carried by at least one of its sets, so a
+// matching group without such a set is an incoherent combination.
 func combine(layout Layout, intermediates []Result, allRule func([]Result) Result, anyRule func([]Result) Result, allowTemp bool) Outcome {
 	if !layout.Valid() || layout.Sets() != len(intermediates) {
 		return Outcome{}
@@ -77,17 +82,26 @@ func combine(layout Layout, intermediates []Result, allRule func([]Result) Resul
 		}
 	}
 	groups := make([]Result, layout.Groups())
+	starts := make([]int, layout.Groups())
 	start := 0
 	for group := range groups {
 		size := int(layout.sizes[group])
+		starts[group] = start
 		groups[group] = allRule(intermediates[start : start+size])
 		start += size
 	}
 	result := anyRule(groups)
-	for index, intermediate := range intermediates {
-		if intermediate == result {
-			return Outcome{result: result, decisive: index, valid: true}
+	for group, groupResult := range groups {
+		if groupResult != result {
+			continue
 		}
+		size := int(layout.sizes[group])
+		for index := starts[group]; index < starts[group]+size; index++ {
+			if intermediates[index] == result {
+				return Outcome{result: result, decisive: index, valid: true}
+			}
+		}
+		return Outcome{}
 	}
 	return Outcome{}
 }

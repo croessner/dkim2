@@ -91,7 +91,6 @@ func TestVerificationScalarMappings(t *testing.T) {
 		{dkim2.SignatureStatusFAIL, generated.SignatureSetResultStatusFail},
 		{dkim2.SignatureStatusPERMERROR, generated.SignatureSetResultStatusPermerror},
 		{dkim2.SignatureStatusTEMPERROR, generated.SignatureSetResultStatusTemperror},
-		{dkim2.SignatureStatusIgnored, generated.SignatureSetResultStatusIgnored},
 	})
 }
 

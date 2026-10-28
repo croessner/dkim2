@@ -485,8 +485,8 @@ link success. No M5 value may be named or documented as full-chain success.
   way without TEMPERROR (`hash-all` all PASS, any FAIL, else PERMERROR;
   `hash-any` any PASS, any FAIL, else PERMERROR).
 - The public reason of a non-PASS combination is the reason of the decisive
-  set: the first set in field order whose intermediate equals the combined
-  result (`signature_mismatch`, `provider_temporary`, or the specific
+  set: within the first group whose group result equals the combined
+  result, the first set in field order whose intermediate equals it (`signature_mismatch`, `provider_temporary`, or the specific
   PERMERROR reason).
 - Unknown hash and signature algorithm detail is exposed only as the bounded
   token `unknown`.

@@ -244,9 +244,9 @@ func expectedPublicGoldenSignatures(testCase publicGoldenCase) []publicGoldenSig
 	case "both_pass":
 		return []publicGoldenSignatureFact{passRSA, {algorithm: AlgorithmEd25519SHA256, status: SignatureStatusPASS, reason: ReasonNone}}
 	case "supported_unknown_pass":
-		return []publicGoldenSignatureFact{passRSA, publicGoldenSignatureFact{algorithm: AlgorithmUnknown, status: SignatureStatusIgnored, reason: ReasonUnsupportedAlgorithm}}
+		return []publicGoldenSignatureFact{passRSA, publicGoldenSignatureFact{algorithm: AlgorithmUnknown, status: SignatureStatusPERMERROR, reason: ReasonUnsupportedAlgorithm}}
 	case "unknown_signature_only":
-		return []publicGoldenSignatureFact{{algorithm: AlgorithmUnknown, status: SignatureStatusIgnored, reason: ReasonUnsupportedAlgorithm}}
+		return []publicGoldenSignatureFact{{algorithm: AlgorithmUnknown, status: SignatureStatusPERMERROR, reason: ReasonUnsupportedAlgorithm}}
 	case goldenVectorSupportedMixedFail:
 		return []publicGoldenSignatureFact{passRSA, {algorithm: AlgorithmEd25519SHA256, status: SignatureStatusFAIL, reason: ReasonSignatureMismatch}}
 	}

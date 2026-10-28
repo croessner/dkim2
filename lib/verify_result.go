@@ -240,18 +240,17 @@ const (
 	SignatureStatusPASS SignatureStatus = "pass"
 	// SignatureStatusFAIL reports a supported failing signature set.
 	SignatureStatusFAIL SignatureStatus = "fail"
-	// SignatureStatusPERMERROR reports permanent key or protocol state for the set.
+	// SignatureStatusPERMERROR reports permanent key or protocol state for the
+	// set, including an unknown or locally disabled algorithm.
 	SignatureStatusPERMERROR SignatureStatus = "permerror"
 	// SignatureStatusTEMPERROR reports typed temporary provider state for the set.
 	SignatureStatusTEMPERROR SignatureStatus = "temperror"
-	// SignatureStatusIgnored reports an unknown algorithm ignored during aggregation.
-	SignatureStatusIgnored SignatureStatus = "ignored"
 )
 
 // Known reports whether the signature status belongs to the closed public vocabulary.
 func (s SignatureStatus) Known() bool {
 	switch s {
-	case SignatureStatusPASS, SignatureStatusFAIL, SignatureStatusPERMERROR, SignatureStatusTEMPERROR, SignatureStatusIgnored:
+	case SignatureStatusPASS, SignatureStatusFAIL, SignatureStatusPERMERROR, SignatureStatusTEMPERROR:
 		return true
 	default:
 		return false

@@ -240,13 +240,11 @@ const (
 	SignaturePERMERROR SignatureStatus = "permerror"
 	// SignatureTEMPERROR reports typed temporary provider failure.
 	SignatureTEMPERROR SignatureStatus = "temperror"
-	// SignatureIgnored reports an unknown algorithm ignored by aggregation.
-	SignatureIgnored SignatureStatus = "ignored"
 )
 
 // Known reports whether signature status belongs to the closed service vocabulary.
 func (s SignatureStatus) Known() bool {
-	return s == SignaturePASS || s == SignatureFAIL || s == SignaturePERMERROR || s == SignatureTEMPERROR || s == SignatureIgnored
+	return s == SignaturePASS || s == SignatureFAIL || s == SignaturePERMERROR || s == SignatureTEMPERROR
 }
 
 // Limits bounds service input, extraction, and retained facts.

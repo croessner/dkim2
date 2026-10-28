@@ -1012,8 +1012,9 @@ func revisionSignatureInputDigest(message rawmsg.Message, target Target, remaini
 
 // revisionSignatureOutcome maps the Section 14.6 combination of one
 // inherited field onto the closed revision vocabulary. A non-PASS result
-// reports the decisive set (the first set whose intermediate equals the
-// combined result), and permanent key failures keep their specific reason.
+// reports the decisive set (the first set carrying the combined result inside
+// the first group whose result equals it), and permanent key failures keep
+// their specific reason.
 func revisionSignatureOutcome(evaluation signatureEvaluation) RevisionProofOutcome {
 	outcome := evaluation.outcome
 	if !outcome.Valid() {

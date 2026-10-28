@@ -208,7 +208,16 @@ in the closed vocabulary but are no longer produced. Consumers that switch on
 the state or reason (Rspamd symbols `DKIM2_FAIL` versus `DKIM2_PERMERROR`,
 dashboards, the Nauthilus projection) must expect the new values.
 Signature-set result rows are positional and are not keyed or merged by
-algorithm. The daemon, Milter, Exim adapter, delivery-status propagator, and every
+algorithm. The per-set status `ignored` is removed from
+`SignatureSetResult.status` and from the root library
+(`SignatureStatusIgnored`): Draft-08 Section 14.6 step 4 makes an unknown
+algorithm a PERMERROR intermediate, so its set now reports `permerror` with
+reason `unsupported_algorithm` and its selector, exactly like a locally
+disabled algorithm. The combined state and primary reason do not change.
+Consumers that matched `ignored` (Rspamd `verifier.lua`, dashboards, parsers
+of the daemon response) must match `permerror` with `unsupported_algorithm`
+instead; a daemon response carrying `ignored` is now rejected by every
+generated client. The daemon, Milter, Exim adapter, delivery-status propagator, and every
 generated client are regenerated from the same OpenAPI source and must be
 deployed and rolled back as one digest-pinned set. The exact multi-instance response states are
 documented in the

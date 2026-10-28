@@ -907,7 +907,7 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 		t.Fatal("VerifierHop.signature_algorithms lacks mldsa44 or advertises the removed post-quantum composite")
 	}
 	assertPropertyEnum(t, document, "SignatureSetResult", "status",
-		[]string{"pass", "fail", "permerror", testValueTemperror, "ignored"})
+		[]string{"pass", "fail", "permerror", testValueTemperror})
 	if _, retired := document.Components.Schemas["KeyPolicyResult"]; retired {
 		t.Fatal("KeyPolicyResult must stay removed: DNS-01 retired the t= tag")
 	}

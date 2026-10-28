@@ -37,7 +37,7 @@ func TestNonPassingSignatureSetsNameTheirSelector(t *testing.T) {
 		{name: "signature mismatch", raw: raw, result: FoundRSAPublicKey(&other.PublicKey), status: SignatureStatusFAIL, reason: ReasonSignatureMismatch, selector: diagnosticSelector},
 		{name: "key error", raw: raw, result: MissingPublicKey(AlgorithmRSASHA256), status: SignatureStatusPERMERROR, reason: ReasonMissingKey, selector: diagnosticSelector},
 		{name: "temporary provider", raw: raw, err: toxicTemporaryProviderError{}, status: SignatureStatusTEMPERROR, reason: ReasonProviderTemporary, selector: diagnosticSelector},
-		{name: "unknown algorithm", raw: bytes.Replace(raw, []byte(":rsa-sha256:"), []byte(":x-future:"), 1), result: FoundRSAPublicKey(key), status: SignatureStatusIgnored, reason: ReasonUnsupportedAlgorithm, selector: diagnosticSelector},
+		{name: "unknown algorithm", raw: bytes.Replace(raw, []byte(":rsa-sha256:"), []byte(":x-future:"), 1), result: FoundRSAPublicKey(key), status: SignatureStatusPERMERROR, reason: ReasonUnsupportedAlgorithm, selector: diagnosticSelector},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

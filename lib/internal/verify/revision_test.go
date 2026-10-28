@@ -461,9 +461,9 @@ func TestVerifyRevisionProofRejectsTargetOverridesAndUnsafeTimePolicyBeforeWork(
 }
 
 // TestRevisionSignatureOutcomeReportsDecisiveSet pins the Draft-08 rule
-// that a non-PASS inherited field reports its decisive set: the first set in
-// field order whose intermediate equals the combined result. Permanent key
-// failures keep their specific reason.
+// that a non-PASS inherited field reports its decisive set: the first set
+// carrying the combined result inside the first group whose result equals
+// it. Permanent key failures keep their specific reason.
 func TestRevisionSignatureOutcomeReportsDecisiveSet(t *testing.T) {
 	contract := SignatureSetStatusProviderContract
 	temporary := SignatureSetStatusProviderTemporary

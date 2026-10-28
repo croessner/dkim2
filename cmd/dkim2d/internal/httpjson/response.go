@@ -871,8 +871,6 @@ func mapSignatureStatus(value dkim2.SignatureStatus) (generated.SignatureSetResu
 		return generated.SignatureSetResultStatusPermerror, true
 	case dkim2.SignatureStatusTEMPERROR:
 		return generated.SignatureSetResultStatusTemperror, true
-	case dkim2.SignatureStatusIgnored:
-		return generated.SignatureSetResultStatusIgnored, true
 	default:
 		return "", false
 	}

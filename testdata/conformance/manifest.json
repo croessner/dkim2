@@ -376,7 +376,7 @@
     {
       "id": "verification-composite-unsupported-source",
       "path": "lib/unsupported_composite_test.go",
-      "sha256": "3d110a9450c5eb16419e55fcb30d73d9512b536e93e6ea31ed24fe50d176bd09",
+      "sha256": "d7e6068fb77b200d15430e88bda78fd735af02b0b7bcec46dbbdc05cbbacd908",
       "module": "lib"
     },
     {

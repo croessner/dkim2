@@ -145,8 +145,6 @@ func policySetStatus(value SignatureStatus) (policy.SetStatus, bool) {
 		return policy.SetStatusPermerror, true
 	case SignatureTEMPERROR:
 		return policy.SetStatusTemperror, true
-	case SignatureIgnored:
-		return policy.SetStatusIgnored, true
 	default:
 		return "", false
 	}
