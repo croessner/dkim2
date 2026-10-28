@@ -18,7 +18,8 @@ type State string
 const (
 	// StatePASS reports complete success for the declared authenticated scope.
 	StatePASS State = "PASS"
-	// StateFAIL reports a supported integrity mismatch.
+	// StateFAIL reports completed verification of a message that is not a
+	// Fully Verified DKIM2 Message (Draft-08 Section 14.1).
 	StateFAIL State = "FAIL"
 	// StatePERMERROR reports permanent malformed, missing, or ambiguous state.
 	StatePERMERROR State = "PERMERROR"
@@ -52,7 +53,9 @@ const (
 	HistoricalNotEvaluated HistoricalState = "not_evaluated"
 	// HistoricalComplete reports authenticated coverage through the origin.
 	HistoricalComplete HistoricalState = "complete"
-	// HistoricalPartial reports authenticated coverage with an explicit unavailable body.
+	// HistoricalPartial reports authenticated coverage with an explicit
+	// unavailable body. Draft-08 Section 13 makes such a history FAIL
+	// body_history_unavailable, so verification no longer produces it.
 	HistoricalPartial HistoricalState = "partial"
 )
 
@@ -136,8 +139,12 @@ const (
 	ReasonMalformedProtocol Reason = "malformed_protocol"
 	// ReasonDuplicateHashAlgorithm reports any repeated h= algorithm name.
 	ReasonDuplicateHashAlgorithm Reason = "duplicate_hash_algorithm"
-	// ReasonInvalidRecipeJSON reports malformed authenticated recipe JSON.
+	// ReasonInvalidRecipeJSON reports authenticated recipe text that is not
+	// valid JSON or not a JSON object.
 	ReasonInvalidRecipeJSON Reason = "invalid_recipe_json"
+	// ReasonInvalidRecipe reports valid authenticated recipe JSON whose
+	// schema, steps, or application are invalid (Draft-08 Section 14.2).
+	ReasonInvalidRecipe Reason = "invalid_recipe"
 	// ReasonFromNotAuthentic reports a From header field state that is not
 	// Authentic for its responsible signature (Draft-08 Section 14.8).
 	ReasonFromNotAuthentic Reason = "from_not_authentic"
@@ -179,8 +186,15 @@ const (
 	ReasonDomainAlignmentMismatch Reason = "domain_alignment_mismatch"
 	// ReasonNextDomainMismatch reports structural next-domain disagreement.
 	ReasonNextDomainMismatch Reason = "next_domain_mismatch"
+	// ReasonCustodyMismatch reports a Chain of Custody adjacency failure: an
+	// mf= or d= that does not match the previous signature's rt= (Draft-08
+	// Sections 7.1 and 14.4).
+	ReasonCustodyMismatch Reason = "custody_mismatch"
 	// ReasonOutOfBandRequired reports terminal nd= requiring OOB trust.
 	ReasonOutOfBandRequired Reason = "out_of_band_required"
+	// ReasonBodyHistoryUnavailable reports a history containing a null body
+	// Recipe, so the message is not Fully Verified (Draft-08 Section 13).
+	ReasonBodyHistoryUnavailable Reason = "body_history_unavailable"
 	// ReasonInternalContract reports inconsistent internal facts.
 	ReasonInternalContract Reason = "internal_contract"
 )
@@ -188,7 +202,7 @@ const (
 // Known reports whether the reason belongs to the closed service vocabulary.
 func (r Reason) Known() bool {
 	switch r {
-	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonFromNotAuthentic, ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonInternalContract:
+	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonInvalidRecipe, ReasonFromNotAuthentic, ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonCustodyMismatch, ReasonOutOfBandRequired, ReasonBodyHistoryUnavailable, ReasonInternalContract:
 		return true
 	default:
 		return false

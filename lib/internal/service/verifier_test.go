@@ -153,7 +153,10 @@ func TestStructuralChainErrorsNormalizeToUnavailableMalformedProtocol(t *testing
 	}
 }
 
-// TestVerifierPreservesEvaluatedCustodyOnNextDomainMismatch verifies service error mapping.
+// TestVerifierPreservesEvaluatedCustodyOnNextDomainMismatch verifies that a
+// Draft-08 Section 14.4 nd= mismatch is a FAIL next_domain_mismatch for the
+// selected target, keeps the evaluated custody structure, and stops before
+// any key lookup.
 func TestVerifierPreservesEvaluatedCustodyOnNextDomainMismatch(t *testing.T) {
 	digest := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x11}, 32))
 	signature := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x22}, 128))
@@ -173,9 +176,10 @@ func TestVerifierPreservesEvaluatedCustodyOnNextDomainMismatch(t *testing.T) {
 		t.Fatalf("Verify() error = %v", err)
 	}
 	projection := result.PolicyProjection()
-	if result.State() != StatePERMERROR || result.PrimaryReason() != ReasonMalformedProtocol || result.Custody() != CustodyNDLinksEvaluated || result.Target() != (Target{}) ||
-		!projection.Valid() || projection.Form() != policy.TargetUnavailable || projection.PreTargetReason() != policy.PreTargetMalformedProtocol {
-		t.Fatalf("result = %q/%q/%q", result.State(), result.PrimaryReason(), result.Custody())
+	if result.State() != StateFAIL || result.PrimaryReason() != ReasonNextDomainMismatch || result.Custody() != CustodyNDLinksEvaluated || result.Target() != (Target{Sequence: 2, Instance: 1}) ||
+		!projection.Valid() || projection.Form() != policy.TargetSelected || projection.Protocol() != policy.ProtocolFAIL ||
+		projection.VerificationReason() != policy.VerificationReasonNextDomainMismatch || projection.TargetSequence() != 2 || len(projection.SignatureFacts()) != 0 {
+		t.Fatalf("result = %q/%q/%q target=%#v projection=%#v", result.State(), result.PrimaryReason(), result.Custody(), result.Target(), projection)
 	}
 	if provider.calls != 0 {
 		t.Fatalf("provider calls = %d, want zero", provider.calls)
@@ -203,8 +207,11 @@ func TestVerifierDoesNotClaimAbsentCustodyWhenInstancesAreMissing(t *testing.T) 
 	}
 }
 
-// TestVerifierMapsOrdinaryAdjacencyMismatchAsMalformedProtocol verifies public custody failure taxonomy.
-func TestVerifierMapsOrdinaryAdjacencyMismatchAsMalformedProtocol(t *testing.T) {
+// TestVerifierMapsOrdinaryAdjacencyMismatchAsDraft08CustodyFail verifies
+// that an mf= and d= that do not match the previous rt= are the Draft-08
+// Section 14.4 FAIL custody_mismatch for the selected target, decided before
+// any key lookup.
+func TestVerifierMapsOrdinaryAdjacencyMismatchAsDraft08CustodyFail(t *testing.T) {
 	digest := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x11}, 32))
 	signatureText := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x22}, 128))
 	raw := "From: sender@example.test\r\n" +
@@ -222,11 +229,12 @@ func TestVerifierMapsOrdinaryAdjacencyMismatchAsMalformedProtocol(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
-	if result.State() != StatePERMERROR || result.PrimaryReason() != ReasonMalformedProtocol || provider.calls != 0 {
+	if result.State() != StateFAIL || result.PrimaryReason() != ReasonCustodyMismatch || provider.calls != 0 {
 		t.Fatalf("adjacency result=%s/%s provider_calls=%d", result.State(), result.PrimaryReason(), provider.calls)
 	}
 	projection := result.PolicyProjection()
-	if result.Target() != (Target{}) || !projection.Valid() || projection.Form() != policy.TargetUnavailable || projection.PreTargetReason() != policy.PreTargetMalformedProtocol {
+	if result.Target() != (Target{Sequence: 2, Instance: 1}) || !projection.Valid() || projection.Form() != policy.TargetSelected ||
+		projection.Protocol() != policy.ProtocolFAIL || projection.VerificationReason() != policy.VerificationReasonCustodyMismatch {
 		t.Fatalf("adjacency target=%#v projection=%#v", result.Target(), projection)
 	}
 }

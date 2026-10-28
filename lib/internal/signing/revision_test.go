@@ -280,23 +280,23 @@ func TestVerifiedRevisionInputSealsExactEvidenceAndPreservesRevisedContent(t *te
 	}
 }
 
-// TestVerifiedRevisionInputCrossesExplicitNullBodyHistory locks truthful b:null sealing and consumption.
-func TestVerifiedRevisionInputCrossesExplicitNullBodyHistory(t *testing.T) {
+// TestVerifyForRevisionRefusesExplicitNullBodyHistory reproduces Draft-08
+// Sections 12 and 13: a history with a "b":null Recipe is not a Fully
+// Verified DKIM2 Message, so the revision gate issues no signing capability
+// and the message cannot be signed again as transit or revision.
+func TestVerifyForRevisionRefusesExplicitNullBodyHistory(t *testing.T) {
 	nullRecipe := `{"h":{"subject":[{"d":["previous"]}]},"b":null}`
 	fixture := newRevisionTestFixture(t, &nullRecipe, false)
 	verifier := newRevisionTestVerifier(t, fixture, nil)
+	outcome, proof, err := verifier.Core().VerifyRevisionProof(context.Background(), verify.Request{Message: fixture.message, Envelope: fixture.envelope})
+	if err != nil || outcome != verify.RevisionProofBodyHistoryUnavailable || proof.Valid() {
+		t.Fatalf("b:null VerifyRevisionProof() = %q/%t/%v", outcome, proof.Valid(), err)
+	}
 	result, capability, err := verifier.VerifyForRevision(context.Background(), RevisionRequest{
 		Message: fixture.message, Envelope: fixture.envelope,
 	})
-	if err != nil || result.Status() != RevisionVerificationVerified || !capability.Valid() {
+	if err != nil || result.Status() != RevisionVerificationProtocolRejected || capability.Valid() {
 		t.Fatalf("b:null VerifyForRevision() = %q/%t/%v", result.Status(), capability.Valid(), err)
-	}
-	if !capability.proof.Facts().HistoryHasUnavailableBody() {
-		t.Fatal("b:null capability lost explicit body-unavailable history fact")
-	}
-	revisedRaw := strings.Replace(string(fixture.message.RawBytes()), "current body", "new body after unavailable boundary", 1)
-	if err := verifier.ConsumeVerifiedRevisionInput(context.Background(), capability, mustParseRevisionMessage(t, []byte(revisedRaw))); err != nil {
-		t.Fatalf("b:null ConsumeVerifiedRevisionInput() error = %v", err)
 	}
 
 	malformedRaw := replaceRevisionRecipe(t, fixture.message.RawBytes(), []byte(`{`))
@@ -317,20 +317,25 @@ func TestVerifiedRevisionInputCrossesExplicitNullBodyHistory(t *testing.T) {
 // TestRevisionProofChecksFromRewriteAcrossNullBodyHistory reproduces Draft-08
 // Sections 11 and 14.8 across a b:null transition: the header state is still
 // reconstructed, so a From rewrite at m=2 must be Authentic for the reviser's
-// d=, while an aligned rewrite passes.
+// d=. An aligned rewrite reaches the Section 13 null-body decision instead;
+// neither form is Fully Verified, so neither may be signed again.
 func TestRevisionProofChecksFromRewriteAcrossNullBodyHistory(t *testing.T) {
 	recipe := `{"h":{"from":[{"d":[" sender@example.test"]}],"subject":[{"d":["previous"]}]},"b":null}`
-	for currentFrom, want := range map[string]RevisionVerificationStatus{
-		"list@sub.example.test": RevisionVerificationVerified,
-		"list@other.test":       RevisionVerificationProtocolRejected,
+	for currentFrom, want := range map[string]verify.RevisionProofOutcome{
+		"list@sub.example.test": verify.RevisionProofBodyHistoryUnavailable,
+		"list@other.test":       verify.RevisionProofFromNotAuthentic,
 	} {
 		fixture := newRevisionTestFixtureWithFrom(t, &recipe, false, nil, canonical.HashAlgorithmSHA256, currentFrom)
 		verifier := newRevisionTestVerifier(t, fixture, nil)
+		outcome, _, err := verifier.Core().VerifyRevisionProof(context.Background(), verify.Request{Message: fixture.message, Envelope: fixture.envelope})
+		if err != nil || outcome != want {
+			t.Fatalf("From %s: VerifyRevisionProof() = %q/%v, want %q", currentFrom, outcome, err, want)
+		}
 		result, capability, err := verifier.VerifyForRevision(context.Background(), RevisionRequest{
 			Message: fixture.message, Envelope: fixture.envelope,
 		})
-		if err != nil || result.Status() != want || capability.Valid() != (want == RevisionVerificationVerified) {
-			t.Fatalf("From %s: VerifyForRevision() = %q/%t/%v, want %q", currentFrom, result.Status(), capability.Valid(), err, want)
+		if err != nil || result.Status() != RevisionVerificationProtocolRejected || capability.Valid() {
+			t.Fatalf("From %s: VerifyForRevision() = %q/%t/%v", currentFrom, result.Status(), capability.Valid(), err)
 		}
 	}
 }

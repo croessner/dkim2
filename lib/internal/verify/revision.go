@@ -28,8 +28,16 @@ const (
 	RevisionProofTerminalNextDomainAuthorizationRequired RevisionProofOutcome = "terminal_next_domain_authorization_required"
 	// RevisionProofProtocolRejected reports malformed, mismatched, expired, or otherwise failed protocol evidence.
 	RevisionProofProtocolRejected RevisionProofOutcome = "protocol_rejected"
-	// RevisionProofInvalidRecipeJSON reports malformed authenticated r= JSON.
+	// RevisionProofInvalidRecipeJSON reports authenticated r= text that is not
+	// valid JSON or not a JSON object.
 	RevisionProofInvalidRecipeJSON RevisionProofOutcome = "invalid_recipe_json"
+	// RevisionProofInvalidRecipe reports valid authenticated r= JSON whose
+	// schema, steps, or application are invalid (Draft-08 Section 14.2).
+	RevisionProofInvalidRecipe RevisionProofOutcome = "invalid_recipe"
+	// RevisionProofBodyHistoryUnavailable reports an otherwise passing
+	// history that contains a null body Recipe, so the message is not a Fully
+	// Verified DKIM2 Message (Draft-08 Section 13).
+	RevisionProofBodyHistoryUnavailable RevisionProofOutcome = "body_history_unavailable"
 	// RevisionProofHashMismatch reports a supported current or historical hash mismatch.
 	RevisionProofHashMismatch RevisionProofOutcome = "hash_mismatch"
 	// RevisionProofSignatureMismatch reports a supported inherited signature mismatch.
@@ -65,7 +73,8 @@ const (
 func (o RevisionProofOutcome) Known() bool {
 	switch o {
 	case RevisionProofVerified, RevisionProofTerminalNextDomainAuthorizationRequired,
-		RevisionProofProtocolRejected, RevisionProofInvalidRecipeJSON, RevisionProofHashMismatch, RevisionProofSignatureMismatch,
+		RevisionProofProtocolRejected, RevisionProofInvalidRecipeJSON, RevisionProofInvalidRecipe, RevisionProofBodyHistoryUnavailable,
+		RevisionProofHashMismatch, RevisionProofSignatureMismatch,
 		RevisionProofUnsupported, RevisionProofProviderTemporary,
 		RevisionProofProviderRejected, RevisionProofProviderContract, RevisionProofLimitExceeded,
 		RevisionProofFromNotAuthentic, RevisionProofMissingKey, RevisionProofInvalidKey, RevisionProofRevokedKey,
@@ -640,6 +649,13 @@ func (v Verifier) completePreparedRevisionProof(input verificationInput, base re
 	if !base.hashes.Valid() {
 		return "", RevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
+	// Draft-08 Section 13: body hashes below a null Recipe cannot be
+	// checked, so a history that crossed one is never Fully Verified. The
+	// gap is decided last, after every inherited signature passed, in the
+	// Section 14 order where hash validation follows signature checks.
+	if base.history.HadUnavailableBody() {
+		return RevisionProofBodyHistoryUnavailable, RevisionProof{}, nil
+	}
 	custodyFacts := revisionCustodyFacts(base.custody, input.signatures)
 	historyFacts := revisionHistoryFacts(base.history)
 
@@ -767,7 +783,9 @@ func (v Verifier) verifyRevisionBase(ctx context.Context, input verificationInpu
 	return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts, originDigest: originDigest, hasOriginDigest: true}, "", nil
 }
 
-// rejectedRevisionHistoryOutcome maps every incomplete authenticated walk to one closed result.
+// rejectedRevisionHistoryOutcome maps every incomplete authenticated walk to
+// one closed result: JSON failures, Recipe schema and application failures,
+// a copy below a null body Recipe, limits, and hash outcomes stay distinct.
 func rejectedRevisionHistoryOutcome(walk HistoryWalk) RevisionProofOutcome {
 	if revisionHistoryAccepted(walk) {
 		return ""
@@ -778,6 +796,14 @@ func rejectedRevisionHistoryOutcome(walk HistoryWalk) RevisionProofOutcome {
 	switch walk.StopReason() {
 	case HistoryStopRecipeInvalid:
 		return RevisionProofInvalidRecipeJSON
+	case HistoryStopRecipeSchemaInvalid, HistoryStopApplicationInvalid:
+		return RevisionProofInvalidRecipe
+	case HistoryStopSourceUnavailable:
+		// A copy from unavailable body state is only reachable below an
+		// explicit null body Recipe; without that gap it stays rejected.
+		if walk.HadUnavailableBody() {
+			return RevisionProofBodyHistoryUnavailable
+		}
 	case HistoryStopLimitExceeded:
 		return RevisionProofLimitExceeded
 	case HistoryStopHashUnsupported:

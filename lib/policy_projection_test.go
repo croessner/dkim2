@@ -165,6 +165,7 @@ func TestFacadeVerificationReasonMapperRejectsInvalidAndUnknown(t *testing.T) {
 		service.ReasonKeyAlgorithmMismatch, service.ReasonProviderTemporary, service.ReasonProviderPermanent,
 		service.ReasonProviderContract, service.ReasonTimestampInvalid, service.ReasonEnvelopeMismatch,
 		service.ReasonDomainAlignmentMismatch, service.ReasonNextDomainMismatch, service.ReasonOutOfBandRequired,
+		service.ReasonCustodyMismatch, service.ReasonBodyHistoryUnavailable, service.ReasonInvalidRecipe,
 		service.ReasonInternalContract,
 	} {
 		mapped, ok := mapServiceVerificationReason(reason)
@@ -209,8 +210,14 @@ func TestFacadeSealsSequenceFailuresAsUnavailableTargets(t *testing.T) {
 	}
 }
 
-// TestFacadeSealsStructuralCustodyFailuresForPolicy proves pre-target chain rejection retains evaluable provenance.
-func TestFacadeSealsStructuralCustodyFailuresForPolicy(t *testing.T) {
+// TestFacadeReportsChainOfCustodyFailuresAsDraft08Fail reproduces Draft-08
+// Section 14.4: an mf= and d= that do not match the previous rt=, an nd=
+// that does not match the next d=, and an inherited signature whose MAIL
+// FROM and d= do not match are completed verifications of a message that is
+// not Fully Verified, so they are FAIL for the selected target with the
+// specific custody reason. The verifier stops before any key lookup, so the
+// sealed policy projection carries no signature facts and no hops.
+func TestFacadeReportsChainOfCustodyFailuresAsDraft08Fail(t *testing.T) {
 	digest := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("\x11", 32)))
 	signatureText := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("\x22", 128)))
 	ordinaryMismatch := "From: sender@example.test\r\n" +
@@ -221,7 +228,13 @@ func TestFacadeSealsStructuralCustodyFailuresForPolicy(t *testing.T) {
 		"Message-Instance: m=1; h=sha256:" + digest + ":" + digest + ";\r\n" +
 		"DKIM2-Signature: i=1; m=1; t=1700000000; nd=wrong.example.test; d=first.example.test; s=selector.test:rsa-sha256:" + signatureText + ";\r\n" +
 		"DKIM2-Signature: i=2; m=1; t=1700000000; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==; d=next.example.test; s=selector.test:rsa-sha256:" + signatureText + ";\r\n\r\nbody\r\n"
+	inheritedMisalignment := "From: sender@example.test\r\n" +
+		"Message-Instance: m=1; h=sha256:" + digest + ":" + digest + ";\r\n" +
+		"DKIM2-Signature: i=1; m=1; t=1700000000; mf=PGFAZWxzZXdoZXJlLnRlc3Q+; rt=PGJAcmVsYXkudGVzdD4=; d=origin.test; s=selector.test:rsa-sha256:" + signatureText + ";\r\n" +
+		"DKIM2-Signature: i=2; m=1; t=1700000000; mf=PGJAcmVsYXkudGVzdD4=; rt=PGNAZmluYWwudGVzdD4=; d=relay.test; s=selector.test:rsa-sha256:" + signatureText + ";\r\n\r\nbody\r\n"
+	lookups := 0
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
+		lookups++
 		return MissingPublicKey(AlgorithmRSASHA256), nil
 	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
 	if err != nil {
@@ -230,23 +243,30 @@ func TestFacadeSealsStructuralCustodyFailuresForPolicy(t *testing.T) {
 	tests := []struct {
 		name    string
 		raw     string
+		reason  ReasonCode
 		custody CustodyStructure
 	}{
-		{"ordinary adjacency", ordinaryMismatch, CustodyStructureNotEvaluated},
-		{"next-domain mismatch", nextDomainMismatch, CustodyStructureNDLinksEvaluated},
+		{"ordinary adjacency", ordinaryMismatch, ReasonCustodyMismatch, CustodyStructureNotEvaluated},
+		{"next-domain mismatch", nextDomainMismatch, ReasonNextDomainMismatch, CustodyStructureNDLinksEvaluated},
+		{"inherited MAIL FROM and d= mismatch", inheritedMisalignment, ReasonDomainAlignmentMismatch, CustodyStructureNotEvaluated},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			lookups = 0
 			result, verifyErr := verifier.Verify(context.Background(), NewVerifyRequest([]byte(test.raw), nil, nil))
 			if verifyErr != nil {
 				t.Fatalf("Verify() error = %v", verifyErr)
 			}
-			if result.State() != ResultStatePERMERROR || result.PrimaryReason() != ReasonMalformedProtocol || result.CustodyStructure() != test.custody || result.Target() != (VerificationTarget{}) ||
-				!result.sealedPolicyProjection().Valid() || result.sealedPolicyProjection().Form() != policy.TargetUnavailable || result.sealedPolicyProjection().PreTargetReason() != policy.PreTargetMalformedProtocol {
-				t.Fatalf("custody result = %q/%q/%q target=%#v projection=%#v", result.State(), result.PrimaryReason(), result.CustodyStructure(), result.Target(), result.sealedPolicyProjection())
+			projection := result.sealedPolicyProjection()
+			if result.State() != ResultStateFAIL || result.PrimaryReason() != test.reason || result.CustodyStructure() != test.custody ||
+				result.Target().Sequence() != 2 || result.Target().Instance() != 1 || !result.Valid() || lookups != 0 ||
+				!projection.Valid() || projection.Form() != policy.TargetSelected || projection.Protocol() != policy.ProtocolFAIL ||
+				projection.VerificationReason() != policy.VerificationReason(test.reason) || len(projection.SignatureFacts()) != 0 || len(projection.Hops()) != 0 {
+				t.Fatalf("custody result = %q/%q/%q target=%d/%d lookups=%d projection=%#v", result.State(), result.PrimaryReason(), result.CustodyStructure(),
+					result.Target().Sequence(), result.Target().Instance(), lookups, projection)
 			}
 			decision, evaluateErr := EvaluatePolicy(result)
-			if evaluateErr != nil || decision.VerificationState() != ResultStatePERMERROR || decision.Verdict() != PolicyVerdictReject || decision.PrimaryReason() != PolicyReasonProtocolPermerror {
+			if evaluateErr != nil || decision.VerificationState() != ResultStateFAIL || decision.Verdict() != PolicyVerdictReject || decision.PrimaryReason() != PolicyReasonProtocolFail {
 				t.Fatalf("EvaluatePolicy() = state=%q verdict=%q reason=%q error=%v", decision.VerificationState(), decision.Verdict(), decision.PrimaryReason(), evaluateErr)
 			}
 		})

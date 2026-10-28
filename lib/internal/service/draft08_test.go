@@ -82,8 +82,15 @@ func TestRevisionProofFailuresRetainSelectedPolicyAuthority(t *testing.T) {
 		{verify.RevisionProofProviderRejected, StatePERMERROR, ReasonProviderPermanent},
 		{verify.RevisionProofProviderContract, StatePERMERROR, ReasonProviderContract},
 		{verify.RevisionProofLimitExceeded, StatePERMERROR, ReasonLimitExceeded},
-		{verify.RevisionProofTerminalNextDomainAuthorizationRequired, StatePERMERROR, ReasonOutOfBandRequired},
+		// Draft-08 Sections 13.2 and 14.4: an unmet out-of-band arrangement is FAIL.
+		{verify.RevisionProofTerminalNextDomainAuthorizationRequired, StateFAIL, ReasonOutOfBandRequired},
 		{verify.RevisionProofInvalidRecipeJSON, StatePERMERROR, ReasonInvalidRecipeJSON},
+		// Draft-08 Section 14.2: an invalid Recipe of valid JSON is PERMERROR invalid_recipe.
+		{verify.RevisionProofInvalidRecipe, StatePERMERROR, ReasonInvalidRecipe},
+		// Draft-08 Section 13: a null body Recipe makes the message not Fully Verified.
+		{verify.RevisionProofBodyHistoryUnavailable, StateFAIL, ReasonBodyHistoryUnavailable},
+		// Draft-08 Sections 14.1 and 14.8: an inauthentic From is FAIL.
+		{verify.RevisionProofFromNotAuthentic, StateFAIL, ReasonFromNotAuthentic},
 		{verify.RevisionProofProtocolRejected, StatePERMERROR, ReasonMalformedProtocol},
 		{verify.RevisionProofVerified, StatePERMERROR, ReasonInternalContract},
 		{verify.RevisionProofOutcome("future"), StatePERMERROR, ReasonInternalContract},

@@ -568,6 +568,16 @@ flag violation overrides a passing result:
 | `PERMERROR` | `reject` | `accept` | `continue` |
 | `TEMPERROR` | `tempfail` | `tempfail` | `continue` |
 
+`FAIL` and `PERMERROR` have identical verdicts in every mode. Draft-08 Section
+14.1 moved timestamp, envelope, alignment, `nd=`, custody, out-of-band, and
+From-authenticity failures from `PERMERROR` to `FAIL`; their verdicts and
+actions are unchanged and only the strict primary reason moves from
+`protocol_permerror` to `protocol_fail`. The one deliberate verdict change is
+`body_history_unavailable`: a history with a null body Recipe was a `PASS` with
+partial history and is now a `FAIL` (Draft-08 Section 13), so strict mode
+rejects it. `lib/verification_disposition_test.go` pins the complete reason by
+mode table.
+
 The output retains the original verification state in every cell. Permissive
 acceptance does not describe the message as cryptographically valid. Testing
 mode does not accept the message; it withholds a DKIM2 terminal decision.
@@ -609,11 +619,11 @@ The exact eligible status/reason pairs are:
 | `PERMERROR` | `revoked_key` | every outcome-driving permanent set is `permerror/revoked_key`, all supported sets declare testing | true |
 | `PERMERROR` | `unsupported_key_type` | every outcome-driving permanent set is `permerror/unsupported_key_type`, all supported sets declare testing | true |
 | `PERMERROR` | `key_algorithm_mismatch` | every outcome-driving permanent set is `permerror/key_algorithm_mismatch`, all supported sets declare testing | true |
-| `PERMERROR` | `timestamp_invalid` | every supported set is `pass/none`, all with testing declared | true |
-| `PERMERROR` | `envelope_mismatch` | every supported set is `pass/none`, all with testing declared | true |
-| `PERMERROR` | `domain_alignment_mismatch` | every supported set is `pass/none`, all with testing declared | true |
-| `PERMERROR` | `next_domain_mismatch` | every supported set is `pass/none`, all with testing declared | true |
-| `PERMERROR` | `out_of_band_required` | every supported set is `pass/none`, all with testing declared | true |
+| `FAIL` | `timestamp_invalid` | every supported set is `pass/none`, all with testing declared | true |
+| `FAIL` | `envelope_mismatch` | every supported set is `pass/none`, all with testing declared | true |
+| `FAIL` | `domain_alignment_mismatch` | every supported set is `pass/none`, all with testing declared | true |
+| `FAIL` | `next_domain_mismatch` | every supported set is `pass/none`, all with testing declared | true |
+| `FAIL` | `out_of_band_required` | every supported set is `pass/none`, all with testing declared | true |
 
 Mixed eligible permanent reasons may be effective only when the top-level
 primary reason is the deterministic existing aggregate of those same four

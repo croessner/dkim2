@@ -733,68 +733,18 @@ func mapVerificationState(value dkim2.ResultState) (generated.VerificationState,
 	}
 }
 
-// mapVerificationReason maps only reasons reachable in verification results.
+// mapVerificationReason maps only reasons reachable in verification results:
+// every closed public reason whose identical spelling the generated contract
+// admits, never the error-only invalid_request.
 func mapVerificationReason(value dkim2.ReasonCode) (generated.VerificationReason, bool) {
-	switch value {
-	case dkim2.ReasonNone:
-		return generated.VerificationReasonNone, true
-	case dkim2.ReasonLimitExceeded:
-		return generated.VerificationReasonLimitExceeded, true
-	case dkim2.ReasonMalformedMessage:
-		return generated.VerificationReasonMalformedMessage, true
-	case dkim2.ReasonMalformedProtocol:
-		return generated.VerificationReasonMalformedProtocol, true
-	case dkim2.ReasonDuplicateHashAlgorithm:
-		return generated.VerificationReasonDuplicateHashAlgorithm, true
-	case dkim2.ReasonInvalidRecipeJSON:
-		return generated.VerificationReasonInvalidRecipeJson, true
-	case dkim2.ReasonFromNotAuthentic:
-		return generated.VerificationReasonFromNotAuthentic, true
-	case dkim2.ReasonDuplicateSelector:
-		return generated.VerificationReasonDuplicateSelector, true
-	case dkim2.ReasonMissingProtocol:
-		return generated.VerificationReasonMissingProtocol, true
-	case dkim2.ReasonSequenceInvalid:
-		return generated.VerificationReasonSequenceInvalid, true
-	case dkim2.ReasonUnsupportedAlgorithm:
-		return generated.VerificationReasonUnsupportedAlgorithm, true
-	case dkim2.ReasonHashMismatch:
-		return generated.VerificationReasonHashMismatch, true
-	case dkim2.ReasonSignatureMismatch:
-		return generated.VerificationReasonSignatureMismatch, true
-	case dkim2.ReasonMissingKey:
-		return generated.VerificationReasonMissingKey, true
-	case dkim2.ReasonInvalidKey:
-		return generated.VerificationReasonInvalidKey, true
-	case dkim2.ReasonAmbiguousKey:
-		return generated.VerificationReasonAmbiguousKey, true
-	case dkim2.ReasonRevokedKey:
-		return generated.VerificationReasonRevokedKey, true
-	case dkim2.ReasonUnsupportedKeyType:
-		return generated.VerificationReasonUnsupportedKeyType, true
-	case dkim2.ReasonKeyAlgorithmMismatch:
-		return generated.VerificationReasonKeyAlgorithmMismatch, true
-	case dkim2.ReasonProviderTemporary:
-		return generated.VerificationReasonProviderTemporary, true
-	case dkim2.ReasonProviderPermanent:
-		return generated.VerificationReasonProviderPermanent, true
-	case dkim2.ReasonProviderContract:
-		return generated.VerificationReasonProviderContract, true
-	case dkim2.ReasonTimestampInvalid:
-		return generated.VerificationReasonTimestampInvalid, true
-	case dkim2.ReasonEnvelopeMismatch:
-		return generated.VerificationReasonEnvelopeMismatch, true
-	case dkim2.ReasonDomainAlignmentMismatch:
-		return generated.VerificationReasonDomainAlignmentMismatch, true
-	case dkim2.ReasonNextDomainMismatch:
-		return generated.VerificationReasonNextDomainMismatch, true
-	case dkim2.ReasonOutOfBandRequired:
-		return generated.VerificationReasonOutOfBandRequired, true
-	case dkim2.ReasonInternalContract:
-		return generated.VerificationReasonInternalContract, true
-	default:
+	if !value.Known() || value == dkim2.ReasonInvalidRequest {
 		return "", false
 	}
+	mapped := generated.VerificationReason(value)
+	if !mapped.Valid() {
+		return "", false
+	}
+	return mapped, true
 }
 
 // mapVerificationScope maps current diagnostic and authenticated-chain scope.

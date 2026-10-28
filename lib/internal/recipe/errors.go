@@ -270,6 +270,16 @@ func IsErrorCode(err error, code ErrorCode) bool {
 	return errors.As(err, &typed) && typed.Code() == code
 }
 
+// IsJSONSyntaxError reports whether err is a recipe failure of the JSON text
+// itself: malformed RFC 8259 syntax, a repeated member name, or a root that
+// is not a JSON object. Draft-08 Section 14.2 reports these as "contains
+// invalid JSON"; every schema, step, range, literal, or application failure
+// of otherwise valid JSON is instead "Recipe <value> is invalid".
+func IsJSONSyntaxError(err error) bool {
+	var typed *Error
+	return errors.As(err, &typed) && (typed.Class() == ErrorClassSyntax || typed.Code() == ErrorCodeInvalidTopLevel)
+}
+
 // classForCode maps closed codes to stable classes.
 func classForCode(code ErrorCode) ErrorClass {
 	switch code {

@@ -83,6 +83,7 @@
 | 0.1.0-draft | 2026-10-21 | Christian Roessner / Claude | Restored the projected fold points of added header fields in the Milter and Exim adapters through the shared `lib/headerfold` package: every TAB after the first value octet becomes LF+TAB, and a field with a physical line over 998 octets fails validation. A composite-algorithm `DKIM2-Signature` was otherwise queued as one multi-kilobyte line, so DSNs returning it failed MIME parsing and SMTP output broke it. |
 | 0.1.0-draft | 2026-10-26 | Christian Roessner / Claude | Removed the post-quantum `mldsa44-ed25519-sha512` composite (ML-DSA-44 plus Ed25519, LAMPS construction) from the library, `dkim2d`, the adapters, `dkim2ctl`, the OpenAPI contract, the Rspamd contrib, and the vectors. The DKIM working group has not settled the DKIM2 post-quantum construction (October 2026 list discussion: separate multiple signatures, LAMPS composite, or plain ML-DSA-44; to be revisited at IETF 127), so the implementation does not ship a construction that may not be standardized. The baseline stays `draft-ietf-dkim-dkim2-spec-07` plus `draft-ietf-dkim-dkim2-dns-01` with this documented deviation (`DKIM2-ISSUE-0019`): composite sets are unknown algorithms ignored with `unsupported_algorithm`, `k=mldsa44-ed25519-sha512` records are unsupported key types, composite credentials fail closed, and forward SQL migration `009_remove_composite_algorithm.sql` restores the two-algorithm constraints and refuses to run while composite rows remain. `lib/headerfold` and the adapter refolding stay. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Advanced the message baseline to `draft-ietf-dkim-dkim2-spec-08` and the DNS companion to `draft-ietf-dkim-dkim2-dns-02`. Draft identifiers, generated contracts, versioned vectors (with Draft-07 and DNS-01 copies under `lib/testdata/vectors/history/`), draft-bound goldens, and section citations (new Sections 13.1 and 16.2) move together without a protocol behavior change; behavior changes follow the work packages in `docs/specs/draft-08-migration-disposition.md`. |
+| 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Remapped verification states to Draft-08 Section 14.1 "Fully Verified DKIM2 Message": timestamp, envelope, MAIL FROM and `d=` alignment, `nd=`, custody adjacency (new `custody_mismatch`), unmet out-of-band, and From-authenticity failures are FAIL; a history with a null body Recipe is FAIL `body_history_unavailable` instead of a PASS with partial history and transit or revision signing refuses it; Recipe schema and application errors are PERMERROR `invalid_recipe`, separate from `invalid_recipe_json`. `policy.ProtocolForVerificationReason` is the single owner of the reason-to-state classification. Policy verdicts, Milter, and Exim SMTP outcomes are unchanged except for the null body Recipe history, which strict mode now rejects. |
 
 ## 1. Purpose
 
@@ -663,6 +664,10 @@ Design notes:
   verification semantics or the public model.
 - The `b:null` body member must be represented explicitly because body
   unavailability has policy meaning; a null whole recipe is not a valid form.
+  Under Draft-08 Section 13 a message whose history contains `b:null` is not
+  Fully Verified: verification reports FAIL `body_history_unavailable` and
+  transit or revision signing refuses it, while a signer may still emit
+  `b:null` for its own hop (Section 12.1 MAY, `AllowUnavailableBody`).
 - Every decoded JSON object key is lowercase, including unknown top-level
   extension keys; header-name keys reject mixed or uppercase spellings,
   including escaped spellings, while message-header matching remains

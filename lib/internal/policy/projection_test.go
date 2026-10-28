@@ -158,8 +158,14 @@ func TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs(t *testing.T) {
 		{ProtocolPERMERROR, VerificationReasonProviderPermanent},
 		{ProtocolPERMERROR, VerificationReasonProviderContract},
 		{ProtocolPERMERROR, VerificationReasonLimitExceeded},
-		{ProtocolPERMERROR, VerificationReasonOutOfBandRequired},
+		// Draft-08 Sections 13 and 14.1: an unmet out-of-band arrangement, an
+		// inauthentic From, and a null body Recipe are FAIL.
+		{ProtocolFAIL, VerificationReasonOutOfBandRequired},
+		{ProtocolFAIL, VerificationReasonFromNotAuthentic},
+		{ProtocolFAIL, VerificationReasonBodyHistoryUnavailable},
 		{ProtocolPERMERROR, VerificationReasonInvalidRecipeJSON},
+		// Draft-08 Section 14.2: an invalid Recipe of valid JSON is PERMERROR.
+		{ProtocolPERMERROR, VerificationReasonInvalidRecipe},
 		{ProtocolPERMERROR, VerificationReasonMalformedProtocol},
 		{ProtocolPERMERROR, VerificationReasonInternalContract},
 		// Inherited key failures keep their specific reason (Draft-08 migration D4).
@@ -178,6 +184,11 @@ func TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs(t *testing.T) {
 	}{
 		{ProtocolPERMERROR, VerificationReasonDuplicateSelector},
 		{ProtocolPERMERROR, VerificationReasonTimestampInvalid},
+		{ProtocolPERMERROR, VerificationReasonOutOfBandRequired},
+		{ProtocolPERMERROR, VerificationReasonFromNotAuthentic},
+		{ProtocolPERMERROR, VerificationReasonBodyHistoryUnavailable},
+		{ProtocolFAIL, VerificationReasonInvalidRecipe},
+		{ProtocolFAIL, VerificationReasonCustodyMismatch},
 		{ProtocolPERMERROR, VerificationReason("future")},
 		{ProtocolFAIL, VerificationReasonProviderTemporary},
 		{ProtocolPASS, VerificationReasonNone},
@@ -360,7 +371,6 @@ func TestPermanentProjectionRequiresACompatibleOutcomeDriver(t *testing.T) {
 		{VerificationReasonUnsupportedAlgorithm, []SignatureFact{ignored}},
 		{VerificationReasonUnsupportedAlgorithm, []SignatureFact{pass}},
 		{VerificationReasonUnsupportedAlgorithm, []SignatureFact{pass, missing}},
-		{VerificationReasonTimestampInvalid, []SignatureFact{pass}},
 		{VerificationReasonLimitExceeded, []SignatureFact{pass}},
 	}
 	for _, test := range valid {
@@ -368,6 +378,63 @@ func TestPermanentProjectionRequiresACompatibleOutcomeDriver(t *testing.T) {
 		if err != nil || !projection.Valid() {
 			t.Fatalf("valid permanent projection %q = %#v error=%v", test.reason, projection, err)
 		}
+	}
+}
+
+// TestDraft08FailReasonsRequireFailProtocol proves that every Draft-08
+// Section 14.1 FAIL reason is sealable only as FAIL, never as PERMERROR, and
+// still cannot hide a permanent signature outcome.
+func TestDraft08FailReasonsRequireFailProtocol(t *testing.T) {
+	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
+	missing := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey)
+	temporary := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusTemperror, SetReasonProviderTemporary)
+	for _, reason := range []VerificationReason{
+		VerificationReasonTimestampInvalid, VerificationReasonEnvelopeMismatch, VerificationReasonDomainAlignmentMismatch,
+		VerificationReasonNextDomainMismatch, VerificationReasonCustodyMismatch, VerificationReasonOutOfBandRequired,
+	} {
+		if protocol, ok := ProtocolForVerificationReason(reason); !ok || protocol != ProtocolFAIL {
+			t.Fatalf("ProtocolForVerificationReason(%q) = %q/%t", reason, protocol, ok)
+		}
+		for _, facts := range [][]SignatureFact{{pass}, {temporary}} {
+			if projection, err := NewSelectedProjection(ProtocolFAIL, reason, 1, nil, facts, DefaultLimits()); err != nil || !projection.Valid() {
+				t.Fatalf("FAIL %q over %#v = %v", reason, facts, err)
+			}
+		}
+		if _, err := NewSelectedProjection(ProtocolFAIL, reason, 1, nil, []SignatureFact{missing}, DefaultLimits()); !IsErrorCode(err, ErrorInternalContract) {
+			t.Fatalf("FAIL %q hid a permanent signature outcome: %v", reason, err)
+		}
+		if _, err := NewSelectedProjection(ProtocolPERMERROR, reason, 1, nil, []SignatureFact{pass}, DefaultLimits()); !IsErrorCode(err, ErrorInternalContract) {
+			t.Fatalf("PERMERROR %q was sealable: %v", reason, err)
+		}
+	}
+}
+
+// TestChainFailureProjectionAdmitsOnlyChainOfCustodyFailures proves the
+// Section 14.4 early-stop projection carries a FAIL custody reason for a
+// selected target and no signature facts or authenticated hops.
+func TestChainFailureProjectionAdmitsOnlyChainOfCustodyFailures(t *testing.T) {
+	for _, reason := range []VerificationReason{VerificationReasonCustodyMismatch, VerificationReasonNextDomainMismatch, VerificationReasonDomainAlignmentMismatch} {
+		projection, err := NewChainFailureProjection(reason, 2)
+		if err != nil || !projection.Valid() || projection.Form() != TargetSelected || projection.Protocol() != ProtocolFAIL ||
+			projection.TargetSequence() != 2 || len(projection.SignatureFacts()) != 0 || len(projection.Hops()) != 0 {
+			t.Fatalf("NewChainFailureProjection(%q) = %#v error=%v", reason, projection, err)
+		}
+	}
+	for _, reason := range []VerificationReason{VerificationReasonHashMismatch, VerificationReasonTimestampInvalid, VerificationReasonMalformedProtocol, VerificationReasonNone} {
+		if projection, err := NewChainFailureProjection(reason, 2); !IsErrorCode(err, ErrorInternalContract) || !projection.IsZero() {
+			t.Fatalf("NewChainFailureProjection(%q) = %#v error=%v", reason, projection, err)
+		}
+	}
+	if projection, err := NewChainFailureProjection(VerificationReasonCustodyMismatch, 0); !IsErrorCode(err, ErrorInternalContract) || !projection.IsZero() {
+		t.Fatalf("zero-target chain failure = %#v error=%v", projection, err)
+	}
+	forged, err := NewChainFailureProjection(VerificationReasonCustodyMismatch, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forged.hops = []HopFact{mustProjectionHop(t, 2, TransitionNotEvaluated)}
+	if forged.Valid() {
+		t.Fatal("chain failure carried an authenticated hop")
 	}
 }
 

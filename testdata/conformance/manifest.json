@@ -178,13 +178,13 @@
     {
       "id": "policy-invalid-recipe-source",
       "path": "lib/policy_projection_test.go",
-      "sha256": "c807c7e995ae0c06b0b458ca0d78298bebe66fc4a00b02bc1d3c67f9643e9faa",
+      "sha256": "e8965520e048c9dfbbe7d90eb038e74bc992a32ec9a1392cde4514a0791cc440",
       "module": "lib"
     },
     {
       "id": "policy-positive-source",
       "path": "lib/policy_api_test.go",
-      "sha256": "4a5054fbfcd8d5a737d07cd679ae4cc4fff50d45690922aecd2f386bfe834102",
+      "sha256": "d76a8cee060d6faa0ea048f1213b2e85981e5701e8f780fb1cfeae295eaf987c",
       "module": "lib"
     },
     {
@@ -280,7 +280,7 @@
     {
       "id": "service-draft08-source",
       "path": "lib/internal/service/draft08_test.go",
-      "sha256": "1c8c34bd9570ca7d20715ec65b0e29bb9b904c4c8de1480d10a90b493bc3098e",
+      "sha256": "29beddcef201f782a9848e2429a618b49865e14c47df12ea38d5e91be23d0073",
       "module": "lib"
     },
     {
@@ -352,7 +352,7 @@
     {
       "id": "signing-revision-source",
       "path": "lib/internal/signing/revision_test.go",
-      "sha256": "c12c816bcc65b27a030d2c78717029c7a1d0534513941baea720b49a98757849",
+      "sha256": "ff6d8a0a8b81af4b65b509908215c7a50d6d5496c96aadc4e19f985da23acd49",
       "module": "lib"
     },
     {

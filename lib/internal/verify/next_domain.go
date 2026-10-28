@@ -6,6 +6,10 @@ import (
 	"github.com/croessner/dkim2/internal/signature"
 )
 
+// signatureTargetName names the DKIM2-Signature field family in bounded
+// chain diagnostics.
+const signatureTargetName = "dkim2_signature"
+
 type nextDomainEvaluation struct {
 	check       CheckResult
 	unsupported bool
@@ -31,20 +35,25 @@ func validateCustodyChain(signatures []signature.Signature, allowedDirectSequenc
 	case signature.ErrorCodeLimitExceeded:
 		return signature.CustodyResult{}, newError(ErrorCodeLimitExceeded, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{
 			Class: ErrorClassLimit, LimitName: typed.LimitName(), Limit: typed.Limit(), Count: typed.Count(),
-			TargetName: "dkim2_signature",
+			TargetName: signatureTargetName,
 		}, nil)
 	case signature.ErrorCodeMissingOrigin, signature.ErrorCodeDuplicateSequence:
-		return signature.CustodyResult{}, malformedSequenceError("dkim2_signature", Target{})
+		return signature.CustodyResult{}, malformedSequenceError(signatureTargetName, Target{})
 	case signature.ErrorCodeSequenceGap:
 		if sequence, ok := nextDomainMissingSuccessor(signatures); ok {
 			return signature.CustodyResult{}, nextDomainChainError(ErrorCodeMissingNextSignature, sequence)
 		}
-		return signature.CustodyResult{}, malformedSequenceError("dkim2_signature", Target{})
+		return signature.CustodyResult{}, malformedSequenceError(signatureTargetName, Target{})
 	case signature.ErrorCodeCustodyMismatch:
 		sequence := typed.ObservedNumber()
 		if typed.TagName() == string(signature.TagNameMailFrom) && result.Evaluated() &&
 			allowedDirectSequence == sequence && result.AllDirectAlignedExcept(allowedDirectSequence) {
 			return result, nil
+		}
+		if typed.TagName() == string(signature.TagNameMailFrom) && result.Evaluated() {
+			// The complete chain evaluated and only an inherited signature's
+			// MAIL FROM and d= are not aligned (Draft-08 Section 14.4).
+			return signature.CustodyResult{}, inheritedAlignmentError(sequence)
 		}
 		code := ErrorCodeCustodyMismatch
 		if typed.TagName() == string(signature.TagNameNextDomain) {
@@ -121,6 +130,30 @@ func nextDomainCheckResult(target Target, status NextDomainStatus) nextDomainEva
 	}
 }
 
+// inheritedAlignmentError reports a MAIL FROM and d= mismatch of an
+// inherited signature using only bounded sequence metadata.
+func inheritedAlignmentError(sequence uint64) *Error {
+	return newError(ErrorCodeDomainAlignmentMismatch, ErrorLocation{
+		Check:          CheckKindDomainAlignment,
+		TargetSequence: sequence,
+	}, ErrorDetails{
+		Class:      ErrorClassEnvelope,
+		Status:     CheckStatusFail,
+		TargetName: signatureTargetName,
+	}, nil)
+}
+
+// withSelectedTarget binds a Chain of Custody failure to the already
+// selected verification target; other errors are returned unchanged.
+func withSelectedTarget(err error, target Target) error {
+	typed, ok := err.(*Error)
+	if !ok || !typed.ChainOfCustodyFailure() || target.Sequence == 0 || target.InstanceNumber == 0 {
+		return err
+	}
+	typed.selected = target
+	return typed
+}
+
 // nextDomainChainError reports chain failure using only bounded sequence metadata.
 func nextDomainChainError(code ErrorCode, sequence uint64) *Error {
 	class := ErrorClassNextDomain
@@ -129,7 +162,7 @@ func nextDomainChainError(code ErrorCode, sequence uint64) *Error {
 	if code == ErrorCodeCustodyMismatch {
 		class = ErrorClassCustody
 		check = CheckKindSignature
-		targetName = "dkim2_signature"
+		targetName = signatureTargetName
 	}
 	return newError(code, ErrorLocation{
 		Check:          check,

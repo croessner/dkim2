@@ -162,18 +162,19 @@ func (v Verifier) assessWithAbsencePolicy(ctx context.Context, request Request, 
 // mapRevisionProofFailure prevents a current-only PASS from escaping after
 // all-hop rejection. An inherited signature's permanent key failure keeps
 // its specific reason, as the current target does; no privacy rule requires
-// collapsing it into provider_permanent.
+// collapsing it into provider_permanent. The state of every reason comes
+// from its single Draft-08 Section 14.1 owner.
 func mapRevisionProofFailure(current Result, outcome verify.RevisionProofOutcome) Result {
-	state, reason, class := StatePERMERROR, ReasonMalformedProtocol, CheckProtocol
+	reason, class := ReasonMalformedProtocol, CheckProtocol
 	switch outcome {
 	case verify.RevisionProofHashMismatch:
-		state, reason, class = StateFAIL, ReasonHashMismatch, CheckBodyHash
+		reason, class = ReasonHashMismatch, CheckBodyHash
 	case verify.RevisionProofSignatureMismatch:
-		state, reason, class = StateFAIL, ReasonSignatureMismatch, CheckSignature
+		reason, class = ReasonSignatureMismatch, CheckSignature
 	case verify.RevisionProofUnsupported:
 		reason = ReasonUnsupportedAlgorithm
 	case verify.RevisionProofProviderTemporary:
-		state, reason, class = StateTEMPERROR, ReasonProviderTemporary, CheckProvider
+		reason, class = ReasonProviderTemporary, CheckProvider
 	case verify.RevisionProofProviderRejected:
 		reason, class = ReasonProviderPermanent, CheckProvider
 	case verify.RevisionProofMissingKey:
@@ -196,12 +197,17 @@ func mapRevisionProofFailure(current Result, outcome verify.RevisionProofOutcome
 		reason, class = ReasonOutOfBandRequired, CheckNextDomain
 	case verify.RevisionProofInvalidRecipeJSON:
 		reason = ReasonInvalidRecipeJSON
+	case verify.RevisionProofInvalidRecipe:
+		reason = ReasonInvalidRecipe
+	case verify.RevisionProofBodyHistoryUnavailable:
+		reason, class = ReasonBodyHistoryUnavailable, CheckBodyHash
 	case verify.RevisionProofFromNotAuthentic:
 		reason = ReasonFromNotAuthentic
 	case verify.RevisionProofProtocolRejected:
 	default:
 		reason, class = ReasonInternalContract, CheckInternalContract
 	}
+	state := StateForReason(reason)
 	result := newResult(state, current.Custody(), current.Target(), reason, []CheckFact{{Class: class, Reason: reason}}, nil)
 	protocol, protocolOK := policyProtocolClass(state)
 	verificationReason, reasonOK := policyVerificationReason(reason)
@@ -227,12 +233,13 @@ func attachRevisionProof(current Result, proof verify.RevisionProof) Result {
 	if current.Target() == (Target{Sequence: 1, Instance: 1}) {
 		return attachOriginProof(current, proof)
 	}
+	// A null body Recipe is refused by the core proof (Draft-08 Section 13);
+	// a verified proof that still carries the gap is an internal defect.
+	if facts.HistoryHasUnavailableBody() {
+		return internalContractResult(current.Target())
+	}
 	history := HistoricalComplete
 	policyCoverage := policy.HistoryComplete
-	if facts.HistoryHasUnavailableBody() {
-		history = HistoricalPartial
-		policyCoverage = policy.HistoryIndeterminate
-	}
 	signatures := facts.Signatures()
 	hops := make([]policy.HopFact, len(signatures))
 	for index, signatureFact := range signatures {
@@ -317,6 +324,9 @@ func mapVerificationError(err error) Result {
 			custody = mapCustody(typed.CustodyStatus())
 		}
 		reason, class, state := mapVerificationErrorCode(typed.Code())
+		if selected, ok := typed.SelectedTarget(); ok && typed.ChainOfCustodyFailure() {
+			return chainOfCustodyFailureResult(custody, Target{Sequence: selected.Sequence, Instance: selected.InstanceNumber}, reason, class)
+		}
 		if verificationErrorHasUnavailableTarget(typed.Code(), target) {
 			target = Target{}
 			reason, class, state = unavailableVerificationFailure(typed.Code(), reason, class, state)
@@ -339,6 +349,23 @@ func mapVerificationError(err error) Result {
 	return result.withPolicyProjection(projection)
 }
 
+// chainOfCustodyFailureResult reports a Draft-08 Section 14.4 Chain of
+// Custody failure for the already selected target. The verifier stopped
+// before any key lookup, so the sealed policy projection carries neither
+// signature facts nor authenticated hops.
+func chainOfCustodyFailureResult(custody Custody, target Target, reason Reason, class CheckClass) Result {
+	verificationReason, ok := policyVerificationReason(reason)
+	if !ok || StateForReason(reason) != StateFAIL {
+		return internalContractResult(target)
+	}
+	projection, err := policy.NewChainFailureProjection(verificationReason, target.Sequence)
+	if err != nil {
+		return internalContractResult(target)
+	}
+	result := newResult(StateFAIL, custody, target, reason, []CheckFact{{Class: class, Reason: reason}}, nil)
+	return result.withPolicyProjection(projection)
+}
+
 // verificationErrorHasUnavailableTarget identifies failures before authoritative selection.
 func verificationErrorHasUnavailableTarget(code verify.ErrorCode, diagnosticTarget Target) bool {
 	if diagnosticTarget.Sequence == 0 || diagnosticTarget.Instance == 0 {
@@ -357,7 +384,10 @@ func verificationErrorHasUnavailableTarget(code verify.ErrorCode, diagnosticTarg
 // unavailableVerificationFailure normalizes pre-target errors to one sealable policy taxonomy.
 func unavailableVerificationFailure(code verify.ErrorCode, reason Reason, class CheckClass, state State) (Reason, CheckClass, State) {
 	switch code {
-	case verify.ErrorCodeCustodyMismatch, verify.ErrorCodeNextDomainMismatch, verify.ErrorCodeMissingNextSignature:
+	case verify.ErrorCodeCustodyMismatch, verify.ErrorCodeNextDomainMismatch, verify.ErrorCodeMissingNextSignature,
+		verify.ErrorCodeDomainAlignmentMismatch:
+		// A Chain of Custody failure without a selected target cannot be
+		// bound to a verified result and stays a permanent protocol error.
 		return ReasonMalformedProtocol, CheckProtocol, StatePERMERROR
 	case verify.ErrorCodeLimitExceeded, verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget,
 		verify.ErrorCodeSequenceInvalid, verify.ErrorCodeMalformedState, verify.ErrorCodeDuplicateHashAlgorithm,
@@ -368,58 +398,64 @@ func unavailableVerificationFailure(code verify.ErrorCode, reason Reason, class 
 	}
 }
 
-// mapVerificationErrorCode exhaustively maps bounded verification error codes.
+// mapVerificationErrorCode exhaustively maps bounded verification error
+// codes to a reason and check class; the state comes from the single
+// Draft-08 Section 14.1 owner.
 func mapVerificationErrorCode(code verify.ErrorCode) (Reason, CheckClass, State) {
+	reason, class := verificationErrorReason(code)
+	return reason, class, StateForReason(reason)
+}
+
+// verificationErrorReason maps one bounded verification error code.
+func verificationErrorReason(code verify.ErrorCode) (Reason, CheckClass) {
 	switch code {
 	case verify.ErrorCodeLimitExceeded:
-		return ReasonLimitExceeded, CheckProtocol, StatePERMERROR
+		return ReasonLimitExceeded, CheckProtocol
 	case verify.ErrorCodeDuplicateHashAlgorithm:
-		return ReasonDuplicateHashAlgorithm, CheckProtocol, StatePERMERROR
+		return ReasonDuplicateHashAlgorithm, CheckProtocol
 	case verify.ErrorCodeInvalidRecipeJSON:
-		return ReasonInvalidRecipeJSON, CheckProtocol, StatePERMERROR
+		return ReasonInvalidRecipeJSON, CheckProtocol
 	case verify.ErrorCodeDuplicateSelector:
-		return ReasonDuplicateSelector, CheckProtocol, StatePERMERROR
+		return ReasonDuplicateSelector, CheckProtocol
 	case verify.ErrorCodeMissingTarget:
-		return ReasonMissingProtocol, CheckProtocol, StatePERMERROR
+		return ReasonMissingProtocol, CheckProtocol
 	case verify.ErrorCodeDuplicateTarget, verify.ErrorCodeSequenceInvalid:
-		return ReasonSequenceInvalid, CheckProtocol, StatePERMERROR
+		return ReasonSequenceInvalid, CheckProtocol
 	case verify.ErrorCodeUnsupportedAlgorithm, verify.ErrorCodeUnsupportedTarget, verify.ErrorCodeDisabledAlgorithm:
-		return ReasonUnsupportedAlgorithm, CheckProtocol, StatePERMERROR
+		return ReasonUnsupportedAlgorithm, CheckProtocol
 	case verify.ErrorCodeHashMismatch:
-		return ReasonHashMismatch, CheckBodyHash, StateFAIL
+		return ReasonHashMismatch, CheckBodyHash
 	case verify.ErrorCodeSignatureMismatch:
-		return ReasonSignatureMismatch, CheckSignature, StateFAIL
+		return ReasonSignatureMismatch, CheckSignature
 	case verify.ErrorCodeTimestampInvalid:
-		return ReasonTimestampInvalid, CheckTimestamp, StatePERMERROR
+		return ReasonTimestampInvalid, CheckTimestamp
 	case verify.ErrorCodeEnvelopeMismatch:
-		return ReasonEnvelopeMismatch, CheckEnvelope, StatePERMERROR
+		return ReasonEnvelopeMismatch, CheckEnvelope
 	case verify.ErrorCodeCustodyMismatch:
-		return ReasonMalformedProtocol, CheckProtocol, StatePERMERROR
+		return ReasonCustodyMismatch, CheckProtocol
 	case verify.ErrorCodeDomainAlignmentMismatch:
-		return ReasonDomainAlignmentMismatch, CheckDomainAlignment, StatePERMERROR
+		return ReasonDomainAlignmentMismatch, CheckDomainAlignment
 	case verify.ErrorCodeNextDomainMismatch, verify.ErrorCodeMissingNextSignature:
-		return ReasonNextDomainMismatch, CheckNextDomain, StatePERMERROR
+		return ReasonNextDomainMismatch, CheckNextDomain
 	case verify.ErrorCodeOutOfBandRequired:
-		return ReasonOutOfBandRequired, CheckNextDomain, StatePERMERROR
+		return ReasonOutOfBandRequired, CheckNextDomain
 	case verify.ErrorCodeMissingKey:
-		return ReasonMissingKey, CheckKey, StatePERMERROR
+		return ReasonMissingKey, CheckKey
 	case verify.ErrorCodeAmbiguousKey:
-		return ReasonAmbiguousKey, CheckKey, StatePERMERROR
+		return ReasonAmbiguousKey, CheckKey
 	case verify.ErrorCodeInvalidKey, verify.ErrorCodeWrongKeyType, verify.ErrorCodeKeyPolicyRejected:
-		return ReasonInvalidKey, CheckKey, StatePERMERROR
+		return ReasonInvalidKey, CheckKey
 	case verify.ErrorCodeRevokedKey:
-		return ReasonRevokedKey, CheckKey, StatePERMERROR
+		return ReasonRevokedKey, CheckKey
 	case verify.ErrorCodeUnsupportedKeyType:
-		return ReasonUnsupportedKeyType, CheckKey, StatePERMERROR
+		return ReasonUnsupportedKeyType, CheckKey
 	case verify.ErrorCodeKeyAlgorithmMismatch:
-		return ReasonKeyAlgorithmMismatch, CheckKey, StatePERMERROR
+		return ReasonKeyAlgorithmMismatch, CheckKey
 	case verify.ErrorCodeProviderError:
-		return ReasonProviderContract, CheckProvider, StatePERMERROR
+		return ReasonProviderContract, CheckProvider
 	case verify.ErrorCodeMalformedState:
-		return ReasonMalformedProtocol, CheckProtocol, StatePERMERROR
-	case verify.ErrorCodeInvalidOptions, verify.ErrorCodeInvalidRequest, verify.ErrorCodeInternalMisuse, "":
-		return ReasonInternalContract, CheckInternalContract, StatePERMERROR
+		return ReasonMalformedProtocol, CheckProtocol
 	default:
-		return ReasonInternalContract, CheckInternalContract, StatePERMERROR
+		return ReasonInternalContract, CheckInternalContract
 	}
 }

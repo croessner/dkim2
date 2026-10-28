@@ -104,7 +104,9 @@ func TestValidateNextDomainChainRejectsMissingNextSignature(t *testing.T) {
 	}
 }
 
-// TestVerifierDoesNotPassHighestNextDomain verifies OOB acceptance is required for a terminal nd= target.
+// TestVerifierDoesNotPassHighestNextDomain verifies OOB acceptance is
+// required for a terminal nd= target: without it, Draft-08 Sections 13.2 and
+// 14.4 make the completed verification a failure of the target.
 func TestVerifierDoesNotPassHighestNextDomain(t *testing.T) {
 	fixture := newHighestNextDomainFixture(t)
 	verifier := mustVerifierWithKeys(t, []StaticKey{{
@@ -118,8 +120,8 @@ func TestVerifierDoesNotPassHighestNextDomain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
-	if result.Status() != TargetStatusUnsupported || !hasNextDomainCheck(result, NextDomainStatusOutOfBandRequired, CheckStatusUnsupported) {
-		t.Fatalf("result = %q checks=%#v, want OOB-required unsupported state", result.Status(), result.Checks())
+	if result.Status() != TargetStatusFail || !hasNextDomainCheck(result, NextDomainStatusOutOfBandRequired, CheckStatusUnsupported) {
+		t.Fatalf("result = %q checks=%#v, want OOB-required failing target", result.Status(), result.Checks())
 	}
 	if result.CustodyStatus() != CustodyStatusTerminalNDRequiresOOB {
 		t.Fatalf("CustodyStatus() = %q, want terminal OOB", result.CustodyStatus())

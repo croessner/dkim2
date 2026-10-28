@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/croessner/dkim2/internal/combine"
+	"github.com/croessner/dkim2/internal/policy"
 	"github.com/croessner/dkim2/internal/verify"
 )
 
@@ -88,7 +89,7 @@ func mapVerificationResult(input verify.Result, limits Limits) Result {
 		accumulator.add(severityPermanent, ReasonInternalContract)
 	}
 	if custody == CustodyTerminalNDRequiresOOB {
-		accumulator.add(severityPermanent, ReasonOutOfBandRequired)
+		accumulator.add(severityFor(ReasonOutOfBandRequired), ReasonOutOfBandRequired)
 	}
 	accumulator.enforceCustodyCoherence(custody)
 	if accumulator.supportedPass == 0 && accumulator.severity < severityTemporary {
@@ -377,7 +378,7 @@ func (a *mappingAccumulator) mapTimestampCheck(class CheckClass, check verify.Ch
 		return
 	}
 	if (check.TimestampStatus == verify.TimestampStatusFuture || check.TimestampStatus == verify.TimestampStatusExpired || check.TimestampStatus == verify.TimestampStatusInvalid) && check.Status == verify.CheckStatusFail && check.Code == verify.ErrorCodeTimestampInvalid {
-		a.addFact(class, severityPermanent, ReasonTimestampInvalid)
+		a.addFact(class, severityFor(ReasonTimestampInvalid), ReasonTimestampInvalid)
 		return
 	}
 	a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
@@ -403,7 +404,7 @@ func (a *mappingAccumulator) mapEnvelopeCheck(class CheckClass, check verify.Che
 		}
 	case verify.EnvelopeStatusMissing, verify.EnvelopeStatusMismatch, verify.EnvelopeStatusInvalid, verify.EnvelopeStatusReversePathMismatch, verify.EnvelopeStatusRecipientValueMismatch:
 		if check.Status == verify.CheckStatusFail && check.Code == verify.ErrorCodeEnvelopeMismatch {
-			a.addFact(class, severityPermanent, ReasonEnvelopeMismatch)
+			a.addFact(class, severityFor(ReasonEnvelopeMismatch), ReasonEnvelopeMismatch)
 			return
 		}
 	}
@@ -430,12 +431,12 @@ func (a *mappingAccumulator) mapAlignmentCheck(class CheckClass, check verify.Ch
 		}
 	case verify.DomainAlignmentStatusMismatch:
 		if check.Status == verify.CheckStatusFail && check.Code == verify.ErrorCodeDomainAlignmentMismatch {
-			a.addFact(class, severityPermanent, ReasonDomainAlignmentMismatch)
+			a.addFact(class, severityFor(ReasonDomainAlignmentMismatch), ReasonDomainAlignmentMismatch)
 			return
 		}
 	case verify.DomainAlignmentStatusInvalid:
 		if check.Status == verify.CheckStatusFail && check.Code == verify.ErrorCodeMalformedState {
-			a.addFact(class, severityPermanent, ReasonDomainAlignmentMismatch)
+			a.addFact(class, severityFor(ReasonDomainAlignmentMismatch), ReasonDomainAlignmentMismatch)
 			return
 		}
 	}
@@ -462,14 +463,14 @@ func (a *mappingAccumulator) mapNextDomainCheck(class CheckClass, check verify.C
 		}
 	case verify.NextDomainStatusOutOfBandRequired:
 		if check.Status == verify.CheckStatusUnsupported && check.Code == verify.ErrorCodeOutOfBandRequired {
-			a.addFact(class, severityPermanent, ReasonOutOfBandRequired)
+			a.addFact(class, severityFor(ReasonOutOfBandRequired), ReasonOutOfBandRequired)
 		} else {
 			a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
 		}
 		return
 	case verify.NextDomainStatusMismatch, verify.NextDomainStatusMissingNext:
 		if check.Status == verify.CheckStatusFail && (check.NextDomainStatus == verify.NextDomainStatusMismatch && check.Code == verify.ErrorCodeNextDomainMismatch || check.NextDomainStatus == verify.NextDomainStatusMissingNext && check.Code == verify.ErrorCodeMissingNextSignature) {
-			a.addFact(class, severityPermanent, ReasonNextDomainMismatch)
+			a.addFact(class, severityFor(ReasonNextDomainMismatch), ReasonNextDomainMismatch)
 		} else {
 			a.addFact(CheckInternalContract, severityPermanent, ReasonInternalContract)
 		}
@@ -694,6 +695,41 @@ func (a *mappingAccumulator) add(severity outcomeSeverity, reason Reason) {
 	}
 }
 
+// severityFor returns the aggregate precedence of one reason from its single
+// Draft-08 Section 14.1 state owner, so a check fact can never carry a
+// severity that disagrees with the state its reason reports.
+func severityFor(reason Reason) outcomeSeverity {
+	switch StateForReason(reason) {
+	case StatePASS:
+		return severityPass
+	case StateTEMPERROR:
+		return severityTemporary
+	case StateFAIL:
+		return severityFailure
+	default:
+		return severityPermanent
+	}
+}
+
+// StateForReason returns the Draft-08 Section 14.1 state that a result with
+// this primary reason reports. The policy package owns the classification;
+// an unknown or request-only reason is PERMERROR, which fails closed.
+func StateForReason(reason Reason) State {
+	if reason == ReasonInvalidRequest {
+		return StatePERMERROR
+	}
+	switch protocol, _ := policy.ProtocolForVerificationReason(policy.VerificationReason(reason)); protocol {
+	case policy.ProtocolPASS:
+		return StatePASS
+	case policy.ProtocolFAIL:
+		return StateFAIL
+	case policy.ProtocolTEMPERROR:
+		return StateTEMPERROR
+	default:
+		return StatePERMERROR
+	}
+}
+
 // stateForSeverity maps aggregate precedence to exactly four states.
 func stateForSeverity(severity outcomeSeverity) State {
 	switch severity {
@@ -852,7 +888,7 @@ func classForReason(reason Reason) CheckClass {
 
 // reasonRank makes equal-precedence primary reasons independent of input order.
 func reasonRank(reason Reason) int {
-	for index, candidate := range []Reason{ReasonInternalContract, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonFromNotAuthentic, ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonMissingKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonHashMismatch, ReasonSignatureMismatch, ReasonProviderTemporary, ReasonNone} {
+	for index, candidate := range []Reason{ReasonInternalContract, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonInvalidRecipe, ReasonFromNotAuthentic, ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonMissingKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonCustodyMismatch, ReasonOutOfBandRequired, ReasonBodyHistoryUnavailable, ReasonHashMismatch, ReasonSignatureMismatch, ReasonProviderTemporary, ReasonNone} {
 		if reason == candidate {
 			return index
 		}

@@ -331,7 +331,8 @@ Public reason codes are closed to `none`, `invalid_request`, `limit_exceeded`,
 `signature_mismatch`, `missing_key`, `invalid_key`, `ambiguous_key`,
 `provider_temporary`, `provider_permanent`, `provider_contract`,
 `timestamp_invalid`, `envelope_mismatch`, `domain_alignment_mismatch`,
-`next_domain_mismatch`, `out_of_band_required`, and `internal_contract`.
+`next_domain_mismatch`, `custody_mismatch`, `out_of_band_required`,
+`body_history_unavailable`, `invalid_recipe`, and `internal_contract`.
 Adding a value requires a spec and mapping-test update. Unknown internal values
 map to `internal_contract`, never to PASS.
 
@@ -369,8 +370,8 @@ M5 exposes exactly these top-level values:
 | Public state | Meaning |
 | --- | --- |
 | `PASS` | Current target, current hashes, required supported signatures, timestamp, and applicable custody/envelope checks passed. |
-| `FAIL` | Verification was possible, but a supported body hash, header hash, or cryptographic signature did not match. |
-| `PERMERROR` | Verification could not complete because of unrecoverable malformed, missing, ambiguous, unsupported, expired, custody, envelope, or key state. |
+| `FAIL` | Draft-08 Section 14.1: verification completed and the message is not a Fully Verified DKIM2 Message: a hash or signature mismatch, a timestamp failure, a Chain of Custody failure (envelope, MAIL FROM and `d=` alignment, `nd=`, custody adjacency, unmet out-of-band arrangement), an inauthentic From, or a null body Recipe in the history. |
+| `PERMERROR` | Verification could not complete because of unrecoverable malformed, missing, duplicate, ambiguous, unsupported, sequence, Recipe, limit, or key state. |
 | `TEMPERROR` | Verification could not complete solely because the injected key provider reported a temporary provider failure. |
 
 Internal `mixed`, `unsupported`, `indeterminate`, `not_applicable`, and
@@ -391,9 +392,17 @@ The binding mapping is:
 | Missing, invalid, ambiguous, mismatched, or policy-rejected static key | `PERMERROR` | No DNS temporary semantics exist in M5. |
 | Temporary injected provider failure | `TEMPERROR` | Provider errors must be typed; arbitrary strings do not decide mapping. |
 | Missing/malformed DKIM2 field, tag, sequence, current instance, or request evidence | `PERMERROR` | Includes resource-limit failure. |
-| Expired or disallowed future timestamp | `PERMERROR` | Uses deterministic clock policy. |
-| Current MAIL FROM, RCPT TO, `d=`, or `nd=` custody mismatch | `PERMERROR` | Raw paths/domains are not emitted. |
-| Highest `nd=` requiring unmodeled out-of-band trust | `PERMERROR` | Deterministic secure default; never PASS or TEMPERROR. |
+| Expired or disallowed future timestamp | `FAIL` `timestamp_invalid` | Draft-08 Section 14.3; uses deterministic clock policy. |
+| Current MAIL FROM or RCPT TO mismatch | `FAIL` `envelope_mismatch` | Draft-08 Section 14.4; raw paths are not emitted. |
+| MAIL FROM and `d=` not aligned, current or inherited | `FAIL` `domain_alignment_mismatch` | Draft-08 Section 14.4. |
+| `nd=` does not match the next `d=`, or an unexpected `nd=` transition | `FAIL` `next_domain_mismatch` | Draft-08 Section 14.4; decided before any key lookup. |
+| `mf=` or `d=` does not match the previous `rt=` | `FAIL` `custody_mismatch` | Draft-08 Sections 7.1 and 14.4; decided before any key lookup for the selected target. |
+| Highest `nd=` requiring unmodeled out-of-band trust | `FAIL` `out_of_band_required` | Draft-08 Sections 13.2 and 14.4; never PASS or TEMPERROR. |
+| Inauthentic From in the authenticated history | `FAIL` `from_not_authentic` | Draft-08 Sections 11 and 14.8. |
+| History contains a `"b":null` Recipe | `FAIL` `body_history_unavailable` | Draft-08 Section 13: body hashes below a null Recipe cannot be checked. |
+| Recipe text not valid JSON or not an object | `PERMERROR` `invalid_recipe_json` | Draft-08 Section 14.2. |
+| Valid Recipe JSON with an invalid schema, step, range, literal, or application | `PERMERROR` `invalid_recipe` | Draft-08 Section 14.2; diagnostics carry step index, member, and kind, never step text. |
+| Signature or instance sequence gap or duplicate | `PERMERROR` `sequence_invalid` | Section 14.2 calls this "not Fully Verified"; kept as a structural PERMERROR. |
 | Context canceled or deadline exceeded by the caller | Go error | Caller control flow, not a DKIM2 protocol result. |
 | Invalid verifier construction or programmer misuse | Go error | No partially initialized verifier is returned. |
 
@@ -402,12 +411,15 @@ order, provider completion order, or error text. The binding precedence is:
 
 1. Caller cancellation/deadline or API misuse: zero result plus Go error.
 2. Structural or permanent protocol state: PERMERROR. This includes parser,
-   limits, required fields/tags, sequence/target, timestamp, envelope,
-   alignment, custody, unsupported-only algorithms, permanent/missing/
-   invalid/ambiguous keys, provider-contract failure, and unknown internal
-   enum values.
-3. Supported integrity failures: FAIL, but only when no PERMERROR fact exists.
-   This includes any supported signature failure or current hash mismatch.
+   limits, required fields/tags, sequence/target, Recipe, unsupported-only
+   algorithms, permanent/missing/invalid/ambiguous keys, provider-contract
+   failure, and unknown internal enum values.
+3. Completed verification of a message that is not Fully Verified: FAIL, but
+   only when no PERMERROR fact exists. This includes any supported signature
+   failure, hash mismatch, timestamp, envelope, alignment, `nd=`, custody, or
+   out-of-band failure, an inauthentic From, and a null body Recipe. The
+   single owner of the reason-to-state classification is
+   `policy.ProtocolForVerificationReason`.
 4. Typed temporary provider failure: TEMPERROR, but only when no PERMERROR or
    FAIL fact exists and the temporary failure prevents a complete conclusion.
 5. PASS only when every applicable required check passes, every supported

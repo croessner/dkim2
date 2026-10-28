@@ -2237,6 +2237,12 @@ components:
             - chain
         historical_content:
           type: string
+          description: >-
+            Authenticated historical content coverage. Under Draft-08 Section 13
+            a history with a null body Recipe is not Fully Verified and is
+            reported as FAIL body_history_unavailable, so a PASS reports
+            complete; partial is retained in the closed vocabulary and is not
+            produced.
           enum:
             - not_evaluated
             - complete
@@ -2449,6 +2455,7 @@ components:
             - malformed_protocol
             - duplicate_hash_algorithm
             - invalid_recipe_json
+            - invalid_recipe
             - from_not_authentic
             - duplicate_selector
             - missing_protocol
@@ -2469,7 +2476,9 @@ components:
             - envelope_mismatch
             - domain_alignment_mismatch
             - next_domain_mismatch
+            - custody_mismatch
             - out_of_band_required
+            - body_history_unavailable
             - internal_contract
             - duplicate_message_without_exploded
             - replay_indeterminate
@@ -2564,6 +2573,17 @@ components:
       pattern: "^[A-Za-z0-9+/]{43}=$"
     VerificationState:
       type: string
+      description: >-
+        Draft-08 Section 14.1 verification state. PASS: the message is a Fully
+        Verified DKIM2 Message. FAIL: verification completed and the message is
+        not Fully Verified, reported with hash_mismatch, signature_mismatch,
+        timestamp_invalid, envelope_mismatch, domain_alignment_mismatch,
+        next_domain_mismatch, custody_mismatch, out_of_band_required,
+        from_not_authentic, or body_history_unavailable. PERMERROR: an
+        unrecoverable error such as malformed, missing, or duplicate protocol
+        state, invalid sequencing, an unsupported algorithm, a key error, an
+        invalid Recipe, or a local limit. TEMPERROR: a temporary inability to
+        retrieve a public key.
       enum:
         - PASS
         - FAIL
@@ -2578,6 +2598,7 @@ components:
         - malformed_protocol
         - duplicate_hash_algorithm
         - invalid_recipe_json
+        - invalid_recipe
         - from_not_authentic
         - duplicate_selector
         - missing_protocol
@@ -2598,7 +2619,9 @@ components:
         - envelope_mismatch
         - domain_alignment_mismatch
         - next_domain_mismatch
+        - custody_mismatch
         - out_of_band_required
+        - body_history_unavailable
         - internal_contract
     PolicyReason:
       type: string

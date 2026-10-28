@@ -18,7 +18,8 @@ type ResultState string
 const (
 	// ResultStatePASS reports complete success for the declared authenticated scope.
 	ResultStatePASS ResultState = "PASS"
-	// ResultStateFAIL reports a supported integrity mismatch.
+	// ResultStateFAIL reports that verification completed and the message is
+	// not a Fully Verified DKIM2 Message (Draft-08 Section 14.1).
 	ResultStateFAIL ResultState = "FAIL"
 	// ResultStatePERMERROR reports unrecoverable malformed, missing, unsupported, or ambiguous state.
 	ResultStatePERMERROR ResultState = "PERMERROR"
@@ -59,7 +60,9 @@ const (
 	HistoricalStateNotEvaluated HistoricalState = "not_evaluated"
 	// HistoricalStateComplete reports authenticated coverage through the origin.
 	HistoricalStateComplete HistoricalState = "complete"
-	// HistoricalStatePartial reports authenticated coverage with an explicit unavailable body.
+	// HistoricalStatePartial reports authenticated coverage with an explicit
+	// unavailable body. Draft-08 Section 13 makes such a history FAIL
+	// body_history_unavailable, so verification no longer produces it.
 	HistoricalStatePartial HistoricalState = "partial"
 )
 
@@ -150,8 +153,13 @@ const (
 	ReasonMalformedProtocol ReasonCode = "malformed_protocol"
 	// ReasonDuplicateHashAlgorithm reports any repeated h= algorithm name.
 	ReasonDuplicateHashAlgorithm ReasonCode = "duplicate_hash_algorithm"
-	// ReasonInvalidRecipeJSON reports malformed authenticated recipe JSON.
+	// ReasonInvalidRecipeJSON reports authenticated recipe text that is not
+	// valid JSON or not a JSON object.
 	ReasonInvalidRecipeJSON ReasonCode = "invalid_recipe_json"
+	// ReasonInvalidRecipe reports valid authenticated recipe JSON whose
+	// schema, steps, or application are invalid (Draft-08 Section 14.2).
+	// Diagnostics never carry the recipe step text.
+	ReasonInvalidRecipe ReasonCode = "invalid_recipe"
 	// ReasonFromNotAuthentic reports a From header field state that is not
 	// Authentic for its responsible signature (Draft-08 Section 14.8).
 	ReasonFromNotAuthentic ReasonCode = "from_not_authentic"
@@ -193,8 +201,16 @@ const (
 	ReasonDomainAlignmentMismatch ReasonCode = "domain_alignment_mismatch"
 	// ReasonNextDomainMismatch reports structural next-domain disagreement.
 	ReasonNextDomainMismatch ReasonCode = "next_domain_mismatch"
+	// ReasonCustodyMismatch reports a Chain of Custody adjacency failure: an
+	// mf= or d= that does not match the previous signature's rt= (Draft-08
+	// Sections 7.1 and 14.4).
+	ReasonCustodyMismatch ReasonCode = "custody_mismatch"
 	// ReasonOutOfBandRequired reports a terminal next-domain requiring unmodeled OOB trust.
 	ReasonOutOfBandRequired ReasonCode = "out_of_band_required"
+	// ReasonBodyHistoryUnavailable reports a history that contains a null
+	// body Recipe, so the message is not a Fully Verified DKIM2 Message
+	// (Draft-08 Section 13).
+	ReasonBodyHistoryUnavailable ReasonCode = "body_history_unavailable"
 	// ReasonInternalContract reports an unknown or inconsistent internal fact.
 	ReasonInternalContract ReasonCode = "internal_contract"
 )
@@ -203,13 +219,13 @@ const (
 func (r ReasonCode) Known() bool {
 	switch r {
 	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage,
-		ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonFromNotAuthentic,
+		ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonInvalidRecipe, ReasonFromNotAuthentic,
 		ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid,
 		ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch,
 		ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary,
 		ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid,
 		ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch,
-		ReasonOutOfBandRequired, ReasonInternalContract:
+		ReasonCustodyMismatch, ReasonOutOfBandRequired, ReasonBodyHistoryUnavailable, ReasonInternalContract:
 		return true
 	default:
 		return false
@@ -666,23 +682,23 @@ func (r VerifyResult) Valid() bool {
 	if target.Sequence() == 0 || target.Instance() == 0 {
 		return false
 	}
-	switch r.state.resultState {
-	case ResultStatePASS:
-		return r.state.primaryReason == ReasonNone &&
-			(r.state.custodyStructure == CustodyStructureNotPresent ||
-				r.state.custodyStructure == CustodyStructureNDLinksEvaluated)
-	case ResultStateFAIL:
-		return r.state.primaryReason == ReasonHashMismatch || r.state.primaryReason == ReasonSignatureMismatch
-	case ResultStateTEMPERROR:
-		return r.state.primaryReason == ReasonProviderTemporary
-	case ResultStatePERMERROR:
-		return r.state.primaryReason != ReasonNone &&
-			r.state.primaryReason != ReasonHashMismatch &&
-			r.state.primaryReason != ReasonSignatureMismatch &&
-			r.state.primaryReason != ReasonProviderTemporary
-	default:
+	if r.state.resultState == ResultStatePASS &&
+		r.state.custodyStructure != CustodyStructureNotPresent &&
+		r.state.custodyStructure != CustodyStructureNDLinksEvaluated {
 		return false
 	}
+	return resultStateForReason(r.state.primaryReason) == r.state.resultState
+}
+
+// resultStateForReason returns the one Draft-08 Section 14.1 state a public
+// result with this primary reason reports, from the single policy-owned
+// classification; an unknown reason has no state.
+func resultStateForReason(reason ReasonCode) ResultState {
+	protocol, ok := policy.ProtocolForVerificationReason(policy.VerificationReason(reason))
+	if !ok || reason == ReasonInvalidRequest {
+		return ""
+	}
+	return ResultState(protocol)
 }
 
 // String returns a constant representation without sealed or message-derived facts.

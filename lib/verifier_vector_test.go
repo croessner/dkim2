@@ -201,25 +201,29 @@ func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 		{name: "typed_provider_deadline_temperror", vector: goldenVectorRSAPass, mode: goldenProviderTemporaryDeadline, state: ResultStateTEMPERROR, reason: ReasonProviderTemporary, class: CheckClassProvider, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "unclassified_provider_deadline_permerror", vector: goldenVectorRSAPass, mode: goldenProviderUnclassifiedDeadline, state: ResultStatePERMERROR, reason: ReasonProviderContract, class: CheckClassProvider, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		pass("timestamp_exact_14_days_pass", "age_exact"),
-		{name: "timestamp_14_days_plus_one_permerror", vector: "age_over", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
+		// Draft-08 Section 14.3: timestamp failures are FAIL.
+		{name: "timestamp_14_days_plus_one_fail", vector: "age_over", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		// future_exact is signed 300 seconds after publicVectorClock and
 		// future_over 301 seconds after it; the clock is moved back so both
 		// sit on the Draft-08 Section 14.3 one-day future boundary.
 		{name: "timestamp_exact_one_day_future_pass", vector: "future_exact", mode: goldenProviderKeys, state: ResultStatePASS, reason: ReasonNone, custody: CustodyStructureNotPresent, sequence: 1, instance: 1, clock: publicVectorClock + 300 - 86400},
-		{name: "timestamp_one_day_plus_one_permerror", vector: "future_over", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1, clock: publicVectorClock + 300 - 86400},
-		{name: "timestamp_large_parseable_permerror", vector: "timestamp_large", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
+		{name: "timestamp_one_day_plus_one_fail", vector: "future_over", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1, clock: publicVectorClock + 300 - 86400},
+		{name: "timestamp_large_parseable_fail", vector: "timestamp_large", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		pass("mail_from_exact_pass", "mail_exact"),
 		{name: "mail_from_ascii_domain_case_pass", vector: "mail_domain_case", mode: goldenProviderKeys, reverse: []byte("<Sender@example.test>"), state: ResultStatePASS, reason: ReasonNone, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
-		{name: "mail_from_local_part_case_mismatch", vector: "mail_exact", mode: goldenProviderKeys, reverse: []byte("<sender@example.test>"), state: ResultStatePERMERROR, reason: ReasonEnvelopeMismatch, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
+		{name: "mail_from_local_part_case_mismatch", vector: "mail_exact", mode: goldenProviderKeys, reverse: []byte("<sender@example.test>"), state: ResultStateFAIL, reason: ReasonEnvelopeMismatch, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		pass("null_reverse_path_matches_null", "mail_null"),
-		{name: "null_reverse_path_nonnull_mismatch", vector: "mail_null", mode: goldenProviderKeys, reverse: []byte("<sender@example.test>"), state: ResultStatePERMERROR, reason: ReasonEnvelopeMismatch, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
+		{name: "null_reverse_path_nonnull_mismatch", vector: "mail_null", mode: goldenProviderKeys, reverse: []byte("<sender@example.test>"), state: ResultStateFAIL, reason: ReasonEnvelopeMismatch, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "recipient_subset_order_and_signed_extra_pass", vector: "recipient_set", mode: goldenProviderKeys, forward: [][]byte{[]byte("<two@example.test>"), []byte("<one@example.test>")}, state: ResultStatePASS, reason: ReasonNone, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
-		{name: "recipient_missing_current_permerror", vector: "recipient_set", mode: goldenProviderKeys, forward: [][]byte{[]byte("<one@example.test>"), []byte("<missing@example.test>")}, state: ResultStatePERMERROR, reason: ReasonEnvelopeMismatch, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
-		{name: "current_envelope_mismatch_permerror", vector: "mail_exact", mode: goldenProviderKeys, reverse: []byte("<Sender@other.test>"), state: ResultStatePERMERROR, reason: ReasonEnvelopeMismatch, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
+		// Draft-08 Section 14.4: Chain of Custody envelope failures are FAIL.
+		{name: "recipient_missing_current_fail", vector: "recipient_set", mode: goldenProviderKeys, forward: [][]byte{[]byte("<one@example.test>"), []byte("<missing@example.test>")}, state: ResultStateFAIL, reason: ReasonEnvelopeMismatch, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
+		{name: "current_envelope_mismatch_fail", vector: "mail_exact", mode: goldenProviderKeys, reverse: []byte("<Sender@other.test>"), state: ResultStateFAIL, reason: ReasonEnvelopeMismatch, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		pass("relaxed_d_alignment_pass", "alignment_relaxed"),
-		{name: "d_alignment_mismatch_permerror", vector: "alignment_mismatch", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonDomainAlignmentMismatch, class: CheckClassDomainAlignment, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
-		{name: "intermediate_nd_from_not_authentic", vector: "intermediate_nd", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonFromNotAuthentic, class: CheckClassProtocol, custody: CustodyStructureNDLinksEvaluated, sequence: 2, instance: 1},
-		{name: "terminal_current_nd_permerror", vector: "terminal_nd", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonOutOfBandRequired, class: CheckClassNextDomain, custody: CustodyStructureTerminalNDRequiresOOB, sequence: 1, instance: 1},
+		{name: "d_alignment_mismatch_fail", vector: "alignment_mismatch", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonDomainAlignmentMismatch, class: CheckClassDomainAlignment, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
+		// Draft-08 Sections 14.1 and 14.8: an inauthentic From is FAIL.
+		{name: "intermediate_nd_from_not_authentic", vector: "intermediate_nd", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonFromNotAuthentic, class: CheckClassProtocol, custody: CustodyStructureNDLinksEvaluated, sequence: 2, instance: 1},
+		// Draft-08 Sections 13.2 and 14.4: terminal nd= without an out-of-band arrangement is FAIL.
+		{name: "terminal_current_nd_fail", vector: "terminal_nd", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonOutOfBandRequired, class: CheckClassNextDomain, custody: CustodyStructureTerminalNDRequiresOOB, sequence: 1, instance: 1},
 	}
 	for index := range cases {
 		cases[index].signatures = expectedPublicGoldenSignatures(cases[index])

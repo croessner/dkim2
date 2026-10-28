@@ -15,7 +15,8 @@ func TestMapVerificationResultAppliesBindingPrecedence(t *testing.T) {
 	passSet := verify.SignatureSetResult{Index: 0, Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusPass, KeyStatus: verify.KeyStatusFound}
 	failSet := verify.SignatureSetResult{Index: 1, Selector: failedSelector, Algorithm: verify.AlgorithmEd25519SHA256, Status: verify.SignatureSetStatusFail, KeyStatus: verify.KeyStatusFound}
 	temporarySet := verify.SignatureSetResult{Index: 0, Algorithm: verify.AlgorithmRSASHA256, Status: verify.SignatureSetStatusProviderTemporary, KeyStatus: verify.KeyStatusProviderTemporary}
-	permanentCheck := verify.CheckResult{Kind: verify.CheckKindTimestamp, Status: verify.CheckStatusFail, Code: verify.ErrorCodeTimestampInvalid, TimestampStatus: verify.TimestampStatusExpired, Target: target}
+	timestampCheck := verify.CheckResult{Kind: verify.CheckKindTimestamp, Status: verify.CheckStatusFail, Code: verify.ErrorCodeTimestampInvalid, TimestampStatus: verify.TimestampStatusExpired, Target: target}
+	permanentCheck := verify.CheckResult{Kind: verify.CheckKindBodyHash, Status: verify.CheckStatusFail, Code: verify.ErrorCodeMalformedState, HashStatus: verify.HashStatusInvalid, Target: target}
 	failAndTemporaryChecks := requiredChecksWithSignatures(target,
 		verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusFail, Code: verify.ErrorCodeProviderError, Algorithm: verify.AlgorithmRSASHA256, ProviderFailureClass: verify.ProviderFailureTemporary, Target: target},
 		verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusFail, Code: verify.ErrorCodeSignatureMismatch, Algorithm: verify.AlgorithmEd25519SHA256, Target: target},
@@ -23,9 +24,15 @@ func TestMapVerificationResultAppliesBindingPrecedence(t *testing.T) {
 	temporaryChecks := requiredChecksWithSignatures(target,
 		verify.CheckResult{Kind: verify.CheckKindSignature, Status: verify.CheckStatusFail, Code: verify.ErrorCodeProviderError, Algorithm: verify.AlgorithmRSASHA256, ProviderFailureClass: verify.ProviderFailureTemporary, Target: target},
 	)
-	permanentChecks := slices.Clone(failAndTemporaryChecks)
+	timestampChecks := slices.Clone(failAndTemporaryChecks)
+	for index := range timestampChecks {
+		if timestampChecks[index].Kind == verify.CheckKindTimestamp {
+			timestampChecks[index] = timestampCheck
+		}
+	}
+	permanentChecks := slices.Clone(timestampChecks)
 	for index := range permanentChecks {
-		if permanentChecks[index].Kind == verify.CheckKindTimestamp {
+		if permanentChecks[index].Kind == verify.CheckKindBodyHash {
 			permanentChecks[index] = permanentCheck
 		}
 	}
@@ -40,7 +47,10 @@ func TestMapVerificationResultAppliesBindingPrecedence(t *testing.T) {
 	}{
 		{name: "passing target", status: verify.TargetStatusPass, checks: passChecks, sets: []verify.SignatureSetResult{passSet}, want: StatePASS, reason: ReasonNone},
 		{name: "supported failure outranks temporary", status: verify.TargetStatusMixed, checks: failAndTemporaryChecks, sets: []verify.SignatureSetResult{temporarySet, failSet}, want: StateFAIL, reason: ReasonSignatureMismatch},
-		{name: "permanent outranks failure and temporary", status: verify.TargetStatusFail, checks: permanentChecks, sets: []verify.SignatureSetResult{temporarySet, failSet}, want: StatePERMERROR, reason: ReasonTimestampInvalid},
+		// Draft-08 Section 14.3: an expired timestamp is a FAIL, which ranks
+		// before the signature mismatch and outranks the temporary set.
+		{name: "Draft-08 timestamp failure outranks signature failure and temporary", status: verify.TargetStatusFail, checks: timestampChecks, sets: []verify.SignatureSetResult{temporarySet, failSet}, want: StateFAIL, reason: ReasonTimestampInvalid},
+		{name: "permanent outranks failure and temporary", status: verify.TargetStatusFail, checks: permanentChecks, sets: []verify.SignatureSetResult{temporarySet, failSet}, want: StatePERMERROR, reason: ReasonMalformedProtocol},
 		{name: "temporary without higher fact", status: verify.TargetStatusIndeterminate, checks: temporaryChecks, sets: []verify.SignatureSetResult{temporarySet}, want: StateTEMPERROR, reason: ReasonProviderTemporary},
 	}
 	for _, tt := range tests {
@@ -180,8 +190,11 @@ func TestMapVerificationResultReportsAllCustodyStates(t *testing.T) {
 			terminalChecks[index].DomainAlignmentStatus = verify.DomainAlignmentStatusNotApplicable
 		}
 	}
-	terminal := mapVerificationResult(verify.NewResultWithCustody(target, verify.TargetStatusUnsupported, terminalChecks, passSet, verify.CustodyStatusTerminalNDRequiresOOB), DefaultLimits())
-	if terminal.State() != StatePERMERROR || terminal.Custody() != CustodyTerminalNDRequiresOOB || terminal.PrimaryReason() != ReasonOutOfBandRequired {
+	// Draft-08 Sections 13.2 and 14.4: a terminal nd= without an out-of-band
+	// arrangement is a completed verification that is not Fully Verified,
+	// so the core reports a failing target and the service FAIL.
+	terminal := mapVerificationResult(verify.NewResultWithCustody(target, verify.TargetStatusFail, terminalChecks, passSet, verify.CustodyStatusTerminalNDRequiresOOB), DefaultLimits())
+	if terminal.State() != StateFAIL || terminal.Custody() != CustodyTerminalNDRequiresOOB || terminal.PrimaryReason() != ReasonOutOfBandRequired {
 		t.Fatalf("terminal custody = %q/%q/%q", terminal.State(), terminal.Custody(), terminal.PrimaryReason())
 	}
 

@@ -960,7 +960,7 @@ func TestDraft08PermanentReasonsDoNotTempfail(t *testing.T) {
 			HTTPResponse: &http.Response{
 				StatusCode:    http.StatusOK,
 				ContentLength: int64(len(body)),
-				Header:        http.Header{"Content-Type": []string{testMediaTypeJSON}},
+				Header:        http.Header{testHeaderContentType: []string{testMediaTypeJSON}},
 				Request: &http.Request{
 					Method: http.MethodPost,
 					URL:    &url.URL{Path: routeProcess},
@@ -1066,7 +1066,7 @@ func TestProcessMappingMarksTemporaryKeyTempfail(t *testing.T) {
 			HTTPResponse: &http.Response{
 				StatusCode:    http.StatusOK,
 				ContentLength: int64(len(body)),
-				Header:        http.Header{"Content-Type": []string{testMediaTypeJSON}},
+				Header:        http.Header{testHeaderContentType: []string{testMediaTypeJSON}},
 				Request:       &http.Request{Method: http.MethodPost, URL: &url.URL{Path: routeProcess}},
 			},
 		}

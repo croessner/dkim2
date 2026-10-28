@@ -223,6 +223,14 @@ DKIM2_NAUTHILUS_DENY
 DKIM2_NAUTHILUS_INDETERMINATE
 ```
 
+`DKIM2_FAIL` and `DKIM2_PERMERROR` follow the daemon's Draft-08 Section 14.1
+state: timestamp, envelope, alignment, `nd=`, custody (`custody_mismatch`),
+out-of-band, From-authenticity, and null body Recipe
+(`body_history_unavailable`) failures report `DKIM2_FAIL`, while malformed,
+sequence, algorithm, key, Recipe (`invalid_recipe`, `invalid_recipe_json`),
+and limit failures report `DKIM2_PERMERROR`. Both symbols are zero-score; the
+daemon disposition stays authoritative.
+
 Received delivery-status notifications add one zero-score symbol per member of
 the daemon's closed received-DSN projection. They are published only when the
 daemon returned that optional member, and they change no disposition, no

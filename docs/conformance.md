@@ -132,12 +132,29 @@ Draft-08 deliberately tightens duplicate Message-Instance hash names (across
 every `h=` group), non-lowercase decoded Recipe header keys, and selector
 uniqueness (across every `s=` group). The three corresponding protocol
 infractions are distinct PERMERROR reasons:
-`duplicate_hash_algorithm`, `invalid_recipe_json`, and `duplicate_selector`.
+`duplicate_hash_algorithm`, `invalid_recipe` (a non-lowercase decoded key is a
+Recipe schema error of valid JSON), and `duplicate_selector`. Following
+Draft-08 Section 14.2, `invalid_recipe_json` is kept only for Recipe text that
+is not valid JSON or not a JSON object, and `invalid_recipe` covers schema,
+step, range, literal, and application errors; neither carries step text.
 They are verification results, not HTTP JSON-decode errors, and do not become
 SMTP 4xx outcomes. Draft-08 Section 10.9 removed the Draft-07 limit of two
 occurrences per signing algorithm and with it the `too_many_signatures`
 reason; only the local `max_signature_sets` and `max_hash_sets` bounds of 16,
 counted across all groups, remain (`limit_exceeded`).
+
+Draft-08 Section 14.1 defines FAIL as a completed verification of a message
+that is not Fully Verified. Timestamp (`timestamp_invalid`), envelope
+(`envelope_mismatch`), MAIL FROM and `d=` alignment
+(`domain_alignment_mismatch`), `nd=` (`next_domain_mismatch`), custody
+adjacency (`custody_mismatch`), unmet out-of-band (`out_of_band_required`),
+and From authenticity (`from_not_authentic`) failures are therefore FAIL, and
+a history with a null body Recipe is FAIL `body_history_unavailable`.
+Sequence gaps and duplicates stay PERMERROR `sequence_invalid` as structural
+errors. Local policy verdicts for every reason are unchanged except that a
+null body Recipe history, formerly a PASS with partial history, is now
+rejected in strict mode; the reason by mode table is pinned by
+`lib/verification_disposition_test.go`.
 
 The verifier now accepts SHA-512-only and agreeing dual-hash
 Message-Instances, a second same-algorithm signature with a distinct selector,

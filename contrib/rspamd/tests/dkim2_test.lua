@@ -392,6 +392,29 @@ for _, report in ipairs({
   end
 end
 
+-- Draft-08 Section 14.1 FAIL reasons and the Section 14.2 invalid_recipe
+-- PERMERROR are admitted with their exact report and emit the state symbol.
+for _, case in ipairs({
+  { state = 'FAIL', reason = 'custody_mismatch', symbol = 'DKIM2_FAIL' },
+  { state = 'FAIL', reason = 'body_history_unavailable', symbol = 'DKIM2_FAIL' },
+  { state = 'FAIL', reason = 'timestamp_invalid', symbol = 'DKIM2_FAIL' },
+  { state = 'PERMERROR', reason = 'invalid_recipe', symbol = 'DKIM2_PERMERROR' },
+}) do
+  local result = string.lower(case.state)
+  pending_response = response(case.state, 'accept', 'not_checked', {
+    { type = 'add_header', name = 'Authentication-Results',
+      value = 'mx.example.test; dkim2=' .. result .. ' (reason=' .. case.reason .. ')' },
+  })
+  pending_response.authentication.primary_reason = case.reason
+  pending_response.verification.primary_reason = case.reason
+  pending_response.policy.mode = 'permissive'
+  pending_response.policy.primary_reason = 'permissive_override'
+  local task = new_task({ ['DKIM2-Signature'] = true })
+  callback(task)
+  assert(task.pre_result == nil, 'Draft-08 reason was not admitted: ' .. case.reason)
+  assert(contains(task.symbols, case.symbol), 'Draft-08 reason emitted the wrong state symbol: ' .. case.reason)
+end
+
 local incomplete_pass = response('PASS', 'accept', 'first_seen')
 incomplete_pass.verification.scope = nil
 assert(verifier.policy_attributes(incomplete_pass) == nil,

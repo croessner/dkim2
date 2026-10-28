@@ -21,7 +21,10 @@ type BodyUnavailablePolicy uint8
 const (
 	// RejectUnavailableBody fails closed when the previous body cannot be reconstructed.
 	RejectUnavailableBody BodyUnavailablePolicy = iota
-	// AllowUnavailableBody permits an explicit unavailable-body success outcome.
+	// AllowUnavailableBody permits an explicit unavailable-body success
+	// outcome (Draft-08 Section 12.1 MAY). The resulting history is never
+	// Fully Verified (Section 13), so later verifiers report FAIL
+	// body_history_unavailable and later signers refuse it.
 	AllowUnavailableBody
 )
 

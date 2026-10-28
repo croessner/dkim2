@@ -99,7 +99,22 @@ there are no deprecated aliases, version fallbacks, or alternate legacy
 values. Draft-06 intentionally replaces the `DraftVersion` enum and adds the
 closed verification reasons `duplicate_hash_algorithm`,
 `invalid_recipe_json`, and `duplicate_selector`; Draft-08 removed the
-Draft-06/07 `too_many_signatures` reason together with the per-algorithm cap.
+Draft-06/07 `too_many_signatures` reason together with the per-algorithm cap,
+and adds `custody_mismatch`, `body_history_unavailable`, and `invalid_recipe`.
+Draft-08 Section 14.1 also moves `timestamp_invalid`, `envelope_mismatch`,
+`domain_alignment_mismatch`, `next_domain_mismatch`, `out_of_band_required`,
+and `from_not_authentic` from PERMERROR to FAIL; Chain of Custody adjacency
+failures formerly reported as PERMERROR `malformed_protocol` are FAIL
+`custody_mismatch` for the selected target, and Recipe schema and application
+errors formerly reported as `invalid_recipe_json` or `malformed_protocol` are
+PERMERROR `invalid_recipe`. Policy verdicts and SMTP outcomes are unchanged
+for all of these. A history with a null body Recipe is FAIL
+`body_history_unavailable` instead of a PASS with partial history, so strict
+policy now rejects it and transit or revision signing refuses it; the
+`partial` historical content and `indeterminate` feedback coverage values stay
+in the closed vocabulary but are no longer produced. Consumers that switch on
+the state or reason (Rspamd symbols `DKIM2_FAIL` versus `DKIM2_PERMERROR`,
+dashboards, the Nauthilus projection) must expect the new values.
 Signature-set result rows are positional and are not keyed or merged by
 algorithm. The daemon, Milter, Exim adapter, delivery-status propagator, and every
 generated client are regenerated from the same OpenAPI source and must be

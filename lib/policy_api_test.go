@@ -651,6 +651,13 @@ func signedPublicFlaggedPolicyMessage(t testing.TB, timestamp int64) ([]byte, *r
 // signedPublicHistoriedMessage creates a current PASS fixture with sealed m=2 history work.
 func signedPublicHistoriedMessage(t testing.TB, timestamp int64) ([]byte, *rsa.PublicKey) {
 	t.Helper()
+	return signedPublicHistoriedMessageWithRecipe(t, timestamp, `{`)
+}
+
+// signedPublicHistoriedMessageWithRecipe creates a current PASS fixture whose
+// m=2 Message-Instance carries recipeJSON over unchanged m=1 hashes.
+func signedPublicHistoriedMessageWithRecipe(t testing.TB, timestamp int64, recipeJSON string) ([]byte, *rsa.PublicKey) {
+	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
 		t.Fatalf("rsa.GenerateKey() error = %v", err)
@@ -671,7 +678,7 @@ func signedPublicHistoriedMessage(t testing.TB, timestamp int64) ([]byte, *rsa.P
 		hashes := "sha256:" + headerDigest.Base64() + ":" + bodyDigest.Base64()
 		return "From: sender@example.test\r\nSubject: current history\r\n" +
 			"Message-Instance: m=1; h=" + hashes + ";\r\n" +
-			"Message-Instance: m=2; h=" + hashes + "; r=" + base64.StdEncoding.EncodeToString([]byte(`{`)) + ";\r\n" +
+			"Message-Instance: m=2; h=" + hashes + "; r=" + base64.StdEncoding.EncodeToString([]byte(recipeJSON)) + ";\r\n" +
 			"DKIM2-Signature: i=1; m=2; t=" + strconv.FormatInt(timestamp, 10) + "; mf=PD4=; rt=PHJjcHRAZXhhbXBsZS50ZXN0Pg==; d=example.test; s=selector.test:rsa-sha256:" + signature + ";\r\n\r\nbody line\r\n"
 	}
 	placeholder := base64.StdEncoding.EncodeToString(make([]byte, 128))

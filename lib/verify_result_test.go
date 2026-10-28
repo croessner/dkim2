@@ -47,8 +47,8 @@ func TestPublicVerificationVocabulariesAreClosed(t *testing.T) {
 		ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey,
 		ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent,
 		ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch,
-		ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch,
-		ReasonOutOfBandRequired, ReasonInternalContract,
+		ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonCustodyMismatch,
+		ReasonOutOfBandRequired, ReasonBodyHistoryUnavailable, ReasonInvalidRecipe, ReasonInternalContract,
 	}
 	for _, reason := range reasons {
 		if !reason.Known() {

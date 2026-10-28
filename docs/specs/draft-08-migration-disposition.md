@@ -448,3 +448,106 @@ because the draft identifier is bound into the replay frame.
   every signature), hash reproducers including headers-only, history groups,
   revision alternatives and specific key reasons, the disabled-algorithm
   reproducer, service and observation mapping.
+
+## 11. Verification states and reasons state
+
+- C16 to C18, C26, C28 to C31, C35 (D5): `policy.ProtocolForVerificationReason`
+  is the single owner of the Section 14.1 state of every verification reason.
+  The service mapping (`service.StateForReason` and the check-fact severities),
+  the revision-failure mapping, the service error mapping, the public
+  `VerifyResult.Valid` invariant, and the policy projection invariants
+  (`verificationReasonProtocolCoherent`, `revisionFailureProtocolReasonAllowed`)
+  all derive from it. FAIL (completed, not Fully Verified): `hash_mismatch`,
+  `signature_mismatch`, `timestamp_invalid`, `envelope_mismatch`,
+  `domain_alignment_mismatch`, `next_domain_mismatch`, `custody_mismatch`,
+  `out_of_band_required`, `from_not_authentic`, and `body_history_unavailable`.
+  TEMPERROR is only `provider_temporary`. Every other reason is PERMERROR.
+- C12: signature and instance sequence gaps and duplicates stay PERMERROR
+  `sequence_invalid`. Section 14.2 calls such a message "not Fully Verified",
+  but the condition is structural and no target can be selected (local
+  interpretation, unchanged).
+- Chain of Custody (Section 14.4): `validateCustodyChain` failures were raised
+  without an instance number and therefore collapsed into the pre-target
+  PERMERROR `malformed_protocol`. They are now bound to the already selected
+  target (`verify.Error.SelectedTarget`) and reported as FAIL for that target:
+  an `mf=` or `d=` that does not match the previous `rt=` is the new public
+  reason `custody_mismatch`; an `nd=` that does not match the next `d=` or an
+  unexpected `nd=` transition keeps the existing, more specific
+  `next_domain_mismatch` (the plan grouped these under `custody_mismatch`;
+  both are FAIL, and the existing reason would otherwise be unreachable); an
+  inherited signature whose MAIL FROM and `d=` do not relaxed-match is
+  `domain_alignment_mismatch`, the same reason the current target uses. The
+  verifier stops before any key lookup, in the Section 14 order where custody
+  precedes key retrieval, and seals `policy.NewChainFailureProjection`: a
+  selected FAIL projection without signature facts or authenticated hops, so
+  no flag-derived finding can come from unverified fields. A custody error
+  without a selected target stays PERMERROR `malformed_protocol` (fail
+  closed). The defensive custody-entry guards for forms the parser already
+  rejects also report `custody_mismatch`; they are unreachable from parsed
+  fields.
+- A terminal `nd=` without an out-of-band arrangement is a failing target in
+  the core (`TargetStatusFail`) and FAIL `out_of_band_required` in the
+  service, also when a signature set is temporarily unavailable.
+- Precedence: severity order stays PERMERROR over FAIL over TEMPERROR over
+  PASS. A remapped check failure therefore no longer hides a supported
+  signature failure behind PERMERROR, and a permanent key error still wins over
+  a timestamp or custody failure.
+- D6 Recipes: `verify` splits the history parse stop into
+  `HistoryStopRecipeInvalid` (JSON syntax, duplicate member, non-object root,
+  owned by `recipe.IsJSONSyntaxError`) and `HistoryStopRecipeSchemaInvalid`.
+  Schema, step, range, literal, and application failures are the new
+  PERMERROR reason `invalid_recipe` (`RevisionProofInvalidRecipe`); before,
+  schema failures were `invalid_recipe_json` and application failures
+  `malformed_protocol`, both PERMERROR. A non-lowercase decoded Recipe key is
+  therefore `invalid_recipe`. Complexity stays `limit_exceeded`. Deliberate
+  deviation from the Section 14.2 SHOULD: Recipe step text is never placed in
+  errors, logs, REST, or CLI output; `recipe.Error` carries only the step
+  index, member index, step kind, dimension, and code.
+- D7 null Recipe: the all-hop proof refuses a history that crossed a `b:null`
+  Recipe (`RevisionProofBodyHistoryUnavailable`), after every inherited
+  signature passed (hash evaluation follows signatures in Section 14), and a
+  copy from unavailable body state below the null Recipe maps to the same
+  outcome. The service reports FAIL `body_history_unavailable` in current
+  scope instead of PASS with `partial` content history; `attachRevisionProof`
+  treats a verified proof that still carries the gap as an internal contract
+  defect. The signing revision gate maps the outcome to `protocol_rejected`,
+  so `Signer.VerifyForRevision` issues no capability and transit or revision
+  signing (`dkim2d` revise, batch revision) refuses the message (Section 12).
+  `AllowUnavailableBody` stays for a signer's own hop (Section 12.1 MAY) with
+  a documentation warning. There is no acceptance knob. The `partial`
+  historical content and `indeterminate` feedback coverage values remain in
+  the closed vocabularies and OpenAPI but are no longer produced.
+- Disposition proof: `lib/verification_disposition_test.go` derives, for every
+  public reason and every policy mode, the only state the sealed result and
+  projection invariants admit and the evaluated verdict, policy primary
+  reason, and action. Against the table recorded before the change, verdicts
+  and actions are byte-identical for every existing reason; the rows that
+  changed deliberately are `timestamp_invalid`, `envelope_mismatch`,
+  `domain_alignment_mismatch`, `next_domain_mismatch`, `out_of_band_required`,
+  and `from_not_authentic` (state PERMERROR to FAIL, strict primary reason
+  `protocol_permerror` to `protocol_fail`), plus the new rows
+  `custody_mismatch` (FAIL), `invalid_recipe` (PERMERROR), and
+  `body_history_unavailable` (FAIL). Message level: Chain of Custody
+  adjacency failures move from PERMERROR `malformed_protocol` to FAIL
+  `custody_mismatch` with the same verdicts; Recipe schema and application
+  failures move between PERMERROR reasons; a null body Recipe history moves
+  from PASS (strict accept) to FAIL (strict reject, permissive accept by
+  override, testing continue), the one deliberate verdict change.
+- Adapters: Milter and Exim SMTP outcomes depend only on the daemon
+  disposition; `TestProcessSMTPOutcomeIsIndependentOfFailOrPermerror` in both
+  adapters proves that every reason yields the same outcome, reply, and
+  temporary-key flag as FAIL or PERMERROR in every mode. Authentication-Results
+  admit the new reasons through `dkim2.ReasonCode.Known`.
+- Vocabularies: the public `ReasonCode`, service and policy reasons, the
+  OpenAPI `VerificationReason` and `AuthenticationResult.primary_reason`
+  enums (`PolicyReason` is unchanged), the `VerificationState` and
+  `historical_content` descriptions, every generated server and client, the
+  daemon mapping, the Rspamd contrib vocabulary and its test, and the
+  documentation carry `custody_mismatch`, `body_history_unavailable`, and
+  `invalid_recipe`. `dkim2ctl` fixtures carry no reason or state that changed.
+- Changed expectations, each required by Draft-08: public golden cases for
+  timestamp, envelope, alignment, From-authenticity, and terminal `nd=`
+  vectors expect FAIL (cases renamed from `_permerror` to `_fail`); the
+  custody facade, service, and core tests expect FAIL `custody_mismatch` /
+  `next_domain_mismatch` for the selected target; the null-body revision and
+  replay tests expect the refusal instead of a verified proof.

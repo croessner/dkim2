@@ -74,6 +74,8 @@ func (e AddHeaderActionType) Valid() bool {
 // Defines values for AuthenticationResultPrimaryReason.
 const (
 	AuthenticationResultPrimaryReasonAmbiguousKey                    AuthenticationResultPrimaryReason = "ambiguous_key"
+	AuthenticationResultPrimaryReasonBodyHistoryUnavailable          AuthenticationResultPrimaryReason = "body_history_unavailable"
+	AuthenticationResultPrimaryReasonCustodyMismatch                 AuthenticationResultPrimaryReason = "custody_mismatch"
 	AuthenticationResultPrimaryReasonDomainAlignmentMismatch         AuthenticationResultPrimaryReason = "domain_alignment_mismatch"
 	AuthenticationResultPrimaryReasonDuplicateHashAlgorithm          AuthenticationResultPrimaryReason = "duplicate_hash_algorithm"
 	AuthenticationResultPrimaryReasonDuplicateMessageWithoutExploded AuthenticationResultPrimaryReason = "duplicate_message_without_exploded"
@@ -83,6 +85,7 @@ const (
 	AuthenticationResultPrimaryReasonHashMismatch                    AuthenticationResultPrimaryReason = "hash_mismatch"
 	AuthenticationResultPrimaryReasonInternalContract                AuthenticationResultPrimaryReason = "internal_contract"
 	AuthenticationResultPrimaryReasonInvalidKey                      AuthenticationResultPrimaryReason = "invalid_key"
+	AuthenticationResultPrimaryReasonInvalidRecipe                   AuthenticationResultPrimaryReason = "invalid_recipe"
 	AuthenticationResultPrimaryReasonInvalidRecipeJson               AuthenticationResultPrimaryReason = "invalid_recipe_json"
 	AuthenticationResultPrimaryReasonKeyAlgorithmMismatch            AuthenticationResultPrimaryReason = "key_algorithm_mismatch"
 	AuthenticationResultPrimaryReasonLimitExceeded                   AuthenticationResultPrimaryReason = "limit_exceeded"
@@ -111,6 +114,10 @@ func (e AuthenticationResultPrimaryReason) Valid() bool {
 	switch e {
 	case AuthenticationResultPrimaryReasonAmbiguousKey:
 		return true
+	case AuthenticationResultPrimaryReasonBodyHistoryUnavailable:
+		return true
+	case AuthenticationResultPrimaryReasonCustodyMismatch:
+		return true
 	case AuthenticationResultPrimaryReasonDomainAlignmentMismatch:
 		return true
 	case AuthenticationResultPrimaryReasonDuplicateHashAlgorithm:
@@ -128,6 +135,8 @@ func (e AuthenticationResultPrimaryReason) Valid() bool {
 	case AuthenticationResultPrimaryReasonInternalContract:
 		return true
 	case AuthenticationResultPrimaryReasonInvalidKey:
+		return true
+	case AuthenticationResultPrimaryReasonInvalidRecipe:
 		return true
 	case AuthenticationResultPrimaryReasonInvalidRecipeJson:
 		return true
@@ -1097,6 +1106,8 @@ func (e VerificationCheckClass) Valid() bool {
 // Defines values for VerificationReason.
 const (
 	VerificationReasonAmbiguousKey            VerificationReason = "ambiguous_key"
+	VerificationReasonBodyHistoryUnavailable  VerificationReason = "body_history_unavailable"
+	VerificationReasonCustodyMismatch         VerificationReason = "custody_mismatch"
 	VerificationReasonDomainAlignmentMismatch VerificationReason = "domain_alignment_mismatch"
 	VerificationReasonDuplicateHashAlgorithm  VerificationReason = "duplicate_hash_algorithm"
 	VerificationReasonDuplicateSelector       VerificationReason = "duplicate_selector"
@@ -1105,6 +1116,7 @@ const (
 	VerificationReasonHashMismatch            VerificationReason = "hash_mismatch"
 	VerificationReasonInternalContract        VerificationReason = "internal_contract"
 	VerificationReasonInvalidKey              VerificationReason = "invalid_key"
+	VerificationReasonInvalidRecipe           VerificationReason = "invalid_recipe"
 	VerificationReasonInvalidRecipeJson       VerificationReason = "invalid_recipe_json"
 	VerificationReasonKeyAlgorithmMismatch    VerificationReason = "key_algorithm_mismatch"
 	VerificationReasonLimitExceeded           VerificationReason = "limit_exceeded"
@@ -1131,6 +1143,10 @@ func (e VerificationReason) Valid() bool {
 	switch e {
 	case VerificationReasonAmbiguousKey:
 		return true
+	case VerificationReasonBodyHistoryUnavailable:
+		return true
+	case VerificationReasonCustodyMismatch:
+		return true
 	case VerificationReasonDomainAlignmentMismatch:
 		return true
 	case VerificationReasonDuplicateHashAlgorithm:
@@ -1146,6 +1162,8 @@ func (e VerificationReason) Valid() bool {
 	case VerificationReasonInternalContract:
 		return true
 	case VerificationReasonInvalidKey:
+		return true
+	case VerificationReasonInvalidRecipe:
 		return true
 	case VerificationReasonInvalidRecipeJson:
 		return true
@@ -1509,7 +1527,9 @@ type AddHeaderActionType string
 // AuthenticationResult defines model for AuthenticationResult.
 type AuthenticationResult struct {
 	PrimaryReason AuthenticationResultPrimaryReason `json:"primary_reason"`
-	State         VerificationState                 `json:"state"`
+
+	// State Draft-08 Section 14.1 verification state. PASS: the message is a Fully Verified DKIM2 Message. FAIL: verification completed and the message is not Fully Verified, reported with hash_mismatch, signature_mismatch, timestamp_invalid, envelope_mismatch, domain_alignment_mismatch, next_domain_mismatch, custody_mismatch, out_of_band_required, from_not_authentic, or body_history_unavailable. PERMERROR: an unrecoverable error such as malformed, missing, or duplicate protocol state, invalid sequencing, an unsupported algorithm, a key error, an invalid Recipe, or a local limit. TEMPERROR: a temporary inability to retrieve a public key.
+	State VerificationState `json:"state"`
 }
 
 // AuthenticationResultPrimaryReason defines model for AuthenticationResult.PrimaryReason.
@@ -2042,21 +2062,25 @@ type VerificationReason string
 
 // VerificationResult Message-local cryptographic evidence; replay may change the final authentication state.
 type VerificationResult struct {
-	Checks               []VerificationCheck                    `json:"checks"`
-	CustodyStructure     VerificationResultCustodyStructure     `json:"custody_structure"`
+	Checks           []VerificationCheck                `json:"checks"`
+	CustodyStructure VerificationResultCustodyStructure `json:"custody_structure"`
+
+	// HistoricalContent Authenticated historical content coverage. Under Draft-08 Section 13 a history with a null body Recipe is not Fully Verified and is reported as FAIL body_history_unavailable, so a PASS reports complete; partial is retained in the closed vocabulary and is not produced.
 	HistoricalContent    VerificationResultHistoricalContent    `json:"historical_content"`
 	HistoricalSignatures VerificationResultHistoricalSignatures `json:"historical_signatures"`
 	PrimaryReason        VerificationReason                     `json:"primary_reason"`
 	Scope                VerificationResultScope                `json:"scope"`
 	SignatureSets        []SignatureSetResult                   `json:"signature_sets"`
-	State                VerificationState                      `json:"state"`
-	Target               *VerificationTarget                    `json:"target,omitempty"`
+
+	// State Draft-08 Section 14.1 verification state. PASS: the message is a Fully Verified DKIM2 Message. FAIL: verification completed and the message is not Fully Verified, reported with hash_mismatch, signature_mismatch, timestamp_invalid, envelope_mismatch, domain_alignment_mismatch, next_domain_mismatch, custody_mismatch, out_of_band_required, from_not_authentic, or body_history_unavailable. PERMERROR: an unrecoverable error such as malformed, missing, or duplicate protocol state, invalid sequencing, an unsupported algorithm, a key error, an invalid Recipe, or a local limit. TEMPERROR: a temporary inability to retrieve a public key.
+	State  VerificationState   `json:"state"`
+	Target *VerificationTarget `json:"target,omitempty"`
 }
 
 // VerificationResultCustodyStructure defines model for VerificationResult.CustodyStructure.
 type VerificationResultCustodyStructure string
 
-// VerificationResultHistoricalContent defines model for VerificationResult.HistoricalContent.
+// VerificationResultHistoricalContent Authenticated historical content coverage. Under Draft-08 Section 13 a history with a null body Recipe is not Fully Verified and is reported as FAIL body_history_unavailable, so a PASS reports complete; partial is retained in the closed vocabulary and is not produced.
 type VerificationResultHistoricalContent string
 
 // VerificationResultHistoricalSignatures defines model for VerificationResult.HistoricalSignatures.
@@ -2065,7 +2089,7 @@ type VerificationResultHistoricalSignatures string
 // VerificationResultScope defines model for VerificationResult.Scope.
 type VerificationResultScope string
 
-// VerificationState defines model for VerificationState.
+// VerificationState Draft-08 Section 14.1 verification state. PASS: the message is a Fully Verified DKIM2 Message. FAIL: verification completed and the message is not Fully Verified, reported with hash_mismatch, signature_mismatch, timestamp_invalid, envelope_mismatch, domain_alignment_mismatch, next_domain_mismatch, custody_mismatch, out_of_band_required, from_not_authentic, or body_history_unavailable. PERMERROR: an unrecoverable error such as malformed, missing, or duplicate protocol state, invalid sequencing, an unsupported algorithm, a key error, an invalid Recipe, or a local limit. TEMPERROR: a temporary inability to retrieve a public key.
 type VerificationState string
 
 // VerificationTarget defines model for VerificationTarget.

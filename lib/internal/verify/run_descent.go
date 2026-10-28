@@ -257,7 +257,7 @@ func (c HistoryCoordinator) initialStateMatches(state recipe.State, current inst
 // descentFailureForStop maps one sealed history stop onto the closed descent failure.
 func descentFailureForStop(stop HistoryStopReason) RunDescentFailure {
 	switch stop {
-	case HistoryStopRecipeInvalid:
+	case HistoryStopRecipeInvalid, HistoryStopRecipeSchemaInvalid:
 		return RunDescentRecipeInvalid
 	case HistoryStopApplicationInvalid:
 		return RunDescentApplicationInvalid

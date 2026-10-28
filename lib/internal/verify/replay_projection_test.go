@@ -1,7 +1,6 @@
 package verify
 
 import (
-	"context"
 	"encoding/hex"
 	"testing"
 
@@ -102,33 +101,5 @@ func TestReplayProjectionIsFixedSizeAndRedacted(t *testing.T) {
 	}
 	if newReplayProjection(digest, false, false).ReplayEligible() {
 		t.Fatal("single-signature projection reported replay eligibility")
-	}
-}
-
-// TestRevisionReplayIdentitySurvivesNullBodyRecipe reproduces the defect where
-// a "b":null Recipe made the origin body unrecoverable and the replay identity
-// unavailable. The identity now comes from the authenticated m=1 declarations,
-// and a single-signature message stays ineligible for replay counting.
-func TestRevisionReplayIdentitySurvivesNullBodyRecipe(t *testing.T) {
-	fixture := newCurrentHistoryVerificationFixture(t, `{"h":{"subject":[{"d":["previous"]}]},"b":null}`)
-	verifier := mustVerifierForFixture(t, fixture)
-	outcome, proof, err := verifier.VerifyRevisionProof(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
-	if err != nil || outcome != RevisionProofVerified || !proof.Valid() {
-		t.Fatalf("VerifyRevisionProof() outcome=%q valid=%t error=%v", outcome, proof.Valid(), err)
-	}
-	projection, ok := proof.ReplayProjection()
-	if !ok || !projection.Valid() {
-		t.Fatal("null-body Recipe left no replay identity")
-	}
-	origin, err := instanceByNumber(fixture.instances, 1)
-	if err != nil {
-		t.Fatalf("instanceByNumber() error = %v", err)
-	}
-	want, _ := originReplayDigest(origin)
-	if got, _ := projection.OriginReplayDigest(); got != want {
-		t.Fatal("revision replay identity differs from the m=1 declaration identity")
-	}
-	if projection.ReplayEligible() {
-		t.Fatal("single-signature revision proof reported replay eligibility")
 	}
 }

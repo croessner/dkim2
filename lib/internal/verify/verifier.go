@@ -263,7 +263,7 @@ func selectVerificationTarget(input verificationInput) (signature.Signature, ins
 	}
 	custody, err := validateCustodyChain(signatures, allowedDirectSequence)
 	if err != nil {
-		return signature.Signature{}, instance.MessageInstance{}, signature.CustodyResult{}, target, err
+		return signature.Signature{}, instance.MessageInstance{}, signature.CustodyResult{}, target, withSelectedTarget(err, target)
 	}
 	targetInstance, err := instanceByNumber(instances, target.InstanceNumber)
 	if err != nil {
@@ -385,11 +385,13 @@ func instanceByNumber(instances []instance.MessageInstance, number uint64) (inst
 
 // targetStatus summarizes protocol facts and the Section 14.6 signature
 // combination for the selected target. A failing hash, timestamp, envelope,
-// or alignment check is a failure; otherwise the combined signature result
-// decides: PASS, TEMPERROR (indeterminate), FAIL, or PERMERROR (no group
-// could be checked to a pass or a fail, reported as unsupported).
+// or alignment check, or a terminal nd= without an out-of-band arrangement
+// (Draft-08 Sections 13.2 and 14.4), is a failure; otherwise the combined
+// signature result decides: PASS, TEMPERROR (indeterminate), FAIL, or
+// PERMERROR (no group could be checked to a pass or a fail, reported as
+// unsupported).
 func targetStatus(hashPass bool, timestampPass bool, envelopePass bool, domainAlignmentPass bool, nextDomain nextDomainEvaluation, signatures signatureEvaluation) TargetStatus {
-	if !hashPass || !timestampPass || !envelopePass || !domainAlignmentPass {
+	if !hashPass || !timestampPass || !envelopePass || !domainAlignmentPass || nextDomain.unsupported {
 		return TargetStatusFail
 	}
 	if !signatures.outcome.Valid() {
@@ -397,9 +399,6 @@ func targetStatus(hashPass bool, timestampPass bool, envelopePass bool, domainAl
 	}
 	switch signatures.outcome.Result() {
 	case combine.ResultPass:
-		if nextDomain.unsupported {
-			return TargetStatusUnsupported
-		}
 		return TargetStatusPass
 	case combine.ResultTempError:
 		return TargetStatusIndeterminate

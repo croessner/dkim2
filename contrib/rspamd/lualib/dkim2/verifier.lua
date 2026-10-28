@@ -125,14 +125,16 @@ local replay_classes = {
 
 local verification_reasons = {
   none = true, limit_exceeded = true, malformed_message = true, malformed_protocol = true,
-  duplicate_hash_algorithm = true, invalid_recipe_json = true, from_not_authentic = true, duplicate_selector = true,
+  duplicate_hash_algorithm = true, invalid_recipe_json = true, invalid_recipe = true,
+  from_not_authentic = true, duplicate_selector = true,
   missing_protocol = true, sequence_invalid = true,
   unsupported_algorithm = true, hash_mismatch = true, signature_mismatch = true,
   missing_key = true, invalid_key = true, ambiguous_key = true, revoked_key = true,
   unsupported_key_type = true, key_algorithm_mismatch = true, provider_temporary = true,
   provider_permanent = true, provider_contract = true, timestamp_invalid = true,
   envelope_mismatch = true, domain_alignment_mismatch = true, next_domain_mismatch = true,
-  out_of_band_required = true, internal_contract = true,
+  custody_mismatch = true, out_of_band_required = true, body_history_unavailable = true,
+  internal_contract = true,
 }
 
 local authentication_reasons = {}

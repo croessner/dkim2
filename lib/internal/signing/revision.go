@@ -534,14 +534,22 @@ func newRevisionVerification(status RevisionVerificationStatus) RevisionVerifica
 	return RevisionVerification{status: status, initialized: true}
 }
 
-// mapRevisionProofOutcome maps the one narrow verify-owned seam exhaustively.
+// mapRevisionProofOutcome maps the one narrow verify-owned seam
+// exhaustively; only a clean proof, or a clean proof ending in a terminal
+// nd= that an out-of-band arrangement may cover, can authorize signing.
 func mapRevisionProofOutcome(outcome verify.RevisionProofOutcome) (RevisionVerificationStatus, bool) {
 	switch outcome {
 	case verify.RevisionProofVerified:
 		return RevisionVerificationVerified, true
 	case verify.RevisionProofTerminalNextDomainAuthorizationRequired:
 		return RevisionVerificationTerminalNextDomainAuthorizationRequired, true
-	case verify.RevisionProofProtocolRejected, verify.RevisionProofInvalidRecipeJSON, verify.RevisionProofFromNotAuthentic:
+	case verify.RevisionProofProtocolRejected, verify.RevisionProofInvalidRecipeJSON, verify.RevisionProofInvalidRecipe,
+		verify.RevisionProofFromNotAuthentic:
+		return RevisionVerificationProtocolRejected, true
+	case verify.RevisionProofBodyHistoryUnavailable:
+		// Draft-08 Sections 12 and 13: a history with a null body Recipe is
+		// not Fully Verified, so it must not be signed again; there is no
+		// local acceptance knob for the inherited gap.
 		return RevisionVerificationProtocolRejected, true
 	case verify.RevisionProofHashMismatch, verify.RevisionProofSignatureMismatch:
 		return RevisionVerificationProtocolRejected, true

@@ -19,6 +19,7 @@ const (
 	VerificationReasonMalformedProtocol       VerificationReason = "malformed_protocol"
 	VerificationReasonDuplicateHashAlgorithm  VerificationReason = "duplicate_hash_algorithm"
 	VerificationReasonInvalidRecipeJSON       VerificationReason = "invalid_recipe_json"
+	VerificationReasonInvalidRecipe           VerificationReason = "invalid_recipe"
 	VerificationReasonFromNotAuthentic        VerificationReason = "from_not_authentic"
 	VerificationReasonDuplicateSelector       VerificationReason = "duplicate_selector"
 	VerificationReasonMissingProtocol         VerificationReason = "missing_protocol"
@@ -39,7 +40,9 @@ const (
 	VerificationReasonEnvelopeMismatch        VerificationReason = "envelope_mismatch"
 	VerificationReasonDomainAlignmentMismatch VerificationReason = "domain_alignment_mismatch"
 	VerificationReasonNextDomainMismatch      VerificationReason = "next_domain_mismatch"
+	VerificationReasonCustodyMismatch         VerificationReason = "custody_mismatch"
 	VerificationReasonOutOfBandRequired       VerificationReason = "out_of_band_required"
+	VerificationReasonBodyHistoryUnavailable  VerificationReason = "body_history_unavailable"
 	VerificationReasonInternalContract        VerificationReason = "internal_contract"
 )
 
@@ -47,17 +50,50 @@ const (
 func (r VerificationReason) Known() bool {
 	switch r {
 	case VerificationReasonNone, VerificationReasonLimitExceeded, VerificationReasonMalformedMessage,
-		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON, VerificationReasonFromNotAuthentic,
+		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON,
+		VerificationReasonInvalidRecipe, VerificationReasonFromNotAuthentic,
 		VerificationReasonDuplicateSelector, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
 		VerificationReasonUnsupportedAlgorithm, VerificationReasonHashMismatch, VerificationReasonSignatureMismatch,
 		VerificationReasonMissingKey, VerificationReasonInvalidKey, VerificationReasonAmbiguousKey,
 		VerificationReasonRevokedKey, VerificationReasonUnsupportedKeyType, VerificationReasonKeyAlgorithmMismatch,
 		VerificationReasonProviderTemporary, VerificationReasonProviderPermanent, VerificationReasonProviderContract,
 		VerificationReasonTimestampInvalid, VerificationReasonEnvelopeMismatch, VerificationReasonDomainAlignmentMismatch,
-		VerificationReasonNextDomainMismatch, VerificationReasonOutOfBandRequired, VerificationReasonInternalContract:
+		VerificationReasonNextDomainMismatch, VerificationReasonCustodyMismatch, VerificationReasonOutOfBandRequired,
+		VerificationReasonBodyHistoryUnavailable, VerificationReasonInternalContract:
 		return true
 	default:
 		return false
+	}
+}
+
+// ProtocolForVerificationReason is the single owner of the Draft-08 Section
+// 14.1 state of every verification reason. PASS carries only none. FAIL means
+// verification completed and the message is not a Fully Verified DKIM2
+// Message: hash and signature mismatches (Sections 14.6 and 14.7), timestamp
+// failures (14.3), Chain of Custody failures including the envelope, MAIL
+// FROM and d= alignment, next-domain, custody adjacency, and unmet
+// out-of-band arrangements (14.4 and 13.2), an inauthentic From (14.8), and
+// a history whose body cannot be checked below a null Recipe (13).
+// TEMPERROR carries only a temporary key-provider failure. Every other
+// reason, including malformed, missing, duplicate, sequence, algorithm, key,
+// Recipe, limit, and internal failures (14.2 and 14.5), is PERMERROR.
+func ProtocolForVerificationReason(reason VerificationReason) (ProtocolClass, bool) {
+	switch reason {
+	case VerificationReasonNone:
+		return ProtocolPASS, true
+	case VerificationReasonHashMismatch, VerificationReasonSignatureMismatch,
+		VerificationReasonTimestampInvalid, VerificationReasonEnvelopeMismatch,
+		VerificationReasonDomainAlignmentMismatch, VerificationReasonNextDomainMismatch,
+		VerificationReasonCustodyMismatch, VerificationReasonOutOfBandRequired,
+		VerificationReasonFromNotAuthentic, VerificationReasonBodyHistoryUnavailable:
+		return ProtocolFAIL, true
+	case VerificationReasonProviderTemporary:
+		return ProtocolTEMPERROR, true
+	default:
+		if !reason.Known() {
+			return "", false
+		}
+		return ProtocolPERMERROR, true
 	}
 }
 
@@ -278,6 +314,7 @@ type Projection struct {
 	signatureFacts     []SignatureFact
 	signatureLayout    combine.Layout
 	revisionFailure    bool
+	chainFailure       bool
 	receivedDSN        ReceivedDSNFacts
 	hasReceivedDSN     bool
 }
@@ -317,28 +354,45 @@ func NewRevisionFailureProjection(protocol ProtocolClass, reason VerificationRea
 	return projection, nil
 }
 
-// revisionFailureProtocolReasonAllowed mirrors the closed service revision-outcome mapping.
+// revisionFailureProtocolReasonAllowed mirrors the closed service
+// revision-outcome mapping: only reasons an inherited all-hop proof can
+// produce, each under its Section 14.1 state.
 func revisionFailureProtocolReasonAllowed(protocol ProtocolClass, reason VerificationReason) bool {
-	switch protocol {
-	case ProtocolFAIL:
-		return reason == VerificationReasonHashMismatch || reason == VerificationReasonSignatureMismatch
-	case ProtocolTEMPERROR:
-		return reason == VerificationReasonProviderTemporary
-	case ProtocolPERMERROR:
-		switch reason {
-		case VerificationReasonUnsupportedAlgorithm, VerificationReasonProviderPermanent,
-			VerificationReasonMissingKey, VerificationReasonInvalidKey, VerificationReasonRevokedKey,
-			VerificationReasonAmbiguousKey, VerificationReasonUnsupportedKeyType, VerificationReasonKeyAlgorithmMismatch,
-			VerificationReasonProviderContract, VerificationReasonLimitExceeded,
-			VerificationReasonOutOfBandRequired, VerificationReasonInvalidRecipeJSON, VerificationReasonFromNotAuthentic,
-			VerificationReasonMalformedProtocol, VerificationReasonInternalContract:
-			return true
-		default:
-			return false
-		}
+	switch reason {
+	case VerificationReasonHashMismatch, VerificationReasonSignatureMismatch, VerificationReasonProviderTemporary,
+		VerificationReasonUnsupportedAlgorithm, VerificationReasonProviderPermanent,
+		VerificationReasonMissingKey, VerificationReasonInvalidKey, VerificationReasonRevokedKey,
+		VerificationReasonAmbiguousKey, VerificationReasonUnsupportedKeyType, VerificationReasonKeyAlgorithmMismatch,
+		VerificationReasonProviderContract, VerificationReasonLimitExceeded,
+		VerificationReasonOutOfBandRequired, VerificationReasonInvalidRecipeJSON, VerificationReasonInvalidRecipe,
+		VerificationReasonFromNotAuthentic, VerificationReasonBodyHistoryUnavailable,
+		VerificationReasonMalformedProtocol, VerificationReasonInternalContract:
+		want, ok := ProtocolForVerificationReason(reason)
+		return ok && want == protocol
 	default:
 		return false
 	}
+}
+
+// NewChainFailureProjection seals a selected target whose Draft-08 Section
+// 14.4 Chain of Custody check failed before any signature was evaluated. The
+// result is FAIL with custody_mismatch, next_domain_mismatch, or
+// domain_alignment_mismatch; it carries no signature facts and no
+// authenticated hops, so no policy finding can be derived from unverified
+// flags.
+func NewChainFailureProjection(reason VerificationReason, target uint64) (Projection, error) {
+	projection := Projection{form: TargetSelected, protocol: ProtocolFAIL, verificationReason: reason, targetSequence: target, history: HistoryNotEvaluated, chainFailure: true}
+	if err := projection.validate(DefaultLimits()); err != nil {
+		return Projection{}, err
+	}
+	return projection, nil
+}
+
+// chainFailureReason reports whether reason is a Section 14.4 Chain of
+// Custody failure that a chain-failure projection may carry.
+func chainFailureReason(reason VerificationReason) bool {
+	return reason == VerificationReasonCustodyMismatch || reason == VerificationReasonNextDomainMismatch ||
+		reason == VerificationReasonDomainAlignmentMismatch
 }
 
 // NewUnavailableProjection seals one exact pre-target permanent-error projection.
@@ -402,7 +456,7 @@ func (p Projection) validate(limits Limits) error {
 
 // validateUnavailable enforces the exact zero-target permanent form.
 func (p Projection) validateUnavailable() error {
-	if p.protocol != ProtocolPERMERROR || p.verificationReason != "" || p.targetSequence != 0 || !p.preTarget.Known() || p.history != HistoryNotEvaluated || len(p.hops) != 0 || len(p.signatureFacts) != 0 || p.revisionFailure {
+	if p.protocol != ProtocolPERMERROR || p.verificationReason != "" || p.targetSequence != 0 || !p.preTarget.Known() || p.history != HistoryNotEvaluated || len(p.hops) != 0 || len(p.signatureFacts) != 0 || p.revisionFailure || p.chainFailure {
 		return newError(ErrorInternalContract)
 	}
 	return nil
@@ -426,8 +480,14 @@ func (p Projection) validateSelected() error {
 
 // validateCurrent enforces the current-only PASS authentication boundary.
 func (p Projection) validateCurrent() error {
+	if p.revisionFailure && p.chainFailure {
+		return newError(ErrorInternalContract)
+	}
 	if p.revisionFailure {
 		return p.validateRevisionFailure()
+	}
+	if p.chainFailure {
+		return p.validateChainFailure()
 	}
 	if len(p.signatureFacts) == 0 {
 		return newError(ErrorInternalContract)
@@ -452,6 +512,15 @@ func (p Projection) validateRevisionFailure() error {
 		return newError(ErrorInternalContract)
 	}
 	if outcome := p.signatureOutcome(); !outcome.Pass() {
+		return newError(ErrorInternalContract)
+	}
+	return nil
+}
+
+// validateChainFailure admits only a FAIL Chain of Custody reason without
+// signature facts or authenticated hops.
+func (p Projection) validateChainFailure() error {
+	if p.protocol != ProtocolFAIL || !chainFailureReason(p.verificationReason) || len(p.hops) != 0 || len(p.signatureFacts) != 0 || p.signatureLayout != (combine.Layout{}) {
 		return newError(ErrorInternalContract)
 	}
 	return nil
@@ -511,7 +580,7 @@ func (p Projection) verificationReasonFactsCoherent() bool {
 func (p Projection) eligiblePermanentPrimaryCoherent(outcome combine.Outcome) bool {
 	if p.verificationReason == VerificationReasonMalformedMessage || p.verificationReason == VerificationReasonMalformedProtocol ||
 		p.verificationReason == VerificationReasonDuplicateHashAlgorithm || p.verificationReason == VerificationReasonInvalidRecipeJSON ||
-		p.verificationReason == VerificationReasonFromNotAuthentic ||
+		p.verificationReason == VerificationReasonInvalidRecipe ||
 		p.verificationReason == VerificationReasonDuplicateSelector ||
 		p.verificationReason == VerificationReasonMissingProtocol || p.verificationReason == VerificationReasonSequenceInvalid {
 		return false
@@ -531,13 +600,12 @@ func (p Projection) eligiblePermanentPrimaryCoherent(outcome combine.Outcome) bo
 func permanentProjectionReasonRank(reason VerificationReason) int {
 	for index, candidate := range []VerificationReason{
 		VerificationReasonInternalContract, VerificationReasonLimitExceeded, VerificationReasonMalformedMessage,
-		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON, VerificationReasonFromNotAuthentic,
+		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON,
+		VerificationReasonInvalidRecipe,
 		VerificationReasonDuplicateSelector, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
 		VerificationReasonUnsupportedAlgorithm, VerificationReasonMissingKey, VerificationReasonRevokedKey,
 		VerificationReasonUnsupportedKeyType, VerificationReasonKeyAlgorithmMismatch, VerificationReasonInvalidKey,
 		VerificationReasonAmbiguousKey, VerificationReasonProviderPermanent, VerificationReasonProviderContract,
-		VerificationReasonTimestampInvalid, VerificationReasonEnvelopeMismatch, VerificationReasonDomainAlignmentMismatch,
-		VerificationReasonNextDomainMismatch, VerificationReasonOutOfBandRequired,
 	} {
 		if reason == candidate {
 			return index
@@ -570,25 +638,16 @@ func permanentSetReasonRank(reason VerificationReason) int {
 	}
 }
 
-// verificationReasonProtocolCoherent binds aggregate state to its reason class.
+// verificationReasonProtocolCoherent binds aggregate state to the one
+// Section 14.1 class its reason belongs to.
 func verificationReasonProtocolCoherent(protocol ProtocolClass, reason VerificationReason) bool {
-	switch protocol {
-	case ProtocolPASS:
-		return reason == VerificationReasonNone
-	case ProtocolFAIL:
-		return reason == VerificationReasonHashMismatch || reason == VerificationReasonSignatureMismatch
-	case ProtocolTEMPERROR:
-		return reason == VerificationReasonProviderTemporary
-	case ProtocolPERMERROR:
-		return reason.Known() && reason != VerificationReasonNone && reason != VerificationReasonHashMismatch && reason != VerificationReasonSignatureMismatch && reason != VerificationReasonProviderTemporary
-	default:
-		return false
-	}
+	want, ok := ProtocolForVerificationReason(reason)
+	return ok && protocol.Known() && want == protocol
 }
 
 // validateHistory enforces bounded explicit partial or contiguous complete history.
 func (p Projection) validateHistory() error {
-	if len(p.hops) == 0 || p.revisionFailure {
+	if len(p.hops) == 0 || p.revisionFailure || p.chainFailure {
 		return newError(ErrorInternalContract)
 	}
 	if len(p.signatureFacts) != 0 && !p.completedOriginEvidenceValid() {
@@ -639,7 +698,7 @@ func (p Projection) Valid() bool { return p.validate(DefaultLimits()) == nil }
 
 // IsZero reports whether the projection is uninitialized.
 func (p Projection) IsZero() bool {
-	return p.form == "" && p.protocol == "" && p.verificationReason == "" && p.targetSequence == 0 && p.preTarget == "" && p.history == "" && len(p.hops) == 0 && len(p.signatureFacts) == 0 && !p.revisionFailure && !p.hasReceivedDSN
+	return p.form == "" && p.protocol == "" && p.verificationReason == "" && p.targetSequence == 0 && p.preTarget == "" && p.history == "" && len(p.hops) == 0 && len(p.signatureFacts) == 0 && !p.revisionFailure && !p.chainFailure && !p.hasReceivedDSN
 }
 
 // WithReceivedDSN returns a copy of the sealed verification projection that

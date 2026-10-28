@@ -74,7 +74,15 @@ type BodyUnavailablePolicy uint8
 const (
 	// RejectUnavailableBody fails when the prior body cannot be represented.
 	RejectUnavailableBody BodyUnavailablePolicy = iota
-	// AllowUnavailableBody permits explicit b:null when representation is impossible.
+	// AllowUnavailableBody permits explicit b:null when representation is
+	// impossible (Draft-08 Section 12.1 MAY).
+	//
+	// Warning: a message whose history contains a null body Recipe is never
+	// a Fully Verified DKIM2 Message (Draft-08 Section 13). Every later
+	// verifier reports FAIL body_history_unavailable, and every later
+	// transit or revision signer, including this library's
+	// VerifyForRevision, refuses to sign it again. Use it only where the
+	// recipients accept that outcome by local arrangement.
 	AllowUnavailableBody
 )
 

@@ -476,7 +476,13 @@ The exact serializable verification reason enum is:
 `unsupported_key_type`, `key_algorithm_mismatch`, `provider_temporary`,
 `provider_permanent`, `provider_contract`, `timestamp_invalid`,
 `envelope_mismatch`, `domain_alignment_mismatch`, `next_domain_mismatch`,
-`out_of_band_required`, and `internal_contract`.
+`custody_mismatch`, `out_of_band_required`, `body_history_unavailable`,
+`invalid_recipe`, and `internal_contract`. `VerificationState` follows
+Draft-08 Section 14.1: FAIL means the verification completed and the message
+is not Fully Verified (hash, signature, timestamp, envelope, alignment, `nd=`,
+custody, out-of-band, From authenticity, or null body Recipe), while
+PERMERROR is kept for malformed, missing, duplicate, sequence, algorithm, key,
+Recipe, limit, and internal failures.
 
 The public `invalid_request` reason belongs only to API/programmer-misuse
 errors returned without a verification result. No valid verifier result can
@@ -539,7 +545,11 @@ response.
 `PolicyFeedback` requires `requested`, `relay_required`, and
 `history_coverage`. Coverage is `not_evaluated` for current scope, `complete`
 for contiguous authenticated history, or `indeterminate` for explicitly
-partial authenticated history.
+partial authenticated history. Under Draft-08 Section 13 a history with a null
+body Recipe is FAIL `body_history_unavailable`, so a PASS never carries
+partial content history and `indeterminate` (like the `partial`
+`historical_content` value) is retained in the closed vocabulary but not
+produced by verification.
 `relay_sequence` is present in the same canonical uint64 decimal-string form
 if and only if `relay_required` is true.
 

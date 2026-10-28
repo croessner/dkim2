@@ -162,6 +162,32 @@ type Error struct {
 	details  ErrorDetails
 	cause    error
 	custody  CustodyStatus
+	selected Target
+}
+
+// SelectedTarget returns the verification target that was already selected
+// when a Draft-08 Section 14.4 Chain of Custody check failed, so the failure
+// can be reported for that target instead of as a pre-target error.
+func (e *Error) SelectedTarget() (Target, bool) {
+	if e == nil || e.selected.Sequence == 0 || e.selected.InstanceNumber == 0 {
+		return Target{}, false
+	}
+	return e.selected, true
+}
+
+// ChainOfCustodyFailure reports whether the error is a completed Draft-08
+// Section 14.4 Chain of Custody failure rather than a malformed or missing
+// protocol state.
+func (e *Error) ChainOfCustodyFailure() bool {
+	if e == nil {
+		return false
+	}
+	switch e.code {
+	case ErrorCodeCustodyMismatch, ErrorCodeNextDomainMismatch, ErrorCodeMissingNextSignature, ErrorCodeDomainAlignmentMismatch:
+		return true
+	default:
+		return false
+	}
 }
 
 // CustodyStatus returns established whole-sequence coverage for chain errors.

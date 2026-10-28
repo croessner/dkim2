@@ -840,14 +840,14 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 		"NullSenderPolicy":  {"header_from"},
 		"VerificationReason": {
 			"none", "limit_exceeded", "malformed_message", "malformed_protocol",
-			"duplicate_hash_algorithm", "invalid_recipe_json", "from_not_authentic", "duplicate_selector",
+			"duplicate_hash_algorithm", "invalid_recipe_json", "invalid_recipe", "from_not_authentic", "duplicate_selector",
 			"missing_protocol", "sequence_invalid", "unsupported_algorithm",
 			"hash_mismatch", "signature_mismatch", "missing_key", "invalid_key",
 			"ambiguous_key", "revoked_key", "unsupported_key_type",
 			"key_algorithm_mismatch", "provider_temporary", "provider_permanent",
 			"provider_contract", "timestamp_invalid", "envelope_mismatch",
-			"domain_alignment_mismatch", "next_domain_mismatch",
-			"out_of_band_required", "internal_contract",
+			"domain_alignment_mismatch", "next_domain_mismatch", "custody_mismatch",
+			"out_of_band_required", "body_history_unavailable", "internal_contract",
 		},
 		"PolicyReason": {
 			"protocol_pass", "protocol_fail", "protocol_permerror",

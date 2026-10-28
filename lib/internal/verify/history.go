@@ -44,8 +44,12 @@ type HistoryStopReason string
 const (
 	// HistoryStopOriginReached reports descent through m=1.
 	HistoryStopOriginReached HistoryStopReason = "origin_reached"
-	// HistoryStopRecipeInvalid reports malformed authenticated recipe JSON.
+	// HistoryStopRecipeInvalid reports authenticated recipe text that is not
+	// valid JSON or whose root is not a JSON object.
 	HistoryStopRecipeInvalid HistoryStopReason = "recipe_invalid"
+	// HistoryStopRecipeSchemaInvalid reports valid recipe JSON whose schema,
+	// steps, ranges, or literals are invalid.
+	HistoryStopRecipeSchemaInvalid HistoryStopReason = "recipe_schema_invalid"
 	// HistoryStopApplicationInvalid reports invalid recipe application.
 	HistoryStopApplicationInvalid HistoryStopReason = "application_invalid"
 	// HistoryStopSourceUnavailable reports a copy from unavailable body state.
@@ -63,7 +67,7 @@ const (
 // Known reports whether reason belongs to the closed stop vocabulary.
 func (r HistoryStopReason) Known() bool {
 	switch r {
-	case HistoryStopOriginReached, HistoryStopRecipeInvalid,
+	case HistoryStopOriginReached, HistoryStopRecipeInvalid, HistoryStopRecipeSchemaInvalid,
 		HistoryStopApplicationInvalid, HistoryStopSourceUnavailable, HistoryStopLimitExceeded,
 		HistoryStopHashMismatch, HistoryStopHashUnsupported, HistoryStopInternalContract:
 		return true
@@ -363,6 +367,10 @@ func (w HistoryWalk) validCoverage(evaluated uint64) bool {
 
 // Coverage returns authoritative authenticated historical coverage.
 func (w HistoryWalk) Coverage() HistoryCoverage { return w.coverage }
+
+// HadUnavailableBody reports whether the walk crossed an explicit b:null
+// Recipe, below which body hashes cannot be checked.
+func (w HistoryWalk) HadUnavailableBody() bool { return w.hadUnavailable }
 
 // StopReason returns the closed reason descent stopped.
 func (w HistoryWalk) StopReason() HistoryStopReason { return w.stop }
@@ -680,7 +688,9 @@ func (c HistoryCoordinator) currentStateMatches(state recipe.State, current inst
 	return evaluation.pass(), work, nil
 }
 
-// historyParseStop maps parser and cumulative failures to one closed stop.
+// historyParseStop maps parser and cumulative failures to one closed stop:
+// JSON syntax and object-shape failures stay separate from schema failures
+// of valid JSON, as Draft-08 Section 14.2 reports them differently.
 func historyParseStop(parseErr, usageErr error) (HistoryStopReason, bool) {
 	if usageErr != nil {
 		if IsErrorCode(usageErr, ErrorCodeHistoryLimitExceeded) {
@@ -688,10 +698,16 @@ func historyParseStop(parseErr, usageErr error) (HistoryStopReason, bool) {
 		}
 		return HistoryStopInternalContract, true
 	}
+	if parseErr == nil {
+		return "", false
+	}
 	if recipe.IsErrorCode(parseErr, recipe.ErrorCodeLimitExceeded) {
 		return HistoryStopLimitExceeded, true
 	}
-	return HistoryStopRecipeInvalid, parseErr != nil
+	if recipe.IsJSONSyntaxError(parseErr) {
+		return HistoryStopRecipeInvalid, true
+	}
+	return HistoryStopRecipeSchemaInvalid, true
 }
 
 // historyApplyStop maps application and cumulative failures to one closed stop.
@@ -816,7 +832,7 @@ func accountAggregateSignatureSet(set SignatureSetResult, supported map[Algorith
 // sealedHistoryStop reports whether stop belongs to a non-result failure lane.
 func sealedHistoryStop(stop HistoryStopReason) bool {
 	switch stop {
-	case HistoryStopRecipeInvalid, HistoryStopApplicationInvalid,
+	case HistoryStopRecipeInvalid, HistoryStopRecipeSchemaInvalid, HistoryStopApplicationInvalid,
 		HistoryStopSourceUnavailable, HistoryStopLimitExceeded, HistoryStopInternalContract:
 		return true
 	default:
