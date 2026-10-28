@@ -1,6 +1,6 @@
 {
   "schema": "dkim2.go-api.v1",
-  "base_revision": "f7099dbd47ff3bd79e30f7801814c87eb0914b4c",
-  "api_sha256": "5958926bb0b972d164d6d6dee00c372cc8966b30f1b0906c2c494262577fd2b2",
-  "declarations": 883
+  "base_revision": "19aad3cd2f61f52ca8cfc81a5628dd1798ca491f",
+  "api_sha256": "f7b044a60c29d4443b08815e8ed0e500eb9b88fdb467980366fb568e0d58b352",
+  "declarations": 899
 }

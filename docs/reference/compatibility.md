@@ -7,15 +7,16 @@ is a reviewed behavior migration, not an automatic compatibility update.
 ## Public surfaces
 
 - The exported root library API is reviewed against the exact base
-  `f7099dbd47ff3bd79e30f7801814c87eb0914b4c`. The deterministic API manifest
-  has 883 declarations and SHA-256
-  `5958926bb0b972d164d6d6dee00c372cc8966b30f1b0906c2c494262577fd2b2`.
-  The [dated review](../reports/api-and-mailflow-review-2026-09-14.md)
-  records the previous inconsistent revision/hash pair, additive declarations,
-  Draft-07 behavior migration and the older DSN constructor migration.
-  This is a reviewed current reference, not a claim of Draft-04/05 behavioral
-  compatibility. The checker covers the root package only; `authresults` is
-  a separately tested subpackage.
+  `19aad3cd2f61f52ca8cfc81a5628dd1798ca491f`. The deterministic API manifest
+  has 899 declarations and SHA-256
+  `f7b044a60c29d4443b08815e8ed0e500eb9b88fdb467980366fb568e0d58b352`.
+  The [root library API delta](#root-library-api-delta) lists every
+  declaration removed, added, or changed since the previous reviewed base
+  `f7099dbd47ff3bd79e30f7801814c87eb0914b4c` (883 declarations); the
+  [dated review](../reports/api-and-mailflow-review-2026-09-14.md) records
+  the reviews before that base. This is a reviewed current reference, not a
+  claim of Draft-04 to Draft-07 behavioral compatibility. The checker covers
+  the root package only; `authresults` is a separately tested subpackage.
 - Daemon HTTP shapes and bounds are authoritative only in
   `docs/specs/openapi/dkim2d.yaml`. The wire `api_version` remains `v1`;
   product prerelease versioning does not alter that field.
@@ -42,6 +43,97 @@ is a reviewed behavior migration, not an automatic compatibility update.
   rows in the dated compatibility report are historical Draft-04 evidence and
   do not qualify Draft-08. There is no portable Exim report, universal
   local-scan ABI binary, binary package, or container image.
+
+## Root library API delta
+
+`make check-reference` compares the deterministic manifest of the exported
+root package (`go -C tools run ./cmd/reference -root .. api`) with
+`testdata/reference/go-api-base.json`. The reviewed base moved from
+`f7099dbd47ff3bd79e30f7801814c87eb0914b4c` to the Draft-08 surface of the
+`v0.1.48` release. A changed declaration keeps its name but changes its
+signature, type, or value. Doc-comment-only changes are not listed.
+
+Draft-07 migration, trusted null-sender signing, replay counting, and the
+earlier DSN reporting identity (released up to `v0.1.47`; the module also
+gained the direct dependency `golang.org/x/net` and moved
+`golang.org/x/sys`):
+
+- Removed: `KeyPolicyMetadata`, `KeyPolicyMetadata.StrictIdentityApplicable`,
+  `KeyPolicyMetadata.StrictIdentityDeclared`,
+  `KeyPolicyMetadata.TestingDeclared`, `LocalOnlySignedMessage`,
+  `LocalOnlySignedMessage.Facts`, `LocalOnlySignedMessage.Format`,
+  `LocalOnlySignedMessage.GoString`,
+  `LocalOnlySignedMessage.ReleaseToInControl`,
+  `LocalOnlySignedMessage.String`, `LocalOnlySignedMessage.Valid`,
+  `PolicyCompliance`, `PolicyCompliance.Known`, `PolicyComplianceHonored`,
+  `PolicyComplianceIndeterminate`, `PolicyComplianceNotEvaluated`,
+  `PolicyComplianceNotRequested`, `PolicyComplianceViolated`,
+  `PolicyDecision.DNSTestingEffective`,
+  `PolicyDecision.DoNotExplodeCompliance`,
+  `PolicyDecision.DoNotModifyCompliance`, `PolicyReasonDNSTestingEffective`,
+  `PolicyReasonDNSTestingIneligible`, `PolicyReasonDNSTestingMixed`,
+  `PolicyReasonDoNotExplodeIndeterminate`,
+  `PolicyReasonDoNotExplodeNotEvaluated`, `PolicyReasonDoNotExplodeViolated`,
+  `PolicyReasonDoNotModifyHonored`, `PolicyReasonDoNotModifyIndeterminate`,
+  `PolicyReasonDoNotModifyNotEvaluated`, `PolicyReasonDoNotModifyViolated`,
+  `PublicKeyResult.KeyPolicyMetadata`, `SignatureSetFact.KeyPolicyMetadata`,
+  `SignedMessageFlagDoNotExplode`, `SignedMessageFlagDoNotModify`,
+  `SigningFlagDoNotExplode`, `SigningFlagDoNotModify`,
+  `SigningRestrictionLocalOnly`, `SigningResult.LocalOnly`,
+  `VerifierHop.DoNotExplode`, `VerifierHop.DoNotModify`.
+- Added: `AuthenticationReplayNotEligible`, `AuthenticatorOption`,
+  `ClassifyHeaderFromNullSender`, `DSNEvidenceStageEmbeddedUnsigned`,
+  `DirectDeliveryReplayCountingPolicy`, `EnvelopePathDomain`,
+  `HeaderFromDomain`, `HeaderFromNullSenderAuthorUnusable`,
+  `HeaderFromNullSenderClass`, `HeaderFromNullSenderContentTypeAmbiguous`,
+  `HeaderFromNullSenderDeliveryStatus`, `HeaderFromNullSenderEligible`,
+  `HeaderFromNullSenderProtocolFields`,
+  `NewHeaderFromNullSenderSigningRequest`,
+  `NewPostfixReportingDSNSigningEvidenceRequest`,
+  `PublicKeyResult.PublicKeySPKI`, `ReasonFromNotAuthentic`,
+  `ReplayCountingPolicy`, `ReplayCountingPolicy.Counts`,
+  `ReplayCountingPolicy.CountsDirectDeliveries`,
+  `UnrestrictedSignedMessage.SigningIdentity`, `ValidEnvelopePath`,
+  `WithDirectDeliveryReplayCounting`.
+- Changed: `DraftIdentifier`, `HardMaxRawMessageBytes`, `NewAuthenticator`,
+  `NewDisabledAuthenticator`, `PrivateKeySignRequest.Digest`.
+
+Draft-08 migration (`v0.1.48`):
+
+- Removed: `NewDerivedDSNSigningEvidenceRequest`,
+  `NewPostfixDerivedDSNSigningEvidenceRequest`,
+  `NewPostfixReportingDSNSigningEvidenceRequest`, `ReasonTooManySignatures`.
+- Added: `AlgorithmMLDSA44`, `DSNEvidenceStageFromNotAuthentic`,
+  `DSNEvidenceStageIdentityUnavailable`, `DSNIdentity.Domain`,
+  `DSNProfileSource`, `DSNSigningEvidence.Resolved`,
+  `DSNSigningEvidenceRequest.WithPreferredIdentity`, `FoundMLDSA44PublicKey`,
+  `MLDSA44Available`, `MLDSA44SignerOptions`, `MLDSA44SigningCredential`,
+  `MLDSA44SigningCredential.Format`, `MLDSA44SigningCredential.GoString`,
+  `MLDSA44SigningCredential.String`, `MLDSA44SigningCredential.Valid`,
+  `MinSigningRSABits`, `NewMLDSA44NextDomainPublicationRequest`,
+  `NewMLDSA44SigningCredential`, `NewMLDSA44SigningProfile`,
+  `NewPostfixDSNSigningEvidenceRequest`, `NewSigningProfile`,
+  `ObservationAlgorithmMLDSA44`,
+  `PrivateKeySignRequest.MessageRepresentative`,
+  `PublicKeyResult.MLDSA44PublicKey`, `ReasonBodyHistoryUnavailable`,
+  `ReasonCustodyMismatch`, `ReasonInvalidRecipe`,
+  `ReceivedDSNPropagationForbiddenIdentityMisaligned`,
+  `SignatureSetFact.Format`, `SignatureSetFact.GoString`,
+  `SignatureSetFact.String`, `Signer.ResolveDSNSigningIdentity`,
+  `SigningCredential`.
+- Changed: `DraftIdentifier`, `NewDSNSigningEvidenceRequest`.
+
+`DraftIdentifier` is `draft-ietf-dkim-dkim2-spec-08`.
+`NewDSNSigningEvidenceRequest` no longer takes a `DSNIdentity`; the Section
+16.2 resolver chooses it (see
+[Delivery-status signing identity](#delivery-status-signing-identity)).
+`PrivateKeySignRequest.Digest` returned `[sha256.Size]byte` before
+`v0.1.47`, returns `[]byte` since, and is deprecated in favor of
+`MessageRepresentative`, which covers `mldsa44`. `NewAuthenticator` and
+`NewDisabledAuthenticator` gained variadic `AuthenticatorOption` arguments,
+which keeps existing calls source compatible. `HardMaxRawMessageBytes` is
+now defined through the raw-message owner and rose from 32 MiB to 128 MiB
+(`128 << 20`) before `v0.1.47`.
 
 ## Qualified storage services
 
@@ -179,7 +271,10 @@ modules): `signing.PrivateKeySignRequest.Digest` is replaced by
 `ValidRepresentativeLength`, and `MessageRepresentative`.
 
 HTTP wire `v1`: `SignatureSetResult.algorithm` and
-`VerifierHop.signature_algorithms` gain `mldsa44`. Generated clients reject
+`VerifierHop.signature_algorithms` gain `mldsa44`.
+`VerifierHop.signature_algorithms` drops `rsa-sha512` and `ed25519-sha512`
+and its `maxItems` becomes 3: only verified Draft-08 Section 3 algorithms are
+listed, so the daemon never produced those values. Generated clients reject
 values outside their enum, so every generated artifact and the Rspamd
 vocabulary are deployed with the daemon as one digest-pinned set. `dkim2d
 serve` and `dkim2d validate` refuse to start without ML-DSA support.
