@@ -69,6 +69,12 @@ const (
 	previousSender = "<sender@" + previousHopDomain + ">"
 	// forwardedRecipient is the final recipient the destination refused.
 	forwardedRecipient = "<final@" + signingDomain + ">"
+	// foreignRecipient is the recipient of the message the foreign previous
+	// hop originated and its own delivery-status system bounced. Draft-08
+	// Section 16.2 lets a notification signer use only a d= that
+	// relaxed-matches an rt= recipient of the reported message, so the
+	// recipient sits under the foreign delivery-status profile domain.
+	foreignRecipient = "<final@" + previousHopDomain + ">"
 	// reinjectionPort is the Milter-free loopback submission listener.
 	reinjectionPort = 10025
 	// propagationTransport is the Postfix transport that serves the reserved
@@ -2021,20 +2027,22 @@ func provePropagationNotLocal() error {
 }
 
 // foreignNotification mints one delivery-status notification about a message
-// the foreign previous hop originated for the local final recipient and that
-// this system never signed. The foreign tenant signs the notification through
-// the daemon's delivery-status route under its own domain, so the outer
-// signature verifies while the embedded completion signature is foreign. The
+// the foreign previous hop originated for a foreign recipient and that this
+// system never signed. The foreign tenant signs the notification through the
+// daemon's delivery-status route under its own domain, which Draft-08 Section
+// 16.2 admits because the reported message's rt= recipient is under that
+// domain, so the outer signature verifies and aligns while the embedded
+// completion signature is foreign. The
 // report carries the exact Postfix bounce wire form, queue identifier, sender
 // extension, and Diagnostic-Code included, because that route admits only
 // the Postfix delivery-status profile.
 func foreignNotification() ([]byte, error) {
 	original, err := signViaDaemon(
 		foreignTenant, previousHopDomain,
-		smtpEnvelope{mailFrom: previousSender, recipients: []string{forwardedRecipient}},
+		smtpEnvelope{mailFrom: previousSender, recipients: []string{foreignRecipient}},
 		[]byte(
 			"From: sender@"+previousHopDomain+"\r\n"+
-				"To: final@"+signingDomain+"\r\n"+
+				"To: "+strings.Trim(foreignRecipient, "<>")+"\r\n"+
 				"Subject: foreign message\r\n"+
 				"Message-ID: <foreign@"+previousHopDomain+">\r\n\r\n"+
 				"foreign body\r\n",
@@ -2057,7 +2065,7 @@ func foreignNotification() ([]byte, error) {
 		"X-Postfix-Queue-ID: 4hcQ6z1Cg6z1Y\r\n" +
 		"X-Postfix-Sender: rfc822; " + strings.Trim(previousSender, "<>") + "\r\n" +
 		"Arrival-Date: " + time.Now().UTC().Format(time.RFC1123Z) + "\r\n\r\n" +
-		"Final-Recipient: rfc822; " + strings.Trim(forwardedRecipient, "<>") + "\r\n" +
+		"Final-Recipient: rfc822; " + strings.Trim(foreignRecipient, "<>") + "\r\n" +
 		"Action: failed\r\nStatus: 5.1.1\r\n" +
 		"Remote-MTA: dns; 127.0.0.1\r\n" +
 		"Diagnostic-Code: smtp; 550 5.1.1 forced qualification failure\r\n" +

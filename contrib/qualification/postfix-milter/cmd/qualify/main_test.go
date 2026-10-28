@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -77,5 +78,36 @@ func TestTopTraceOrderPinsPropagatedPlacement(t *testing.T) {
 	bottom := []byte("Received: by reinjection\r\nFrom: MAILER-DAEMON@example.test\r\nMessage-Instance: m=1\r\nDKIM2-Signature: i=1\r\n\r\nbody\r\n")
 	if validateTopTraceOrder(bottom, propagatedTraceOrder...) == nil {
 		t.Fatal("bottom-placed propagated report was accepted")
+	}
+}
+
+// TestForeignNotificationRecipientAlignsWithForeignSigner pins the Draft-08
+// Section 16.2 topology of the not_local lane: the foreign delivery-status
+// signer may sign only a notification whose embedded completion signature
+// names a recipient under its own domain, so the foreign original must be
+// addressed under the foreign delivery-status profile domain and never under
+// the local signing domain.
+func TestForeignNotificationRecipientAlignsWithForeignSigner(t *testing.T) {
+	address := strings.Trim(foreignRecipient, "<>")
+	at := strings.LastIndexByte(address, '@')
+	if at < 0 {
+		t.Fatalf("foreign recipient %q has no domain", foreignRecipient)
+	}
+	domain := strings.ToLower(address[at+1:])
+	underDomain := func(candidate, signer string) bool {
+		return candidate == signer || strings.HasSuffix(candidate, "."+signer)
+	}
+	if underDomain(domain, signingDomain) {
+		t.Fatalf("foreign recipient %q is under the local signing domain", foreignRecipient)
+	}
+	aligned := false
+	for _, identity := range qualificationIdentities {
+		if identity.tenant == foreignTenant && identity.use == "delivery_status" &&
+			underDomain(domain, identity.domain) {
+			aligned = true
+		}
+	}
+	if !aligned {
+		t.Fatalf("foreign recipient %q has no aligned foreign delivery_status profile", foreignRecipient)
 	}
 }

@@ -22,7 +22,10 @@ compose_file=contrib/qualification/postfix-milter/compose.yaml
 # directed parent-domain case is covered by the library golden vectors alone.
 # The not_local case mints its notification through the daemon's
 # delivery-status route under the foreign tenant, because Postfix itself can
-# only produce notifications the local delivery-status Milter signs.
+# only produce notifications the local delivery-status Milter signs. The
+# reported foreign message is addressed under the foreign domain, because
+# Draft-08 Section 16.2 admits a notification d= only when it relaxed-matches
+# an rt= recipient of the reported message.
 #
 # DKIM2_DEBUG_KEEP_STACK is a debugging knob: when it is set to any non-empty
 # value the exit trap keeps the compose project and the built images instead of
