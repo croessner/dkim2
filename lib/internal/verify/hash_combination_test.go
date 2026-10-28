@@ -170,6 +170,8 @@ func TestHashCombinationComputableOnlyRejectsDigestFreeValues(t *testing.T) {
 		computable bool
 	}{
 		{"{x-new}", false},
+		{"{sha256}", true},
+		{"{sha256},{sha512}", true},
 		{"{sha256-header},{x-new}", true},
 		{"{x-new}|{sha256}", true},
 	}
