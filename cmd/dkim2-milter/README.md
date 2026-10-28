@@ -4,7 +4,8 @@
 implementation. It collects one bounded Milter-v6 callback transaction,
 reconstructs an explicitly identified RFC 5322 representation, calls exactly
 one generated `dkim2d` operation at end of message, validates the complete
-response, and applies only the admitted append-only action plan.
+response, and applies only the admitted additive action plan at the top of
+the header block.
 For inbound reporting it also performs the bounded RFC 8601 sanitization
 described below before inserting the daemon-owned trace field.
 
@@ -311,7 +312,21 @@ revision, and malformed no-content responses fail closed.
 | `ordinary_transit` | `POST /v1/revise` | `DKIM2-Signature`, optionally preceded by `Message-Instance` |
 | `postfix_dsn` | `POST /v1/dsn/sign` | `Message-Instance`, then `DKIM2-Signature` |
 
+Every accepted field is inserted with `SMFIR_INSHEADER` at index 0. The plan
+is emitted in reverse, so the queued header starts with this hop's fields in
+the order of the table above, then the previous top field. Message-Instance
+and DKIM2-Signature are trace fields (Draft-08 Sections 9 and 10), which
+RFC 5322 Section 3.6 says SHOULD be kept in blocks prepended to the message.
+An optional `X-DKIM2-Info` field directly follows the hop's DKIM2-Signature.
+Under Postfix, index 0 places the block above Postfix's own `Received` field,
+which Milters never see; index 1 would place it directly below that field. A
+Postfix-queued signed message therefore starts with `Message-Instance`,
+`DKIM2-Signature`, `Received`. Earlier adapter releases appended the fields
+at the end of the header block; verification is placement-independent, so
+both forms verify.
+
 The adapter negotiates only the Milter-v6 callbacks it needs and the add-header
+(`SMFIF_ADDHDRS`, which covers both `SMFIR_ADDHEADER` and `SMFIR_INSHEADER`)
 and change-header mutation capabilities. A `postfix_dsn` instance additionally
 requires standard symbol-list negotiation for its EOH origin macro. It rejects
 peers that cannot preserve after-colon leading whitespace or perform RFC 8601
@@ -436,6 +451,11 @@ selected signing domain. `processed_domains` renders at most eight domains;
 `processed_domain_count` and `processed_domains_truncated` retain explicit
 multi-domain state. These values are local log fields only and never become
 Prometheus labels or remote trace attributes.
+
+The closed Milter action label for signing, revision, and delivery-status
+mutations is `insert_header` (it was `add_header` while the adapter appended
+fields); dashboards that select signing actions by that label must use the
+new value.
 
 Readiness means validated configuration, protected capability ownership, the
 public listener, admission controls, and required local resources are live. It

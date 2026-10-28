@@ -2038,6 +2038,14 @@ components:
           x-enum-varnames:
             - PropagationStateCommitted
     ActionPlan:
+      description: >
+        Ordered header actions for one hop. Array order is the top-down order
+        of the hop's new fields: Message-Instance, then DKIM2-Signature, then
+        any X-DKIM2-Info. Message-Instance and DKIM2-Signature are trace header
+        fields (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6.7), so
+        consumers SHOULD insert the whole block above the current topmost
+        header field, keeping array order, and must not interleave it with
+        other fields. Verification does not depend on this placement.
       type: array
       maxItems: 3
       items:

@@ -101,8 +101,8 @@
         "rcpt_to_base64": ["PHJlY2lwaWVudEBleGFtcGxlLnRlc3Q+"]
       },
       "expected_actions": [
-        {"command": "add_header", "index": 0, "name": "Message-Instance", "value": "v=2; i=fixture"},
-        {"command": "add_header", "index": 0, "name": "DKIM2-Signature", "value": "v=2; s=fixture"}
+        {"command": "insert_header", "index": 0, "name": "DKIM2-Signature", "value": "v=2; s=fixture"},
+        {"command": "insert_header", "index": 0, "name": "Message-Instance", "value": "v=2; i=fixture"}
       ],
       "terminal": "accept"
     },
@@ -127,8 +127,8 @@
         "rcpt_to_base64": ["PHJlY2lwaWVudEBleGFtcGxlLnRlc3Q+"]
       },
       "expected_actions": [
-        {"command": "add_header", "index": 0, "name": "Message-Instance", "value": "v=2; i=fixture"},
-        {"command": "add_header", "index": 0, "name": "DKIM2-Signature", "value": "v=2; s=fixture"}
+        {"command": "insert_header", "index": 0, "name": "DKIM2-Signature", "value": "v=2; s=fixture"},
+        {"command": "insert_header", "index": 0, "name": "Message-Instance", "value": "v=2; i=fixture"}
       ],
       "terminal": "accept"
     },
@@ -154,7 +154,7 @@
         "rcpt_to_base64": ["PHJlY2lwaWVudEBleGFtcGxlLnRlc3Q+"]
       },
       "expected_actions": [
-        {"command": "add_header", "index": 0, "name": "DKIM2-Signature", "value": "v=2; s=revision"}
+        {"command": "insert_header", "index": 0, "name": "DKIM2-Signature", "value": "v=2; s=revision"}
       ],
       "terminal": "accept"
     }

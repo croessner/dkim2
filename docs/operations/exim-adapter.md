@@ -76,6 +76,13 @@ proof. The qualification path uses an explicitly authentication-results-disabled
 inbound configuration for that case; normal receive-time reporting and forged
 header rejection remain independently tested.
 
+The transport filter prepends this hop's `Message-Instance` and
+`DKIM2-Signature` as one block, in action order, above Exim's own `Received`
+field (Draft-08 Sections 9 and 10 trace fields; RFC 5322 Section 3.6). Earlier
+releases appended them before the header/body separator. Verification is
+placement-independent, so both forms verify; only the visible header order
+changed. Do not add a post-filter header rewrite that moves them.
+
 Exim generates the leading `Received` field before `local_scan()` and updates
 its timestamp after the hook returns. The adapter sends the exact
 pre-acceptance Exim observation to the daemon. Qualification requires a

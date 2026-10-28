@@ -216,6 +216,35 @@ signing identity. `DeliveryStatusProjection.propagation` gains
 changed from "signing identity" to "preferred candidate when matching" (see
 `cmd/dkim2d/README.md`).
 
+### Header field placement
+
+Draft-08 Sections 9 and 10 make Message-Instance and DKIM2-Signature trace
+header fields. RFC 5322 Section 3.6 says trace fields SHOULD be kept in
+blocks prepended to the message. This is a visible behavior change of the
+adapters:
+
+- `dkim2-milter` inserts this hop's fields with `SMFIR_INSHEADER` index 0
+  instead of appending them with `SMFIR_ADDHEADER`. The queued header now
+  starts with `Message-Instance`, `DKIM2-Signature` (and an optional
+  `X-DKIM2-Info`), then the previous top field. Under Postfix that is
+  Postfix's own `Received` field. The negotiated actions are unchanged. The
+  closed Milter action label for these mutations changes from `add_header` to
+  `insert_header`.
+- `dkim2-exim` prepends the same block above Exim's own `Received` field
+  instead of inserting it before the header/body separator.
+- The daemon action plan, its `add_header` type, and the field order are
+  unchanged; the OpenAPI `ActionPlan` description now documents the top-down
+  block order.
+- Library completed-message outputs (signing results' `Bytes()`, `dkim2ctl`
+  output, `/v1/revise/batch` `insertion_offset`, propagated DSNs) still
+  append the fields at the end of the header block.
+
+Verification, revision, and the Section 16.3 DSN rebuild do not depend on
+placement and accept top-placed, bottom-placed, and mixed chains. A Section
+16.3 rebuild keeps a previous hop's own `Received` fields only when that hop
+was top-placed. Consumers that read these fields by physical position (for
+example "the last DKIM2-Signature") must select by `i=` or `m=` instead.
+
 The compatibility window begins only if all seven `v0.1.0-rc.1` module tags
 are later created under separately authorized release work. From then through
 `v0.1.0`, breaking exported Go API, HTTP wire `v1`, configuration, CLI machine

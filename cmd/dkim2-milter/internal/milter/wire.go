@@ -40,7 +40,7 @@ const (
 	replyCode         byte = 'y'
 
 	milterVersion6         uint32 = 6
-	actionAddHeaders       uint32 = 0x00000001
+	actionAddHeaders       uint32 = 0x00000001 // SMFIF_ADDHDRS: SMFIR_ADDHEADER and SMFIR_INSHEADER
 	actionChangeHeaders    uint32 = 0x00000010
 	actionSetSymbolList    uint32 = 0x00000100
 	requiredActions               = actionAddHeaders | actionChangeHeaders
@@ -473,7 +473,10 @@ func (s *Session) handleQuit(payload []byte) (bool, [][]byte, error) {
 	return true, nil, nil
 }
 
-// negotiate requires protocol v6, add-header capability, and leading-space fidelity.
+// negotiate requires protocol v6, add-header capability, and leading-space
+// fidelity. SMFIF_ADDHDRS authorizes both SMFIR_ADDHEADER and
+// SMFIR_INSHEADER, so an MTA that withholds it cannot receive the top-placed
+// trace fields and the session fails closed before any message data.
 func (s *Session) negotiate(payload []byte) ([][]byte, error) {
 	if s.state != stateInitial || len(payload) != 12 {
 		return nil, &Error{Class: FailureContract}
@@ -714,7 +717,14 @@ func (s *Session) serializeResult(
 }
 
 // serializeAcceptance emits trust-boundary scrubbing before approved actions
-// and the terminal acceptance frame.
+// and the terminal acceptance frame. Every approved field is a trace or
+// trust-boundary field that belongs at the top of the header block (Draft-08
+// Sections 9 and 10, RFC 5322 Section 3.6, RFC 8601 Section 5), so each one is
+// inserted with SMFIR_INSHEADER at index 0. The actions are emitted in reverse
+// plan order, which leaves the hop's fields as one top block in plan order:
+// Message-Instance, DKIM2-Signature, then any X-DKIM2-Info. Under Postfix,
+// index 0 places the block above Postfix's own Received field, which is not
+// visible to Milters; index 1 would place it below that field.
 func (s *Session) serializeAcceptance(
 	actions []Action,
 	localAuthenticationResults []uint32,
@@ -731,13 +741,10 @@ func (s *Session) serializeAcceptance(
 		payload = append(payload, 0, 0)
 		frames = append(frames, encodeFrame(replyChangeHeader, payload))
 	}
-	for _, action := range actions {
-		prefix := 0
-		command := replyAddHeader
-		if s.mode == modeInbound && action.Name == headerAuthResults {
-			prefix = 4
-			command = replyInsertHeader
-		}
+	for index := len(actions) - 1; index >= 0; index-- {
+		action := actions[index]
+		// The four zero bytes are the SMFIR_INSHEADER index 0 (topmost).
+		const prefix = 4
 		valuePrefix := ""
 		if action.Name == headerAuthResults {
 			valuePrefix = " "
@@ -754,7 +761,7 @@ func (s *Session) serializeAcceptance(
 		// projected fold points so no queued line exceeds RFC 5322 limits.
 		payload = append(payload, headerfold.Restore(action.Value)...)
 		payload = append(payload, 0)
-		frames = append(frames, encodeFrame(command, payload))
+		frames = append(frames, encodeFrame(replyInsertHeader, payload))
 	}
 	frames = append(frames, encodeFrame(replyAccept, nil))
 	if len(actions) > 0 || len(localAuthenticationResults) > 0 {

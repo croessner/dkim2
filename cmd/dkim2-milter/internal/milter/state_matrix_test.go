@@ -27,6 +27,7 @@ func TestNegotiationRequiresExactFidelityCapabilities(t *testing.T) {
 		{name: "old version", version: 5, actions: actionAddHeaders | actionChangeHeaders, protocol: requiredProtocol},
 		{name: "missing action", version: 6, protocol: requiredProtocol},
 		{name: "cannot remove forged local results", version: 6, actions: actionAddHeaders, protocol: requiredProtocol},
+		{name: "cannot insert top trace fields", version: 6, actions: actionChangeHeaders, protocol: requiredProtocol},
 		{name: "missing header space", version: 6, actions: actionAddHeaders, protocol: requiredProtocol &^ protocolHeaderSpace},
 		{name: "cannot suppress unknown", version: 6, actions: actionAddHeaders, protocol: requiredProtocol &^ protocolNoUnknown},
 		{name: "cannot suppress data", version: 6, actions: actionAddHeaders, protocol: requiredProtocol &^ protocolNoData},

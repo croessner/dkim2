@@ -1284,7 +1284,7 @@ func (e VerifierProjectionSchema) Valid() bool {
 // APIVersion defines model for APIVersion.
 type APIVersion string
 
-// ActionPlan defines model for ActionPlan.
+// ActionPlan Ordered header actions for one hop. Array order is the top-down order of the hop's new fields: Message-Instance, then DKIM2-Signature, then any X-DKIM2-Info. Message-Instance and DKIM2-Signature are trace header fields (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6.7), so consumers SHOULD insert the whole block above the current topmost header field, keeping array order, and must not interleave it with other fields. Verification does not depend on this placement.
 type ActionPlan = []AddHeaderAction
 
 // AddHeaderAction Daemon-owned header action. Authentication-Results carries one dkim2 result, optionally followed by a bounded diagnostic comment from the closed reason vocabulary. Consumers validate authority and result and must not use diagnostic comments for policy. Legacy bare results remain accepted. Origin and failure-index properties are omitted by this privacy-preserving profile. Successful sign, revise, and delivery_status operations may append one X-DKIM2-Info action after their protocol fields when signing.interop_info.enabled is true. It is unsigned diagnostic metadata, never authentication evidence. Earlier diagnostic fields are preserved. Consumers must reject duplicates, misplaced info actions, and info actions on process, non-accept, or non-pass outcomes.
@@ -1411,6 +1411,7 @@ type NullSenderPolicy string
 
 // OperationResponse Result and disposition are coherent: pass permits accept or continue, fail and permerror require reject, and temperror requires tempfail. Only accept may carry actions.
 type OperationResponse struct {
+	// Actions Ordered header actions for one hop. Array order is the top-down order of the hop's new fields: Message-Instance, then DKIM2-Signature, then any X-DKIM2-Info. Message-Instance and DKIM2-Signature are trace header fields (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6.7), so consumers SHOULD insert the whole block above the current topmost header field, keeping array order, and must not interleave it with other fields. Verification does not depend on this placement.
 	Actions     ActionPlan                 `json:"actions"`
 	ApiVersion  APIVersion                 `json:"api_version"`
 	Disposition Disposition                `json:"disposition"`
@@ -1485,6 +1486,7 @@ type ProcessRequest struct {
 
 // ProcessResponse Applicable inbound processing result. Reject and tempfail carry no actions. Accept and non-terminal continue may carry the sole daemon-owned Authentication-Results reporting action.
 type ProcessResponse struct {
+	// Actions Ordered header actions for one hop. Array order is the top-down order of the hop's new fields: Message-Instance, then DKIM2-Signature, then any X-DKIM2-Info. Message-Instance and DKIM2-Signature are trace header fields (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6.7), so consumers SHOULD insert the whole block above the current topmost header field, keeping array order, and must not interleave it with other fields. Verification does not depend on this placement.
 	Actions        ActionPlan           `json:"actions"`
 	ApiVersion     APIVersion           `json:"api_version"`
 	Authentication AuthenticationResult `json:"authentication"`

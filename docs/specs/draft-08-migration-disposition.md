@@ -223,7 +223,8 @@ stricter than Section 16.2 Provisional Verification (local, unchanged by D5). Im
 Message-Instance and DKIM2-Signature at the top of the header block (Milter
 INSHEADER index 0, Exim prepend), Message-Instance then DKIM2-Signature,
 directly above the previous top field, with tests for top-placed,
-bottom-placed, mixed, and headers-only previous hops.
+bottom-placed, mixed, and headers-only previous hops. Implemented as recorded
+in Section 15.
 
 **D10 RSA signing floor.** New signing credentials and loaded signing profiles
 require RSA of at least 2048 bits (C2 SHOULD made a local MUST); verification
@@ -783,3 +784,111 @@ because the draft identifier is bound into the replay frame.
   ambiguous/unavailable profiles), REST 204 header mapping and OpenAPI
   contract, Milter and `dkim2ctl` reason admission, propagation refusal
   (internal, library, golden vectors, propagator outcome).
+
+## 15. Header field placement state
+
+- C11, D9. The normative basis, quoted from spec-08:
+  - Section 9: "The Message-Instance header field is a trace header field
+    (see Section 3.6.7 of [RFC5322])."
+  - Section 10: "The DKIM2-Signature header field is a trace header field
+    (see Section 3.6.7 of [RFC5322])."
+  - The IANA registrations in Section 19 mark both fields "Trace: yes".
+  - Spec-08 contains no placement sentence of its own: no "top", "prepend",
+    or position rule for either field and no order between them. The
+    placement rule is inherited from RFC 5322 Section 3.6: "the trace header
+    fields and resent header fields MUST NOT be reordered, and SHOULD be kept
+    in blocks prepended to the message." Top placement is therefore SHOULD;
+    the MUST NOT applies to reordering existing trace fields, which no
+    adapter does. RFC 5322 Section 4.5 leaves the interpretation of trace
+    fields outside prepended blocks unspecified, so a bottom-placed field is
+    still a valid field.
+  - Placement is outside the signed input: Section 6.2 sorts header fields by
+    lower-cased name before hashing, and Section 12.8 selects the target by
+    `i=`. Verifiers must not depend on position, and this implementation's
+    verifier does not.
+- Final top-of-header order for one signing hop, top-down: this hop's
+  Message-Instance (when one is added), this hop's DKIM2-Signature, any
+  `X-DKIM2-Info` diagnostic field, then the previous top field. The daemon
+  action plan already lists the fields in this order; it is the top-down order
+  of the hop block. The block is one unit and is never interleaved. The
+  Message-Instance above DKIM2-Signature order is a local choice (the draft
+  orders neither); it matches the plan order and the existing adapter
+  validators. `X-DKIM2-Info` moved into the block so a Section 16.3 rebuild
+  removes it with the local hop's other unsigned fields.
+- Postfix (Milter). Each field is sent with SMFIR_INSHEADER index 0, in
+  reverse plan order, so the queued result is the block above in plan order.
+  Postfix `cleanup_milter.c` maps Milter index `n` to its own one-based index
+  `n + 1`. Index 0 lands above Postfix's own Received field, which Milters
+  never see; index 1 lands directly below it. After the first insert above
+  that field, Postfix treats it like any other field, so later index 0
+  inserts also reach the top. Postfix-generated messages (bounces via
+  `post_mail`, local `pickup`) start with the same hidden Received field.
+  Resulting queued orders:
+  - Milter-signed SMTP or local submission: `Message-Instance`,
+    `DKIM2-Signature`, `Received` (Postfix), then the submitted fields.
+  - Postfix bounce signed by `postfix_dsn`: `Message-Instance`,
+    `DKIM2-Signature`, `Received` (Postfix bounce), then the report fields.
+  - Inbound verification of that message at the next Postfix:
+    `Authentication-Results`, `Received` (inbound Postfix), then the previous
+    hop's block. Authentication-Results keeps its existing SMFIR_INSHEADER
+    index 0 placement.
+  SMFIF_ADDHDRS authorizes both SMFIR_ADDHEADER and SMFIR_INSHEADER. The
+  adapter already required it, so the negotiation is unchanged; an MTA that
+  withholds it is refused at negotiation, before any message data (fail
+  closed). The observed Milter action label for signing changed from
+  `add_header` to `insert_header`; both values were already on the closed
+  label allowlist.
+- Exim (transport filter). `filter.TransformLimited` prepends the block at
+  byte offset 0 of the transport message, above Exim's own Received field,
+  and copies every inherited byte unchanged after it. This also covers an
+  empty header block and header-only messages. The `local_scan` inbound
+  Authentication-Results placement (`header_add_at_position` at the top) is
+  unchanged. The Exim real-matrix scripts check the Message-Instance then
+  DKIM2-Signature order, which top placement keeps.
+- Owner: the daemon action plan carries no position field and the
+  `add_header` enum is unchanged; the generated `ActionPlan` schema now
+  documents the top-down block order and the SHOULD-level top placement.
+  Placement is applied by each adapter with its MTA primitive. No library
+  rule changed.
+- Not changed (open): library complete-message outputs still append the
+  generated fields after the last header field. This covers the unrestricted
+  signing results' `Bytes()`, `dkim2ctl` sign output, the
+  `/v1/revise/batch` `insertion_offset`, and the propagated DSN that
+  `dkim2-dsn-propagator` relays. Moving them needs a rework of the signing
+  completion proof, which binds the new signature to the last physical
+  DKIM2-Signature occurrence, a new REST contract for `insertion_offset`, and
+  regenerated golden vectors. These outputs are valid; a later change can
+  move them.
+- DSN rebuild (Section 16.3). The rebuild removes the local hop's
+  DKIM2-Signature fields by `i=`, its Message-Instance fields by `m=`, and
+  every hash-excluded field above the previous hop's DKIM2-Signature. The
+  logic is unchanged and does not depend on placement. Top placement of the
+  previous hop keeps that hop's own Received fields, because only fields
+  added after arrival sit above its signature. With a bottom-placed previous
+  hop every unsigned field sits above it, so the rebuild also removes
+  unsigned fields that were present on arrival. That is safe, because
+  Section 4 excludes them from every hash, and within the Section 16.3
+  "good faith effort SHOULD" removal.
+- Postfix qualification: `validateTopTraceOrder` pins the queued top-of-header
+  names for the SMTP origin, local submission, Milter-signed bounce, and
+  inbound cases above. The propagated notice keeps only its cardinality and
+  cryptographic checks, because the library still places its fields at the
+  bottom. `run.sh` had a stale config identity for
+  `golang:1.27.3-trixie@sha256:604106...`: the Go 1.27.3 move updated the
+  index digest but kept the Go 1.27.2 config digest (`sha256:99668476...`).
+  The registry index resolves to the linux/amd64 manifest
+  `sha256:8aa28219...`, whose config is
+  `sha256:8f320504681311625326bbcea73247b25857f43e74098ddcb4a589192c024e5d`.
+  That is now the pinned identity. The digest, identity, and platform checks
+  are unchanged. The harness also generated 1024-bit RSA signing keys, which
+  the 2048-bit signing floor (Section 13, D10) made the daemon refuse; it now
+  generates keys at `dkim2.MinSigningRSABits`. With both fixes the core lane
+  passes on Postfix 3.11.7 with the placement pins.
+- Tests: Milter reproducer for SMFIR_INSHEADER index 0 in reverse plan order
+  for originator, reviser, forwarder, and delivery-status plans; negotiation
+  refusal without SMFIF_ADDHDRS; the portable Milter fixtures and the
+  public-socket matrix updated to inserts; Exim prepend tests for Received,
+  header-only, empty header block, and binary body; library verification of
+  bottom-placed, top-placed, and mixed chains, with a Reviser signing over a
+  top-placed predecessor; DSN rebuild with both hops top-placed, both
+  bottom-placed, both mixed orders, and a headers-only rebuild.

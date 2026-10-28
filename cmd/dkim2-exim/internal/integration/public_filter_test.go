@@ -277,9 +277,9 @@ func TestPublicExecutableGeneratedSignFlow(t *testing.T) {
 		)
 	}
 	want := []byte(
-		"Subject: public\n" +
-			"Message-Instance: i=1; m=public\n" +
-			"DKIM2-Signature: i=1; s=public\n\n" +
+		"Message-Instance: i=1; m=public\n" +
+			"DKIM2-Signature: i=1; s=public\n" +
+			"Subject: public\n\n" +
 			"body\n",
 	)
 	if !bytes.Equal(stdout.Bytes(), want) || stderr.Len() != 0 ||
@@ -338,8 +338,8 @@ func TestPublicExecutableGeneratedReviseFlow(t *testing.T) {
 		)
 	}
 	want := []byte(
-		"Subject: public revise\n" +
-			"DKIM2-Signature: i=2; s=public\n\n" +
+		"DKIM2-Signature: i=2; s=public\n" +
+			"Subject: public revise\n\n" +
 			"body\n",
 	)
 	if !bytes.Equal(stdout.Bytes(), want) || stderr.Len() != 0 ||

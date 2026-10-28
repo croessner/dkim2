@@ -190,7 +190,7 @@ func TestObserverReceivesCompleteClosedEOMFacts(t *testing.T) {
 		observer.messages[0].domains.Domains() != "example.test" ||
 		observer.messages[0].failOpen ||
 		!containsObservation(observer.callbacks, "eom/") ||
-		!containsObservation(observer.actions, "add_header/success") ||
+		!containsObservation(observer.actions, "insert_header/success") ||
 		!containsObservation(observer.actions, "accept/success") {
 		t.Fatalf("incomplete closed observations: %#v %#v %#v",
 			observer.messages, observer.callbacks, observer.actions)

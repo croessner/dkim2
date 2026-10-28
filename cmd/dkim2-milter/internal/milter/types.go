@@ -387,11 +387,12 @@ func (Message) MarshalJSON() ([]byte, error) { return nil, &Error{Class: Failure
 type ActionKind string
 
 const (
-	// ActionAddHeader appends one validated field.
+	// ActionAddHeader adds one validated field; the adapter inserts it at
+	// the top of the header block (SMFIR_INSHEADER index 0).
 	ActionAddHeader ActionKind = "add_header"
 )
 
-// Action is one prevalidated append-only mutation.
+// Action is one prevalidated additive header mutation.
 type Action struct {
 	Kind  ActionKind
 	Name  string

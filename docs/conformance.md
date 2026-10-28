@@ -53,7 +53,12 @@ message sent to the daemon.
 
 Postfix prepends its own `Received` field outside the bytes visible to Milters.
 The final queued message therefore contains that field while the daemon input
-does not. For `non_smtpd_milters`, Postfix simulates SMTP callbacks and emits
+does not. The Milter inserts this hop's trace fields with `SMFIR_INSHEADER`
+index 0, which Postfix places above that `Received` field. The Postfix profile
+pins the queued top-of-header order: `Message-Instance`, `DKIM2-Signature`,
+`Received` for Milter-signed SMTP, local, and bounce messages, and
+`Authentication-Results`, `Received`, `Message-Instance`, `DKIM2-Signature`,
+`Received` after inbound verification. For `non_smtpd_milters`, Postfix simulates SMTP callbacks and emits
 unbracketed envelope mailbox fields. The adapter validates and frames those
 mailboxes as RFC 5321 paths without otherwise changing mailbox bytes. These
 facts are adapter limitations, not original-wire fidelity claims.

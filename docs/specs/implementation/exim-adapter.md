@@ -933,9 +933,13 @@ Originator signing requires the exact M16 order. Revision accepts only the
 exact unchanged/changed plan shape. Authentication-Results, deletion, change,
 recipient mutation and body-only replacement are invalid on this path.
 
-The filter inserts the ordered fields at the end of the inherited header block,
-immediately before the existing header/body separator, matching the M10
-insertion position and action order. Each action is rendered as
+The filter prepends the ordered fields as one block at byte offset 0 of the
+transport message, above the previous top field (Exim's own `Received`
+field), in action order. Message-Instance and DKIM2-Signature are trace
+fields (Draft-08 Sections 9 and 10), and RFC 5322 Section 3.6 says trace
+fields SHOULD be kept in blocks prepended to the message. Placement is outside
+the signed input, so the library's appended completed-message form and this
+prepended form verify identically. Each action is rendered as
 `name + ":" + headerfold.Restore(value) + LF`; the OpenAPI value already
 contains the exact post-colon bytes, including required legal leading SP or
 HTAB folding whitespace. Missing or illegal post-colon folding whitespace is a
@@ -948,7 +952,8 @@ contract failure. Without this, a long `DKIM2-Signature` (for example an
 8192-bit RSA set with many recipients) would be written as one multi-kilobyte
 line. Independent tests prove canonical
 equivalence with the action value. The
-adapter does not prepend, reorder or refold inherited fields. A header-only
+adapter does not reorder or refold inherited fields; every inherited byte
+follows the prepended block unchanged. A header-only
 message remains header-only unless the authoritative completed-message proof
 requires otherwise; the adapter never invents a body separator independently.
 

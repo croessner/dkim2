@@ -8,9 +8,11 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2-exim/internal/adapter"
 )
 
-// TestTransformInsertsOnlyTheAdmittedOrderedFields proves inherited LF bytes
-// remain unchanged and M16 ordered additions precede the existing separator.
-func TestTransformInsertsOnlyTheAdmittedOrderedFields(t *testing.T) {
+// TestTransformPrependsAdmittedFieldsAsOneTopBlock proves Draft-08 Sections
+// 9 and 10 trace placement: inherited LF bytes remain unchanged and the
+// ordered additions form one block in plan order above the previous top field,
+// which in an Exim transport filter is Exim's own Received field.
+func TestTransformPrependsAdmittedFieldsAsOneTopBlock(t *testing.T) {
 	first, err := adapter.NewAction(adapter.ActionAddHeader, "Message-Instance", " i=1; m=a")
 	if err != nil {
 		t.Fatal("message-instance action failed")
@@ -23,10 +25,10 @@ func TestTransformInsertsOnlyTheAdmittedOrderedFields(t *testing.T) {
 	if err != nil {
 		t.Fatal("sign plan failed")
 	}
-	output, err := Transform([]byte("Subject: preserved\n\nbody\n"), plan)
-	want := []byte("Subject: preserved\nMessage-Instance: i=1; m=a\nDKIM2-Signature: i=1; s=a\n\nbody\n")
+	output, err := Transform([]byte("Received: from relay by mx;\n\tTue, 14 Nov 2023 22:13:20 +0000\nSubject: preserved\n\nbody\n"), plan)
+	want := []byte("Message-Instance: i=1; m=a\nDKIM2-Signature: i=1; s=a\nReceived: from relay by mx;\n\tTue, 14 Nov 2023 22:13:20 +0000\nSubject: preserved\n\nbody\n")
 	if err != nil || !bytes.Equal(output, want) {
-		t.Fatal("rewrite changed inherited bytes or action order")
+		t.Fatal("rewrite changed inherited bytes or did not prepend the ordered block")
 	}
 }
 
@@ -62,13 +64,13 @@ func TestTransformDoesNotInventPostColonWhitespace(t *testing.T) {
 		[]adapter.Action{first, second},
 	)
 	output, err := Transform([]byte("Subject: x\n\nbody\n"), plan)
-	want := []byte("Subject: x\nMessage-Instance:\ti=1; m=a\nDKIM2-Signature: i=1; s=a\n\nbody\n")
+	want := []byte("Message-Instance:\ti=1; m=a\nDKIM2-Signature: i=1; s=a\nSubject: x\n\nbody\n")
 	if err != nil || !bytes.Equal(output, want) {
 		t.Fatal("rewrite changed daemon-authorized post-colon bytes")
 	}
 }
 
-// TestTransformPreservesHeaderOnlyForm proves the adapter can append admitted
+// TestTransformPreservesHeaderOnlyForm proves the adapter can prepend admitted
 // fields without inventing a header/body separator.
 func TestTransformPreservesHeaderOnlyForm(t *testing.T) {
 	first, _ := adapter.NewAction(adapter.ActionAddHeader, "Message-Instance", " i=1; m=a")
@@ -80,7 +82,7 @@ func TestTransformPreservesHeaderOnlyForm(t *testing.T) {
 		[]adapter.Action{first, second},
 	)
 	output, err := Transform([]byte("Subject: x\n"), plan)
-	want := []byte("Subject: x\nMessage-Instance: i=1; m=a\nDKIM2-Signature: i=1; s=a\n")
+	want := []byte("Message-Instance: i=1; m=a\nDKIM2-Signature: i=1; s=a\nSubject: x\n")
 	if err != nil || !bytes.Equal(output, want) {
 		t.Fatal("header-only rewrite invented a body separator")
 	}
@@ -125,7 +127,7 @@ func TestTransformPreservesBinaryBody(t *testing.T) {
 	output, err := Transform(message, plan)
 	if err != nil || !bytes.Equal(
 		output,
-		append([]byte("Subject: x\nDKIM2-Signature: i=2; s=a\n\n"), body...),
+		append([]byte("DKIM2-Signature: i=2; s=a\nSubject: x\n\n"), body...),
 	) {
 		t.Fatal("rewrite changed binary body bytes")
 	}

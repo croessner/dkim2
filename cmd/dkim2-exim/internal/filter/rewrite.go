@@ -17,6 +17,10 @@ func Transform(message []byte, plan adapter.Plan) ([]byte, error) {
 }
 
 // TransformLimited applies one plan under configured message-structure limits.
+// The admitted fields are trace fields (Draft-08 Sections 9 and 10, RFC 5322
+// Section 3.6), so they are prepended as one block in plan order above the
+// previous top field, which in a transport filter is Exim's own Received
+// field. Inherited header and body bytes are copied unchanged after the block.
 func TransformLimited(message []byte, plan adapter.Plan, limits Limits) ([]byte, error) {
 	if len(message) == 0 || plan.Operation() != adapter.OperationSign && plan.Operation() != adapter.OperationRevise {
 		return nil, adapter.NewError(adapter.FailureContract)
@@ -37,13 +41,6 @@ func TransformLimited(message []byte, plan adapter.Plan, limits Limits) ([]byte,
 	actions := plan.Actions()
 	if len(actions) == 0 {
 		return slices.Clone(message), nil
-	}
-	separator := bytes.Index(message, []byte("\n\n"))
-	insertion := len(message)
-	if message[0] == '\n' {
-		insertion = 0
-	} else if separator >= 0 {
-		insertion = separator + 1
 	}
 	additions := make([]byte, 0, len(actions)*(len("DKIM2-Signature:")+2))
 	defer clear(additions)
@@ -69,9 +66,8 @@ func TransformLimited(message []byte, plan adapter.Plan, limits Limits) ([]byte,
 		return nil, adapter.NewError(adapter.FailureResource)
 	}
 	output := make([]byte, 0, len(message)+len(additions))
-	output = append(output, message[:insertion]...)
 	output = append(output, additions...)
-	output = append(output, message[insertion:]...)
+	output = append(output, message...)
 	if err := validateCompleteMessageLimited(output, limits); err != nil {
 		clear(output)
 		return nil, err

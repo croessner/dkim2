@@ -88,7 +88,7 @@
     {
       "id": "milter-fixture-data",
       "path": "testdata/conformance/milter/draft-ietf-dkim-dkim2-spec-08/portable-fixtures.json",
-      "sha256": "65fb57bdd1ebf14a1dda4473bca35470cd25652c1c51d32c009c677afc1651f0",
+      "sha256": "ee15d0f2ebe9770ab98776ec04fe9711ba39ccfc58a9ae935b4c7f9d742727d2",
       "module": "testdata/conformance"
     },
     {
@@ -100,13 +100,13 @@
     {
       "id": "milter-negative-source",
       "path": "cmd/dkim2-milter/internal/milter/state_matrix_test.go",
-      "sha256": "16335c8de7f080c4cc0af67fd0b76715666de1e673738ebf0a32e906add52f8d",
+      "sha256": "2f7681f8c0c67cbc088ce6716f63d7414df6101665312fc42fed31087b25075a",
       "module": "cmd/dkim2-milter"
     },
     {
       "id": "milter-public-peer-source",
       "path": "cmd/dkim2-milter/internal/integration/public_peer_test.go",
-      "sha256": "981ea5bc9570058fea55e7f9f898bbc8ff328f48ee7de02453c7561c5b36a660",
+      "sha256": "4153419781a4e17f83b75c5c48a5894fc8c4d5b1a64e85bf349acff2c2dbdf60",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -214,7 +214,7 @@
     {
       "id": "postfix-qualification-runtime",
       "path": "contrib/qualification/postfix-milter/cmd/qualify/main.go",
-      "sha256": "d0e22107570b124b8d2443df79bf6097ce644bea403ff721f0eb8d50cd9240ac",
+      "sha256": "d2a549cc8c02560849f18b8051d5cc61345d7136dac9e9842310e82bc4fdcccc",
       "module": "contrib/qualification/postfix-milter"
     },
     {

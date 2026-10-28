@@ -38,9 +38,9 @@ func TestGeneratedClientFilterFlow(t *testing.T) {
 				Operation: generated.Sign, Result: generated.OperationResponseResultPass,
 			},
 			wantOutput: []byte(
-				"Subject: \xc3\xa9\n" +
-					"Message-Instance: i=1; m=a\n" +
-					"DKIM2-Signature: i=1; s=a\n\n" +
+				"Message-Instance: i=1; m=a\n" +
+					"DKIM2-Signature: i=1; s=a\n" +
+					"Subject: \xc3\xa9\n\n" +
 					"lf\ncrlf\r\nnul\x00utf8\xf0\x9f\x93\xa8\n",
 			),
 		},
@@ -61,8 +61,8 @@ func TestGeneratedClientFilterFlow(t *testing.T) {
 				Operation: generated.Revise, Result: generated.OperationResponseResultPass,
 			},
 			wantOutput: []byte(
-				"Subject: \xc3\xa9\n" +
-					"DKIM2-Signature: i=2; s=b\n\n" +
+				"DKIM2-Signature: i=2; s=b\n" +
+					"Subject: \xc3\xa9\n\n" +
 					"lf\ncrlf\r\nnul\x00utf8\xf0\x9f\x93\xa8\n",
 			),
 		},

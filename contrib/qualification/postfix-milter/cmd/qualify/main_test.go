@@ -40,3 +40,28 @@ func TestQueuedDSNDetectionDoesNotPrejudgeSignature(t *testing.T) {
 		t.Fatal("ordinary message was classified as a delivery-status report")
 	}
 }
+
+// TestTopTraceOrderPinsMilterPlacement proves the qualification pin accepts
+// only a header block that starts with the hop's top-placed trace block above
+// Postfix's own Received field, and rejects the former bottom placement.
+func TestTopTraceOrderPinsMilterPlacement(t *testing.T) {
+	top := []byte("Message-Instance: m=1\r\nDKIM2-Signature: i=1\r\nReceived: by mx\r\n\tid 1\r\nFrom: a@example.test\r\n\r\nbody\r\n")
+	if err := validateTopTraceOrder(top, milterSignedTraceOrder...); err != nil {
+		t.Fatal("top-placed trace block was rejected")
+	}
+	bottom := []byte("Received: by mx\r\nFrom: a@example.test\r\nMessage-Instance: m=1\r\nDKIM2-Signature: i=1\r\n\r\nbody\r\n")
+	if validateTopTraceOrder(bottom, milterSignedTraceOrder...) == nil {
+		t.Fatal("bottom-placed trace block was accepted")
+	}
+	swapped := []byte("DKIM2-Signature: i=1\r\nMessage-Instance: m=1\r\nReceived: by mx\r\nFrom: a@example.test\r\n\r\n")
+	if validateTopTraceOrder(swapped, milterSignedTraceOrder...) == nil {
+		t.Fatal("signature above its instance was accepted")
+	}
+	inbound := []byte("Authentication-Results: mx; dkim2=pass\r\nReceived: by in\r\n" + string(top))
+	if err := validateTopTraceOrder(inbound, inboundTraceOrder...); err != nil {
+		t.Fatal("inbound trace order was rejected")
+	}
+	if validateTopTraceOrder(top[:10], milterSignedTraceOrder...) == nil {
+		t.Fatal("truncated header block was accepted")
+	}
+}

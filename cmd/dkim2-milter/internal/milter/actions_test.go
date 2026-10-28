@@ -427,13 +427,14 @@ func TestLongSignatureFieldIsRefoldedForPostfix(t *testing.T) {
 			{Kind: ActionAddHeader, Name: headerDKIM2, Value: value},
 		},
 	}, nil)
-	if err != nil || len(frames) != 3 || len(frames[1]) < 5 || frames[1][4] != replyAddHeader {
+	// Top placement emits the plan in reverse: DKIM2-Signature, then Message-Instance.
+	if err != nil || len(frames) != 3 || len(frames[0]) < 9 || frames[0][4] != replyInsertHeader {
 		t.Fatalf("serializeResult() frames=%d error=%v", len(frames), err)
 	}
-	if !bytes.Equal(frames[0][5:], []byte(headerMessage+"\x00 v=1; m=1\x00")) {
-		t.Fatalf("short field changed: %q", frames[0][5:])
+	if !bytes.Equal(frames[1][9:], []byte(headerMessage+"\x00 v=1; m=1\x00")) {
+		t.Fatalf("short field changed: %q", frames[1][9:])
 	}
-	payload := frames[1][5:]
+	payload := frames[0][9:]
 	name, rest, ok := bytes.Cut(payload, []byte{0})
 	if !ok || string(name) != headerDKIM2 || !bytes.HasSuffix(rest, []byte{0}) {
 		t.Fatalf("header payload framing invalid")
@@ -450,5 +451,84 @@ func TestLongSignatureFieldIsRefoldedForPostfix(t *testing.T) {
 	if bytes.Count(emitted, []byte("\n\t")) != strings.Count(value, "\t") ||
 		string(bytes.ReplaceAll(emitted, []byte("\n"), nil)) != value {
 		t.Fatal("refolding changed the field beyond restoring fold points")
+	}
+}
+
+// TestTraceFieldsArePrependedAsOneTopBlock proves Draft-08 Sections 9 and 10
+// trace placement: this hop's fields are inserted with SMFIR_INSHEADER at
+// index 0 in reverse plan order, so the queued top of the header block reads
+// Message-Instance, DKIM2-Signature, X-DKIM2-Info in plan order directly above
+// the previous top field (above the MTA's own Received field under Postfix).
+func TestTraceFieldsArePrependedAsOneTopBlock(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		mode      string
+		operation string
+		actions   []Action
+	}{
+		{
+			name: "originator", mode: modeOriginator, operation: operationSign,
+			actions: []Action{
+				{Kind: ActionAddHeader, Name: headerMessage, Value: " m=1"},
+				{Kind: ActionAddHeader, Name: headerDKIM2, Value: " i=1"},
+				{Kind: ActionAddHeader, Name: headerInteropInfo, Value: " info"},
+			},
+		},
+		{
+			name: "reviser", mode: modeTransit, operation: operationRevise,
+			actions: []Action{
+				{Kind: ActionAddHeader, Name: headerMessage, Value: " m=2"},
+				{Kind: ActionAddHeader, Name: headerDKIM2, Value: " i=2"},
+			},
+		},
+		{
+			name: "forwarder", mode: modeTransit, operation: operationRevise,
+			actions: []Action{{Kind: ActionAddHeader, Name: headerDKIM2, Value: " i=2"}},
+		},
+		{
+			name: "delivery status", mode: modePostfixDSN, operation: operationDSNSign,
+			actions: []Action{
+				{Kind: ActionAddHeader, Name: headerMessage, Value: " m=1"},
+				{Kind: ActionAddHeader, Name: headerDKIM2, Value: " i=1"},
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			session := testSession(t, &testHandler{}, false, testCase.mode, "")
+			frames, err := session.serializeResult(Result{
+				Operation: testCase.operation, Result: resultPass, Outcome: DispositionAccept,
+				Actions: testCase.actions,
+			}, nil)
+			if err != nil || len(frames) != len(testCase.actions)+1 {
+				t.Fatalf("serializeResult() frames=%d error=%v", len(frames), err)
+			}
+			// Replaying the inserts against a model header block proves the
+			// resulting top-down order, independent of the emission order.
+			queued := []string{"Received", "Subject"}
+			for index, frame := range frames[:len(frames)-1] {
+				if len(frame) < 9 || frame[4] != replyInsertHeader {
+					t.Fatalf("frame %d is not SMFIR_INSHEADER: %x", index, frame)
+				}
+				if position := binary.BigEndian.Uint32(frame[5:9]); position != 0 {
+					t.Fatalf("frame %d inserts at index %d, want 0", index, position)
+				}
+				name, _, ok := bytes.Cut(frame[9:], []byte{0})
+				if !ok {
+					t.Fatalf("frame %d lacks a name terminator", index)
+				}
+				queued = append([]string{string(name)}, queued...)
+			}
+			want := make([]string, 0, len(testCase.actions)+2)
+			for _, action := range testCase.actions {
+				want = append(want, action.Name)
+			}
+			want = append(want, "Received", "Subject")
+			if strings.Join(queued, ",") != strings.Join(want, ",") {
+				t.Fatalf("queued order=%v want=%v", queued, want)
+			}
+			if frames[len(frames)-1][4] != replyAccept {
+				t.Fatal("terminal frame is not accept")
+			}
+		})
 	}
 }

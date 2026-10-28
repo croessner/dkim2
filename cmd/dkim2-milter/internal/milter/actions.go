@@ -171,7 +171,7 @@ func validOriginatorResult(result Result) bool {
 		result.Actions[1].Name == headerDKIM2
 }
 
-// validTransitResult enforces the exact append-only revision alternatives.
+// validTransitResult enforces the exact additive revision alternatives.
 func validTransitResult(result Result) bool {
 	if result.Outcome != DispositionAccept {
 		return len(result.Actions) == 0
@@ -190,7 +190,7 @@ func validTransitResult(result Result) bool {
 		result.Actions[1].Name == headerDKIM2
 }
 
-// validActionName accepts only the exact append-only field matrix.
+// validActionName accepts only the exact additive field matrix.
 func validActionName(value string) bool {
 	return value == headerMessage || value == headerDKIM2 ||
 		value == headerAuthResults || value == headerInteropInfo

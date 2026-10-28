@@ -48,10 +48,11 @@ const (
 	peerQuit      byte = 'Q'
 	peerRecipient byte = 'R'
 
-	adapterAccept    byte = 'a'
-	adapterContinue  byte = 'c'
-	adapterAddHeader byte = 'h'
-	adapterReplyCode byte = 'y'
+	adapterAccept       byte = 'a'
+	adapterContinue     byte = 'c'
+	adapterAddHeader    byte = 'h'
+	adapterInsertHeader byte = 'i'
+	adapterReplyCode    byte = 'y'
 
 	peerVersion6        uint32 = 6
 	peerAddHeaders      uint32 = 0x00000001
@@ -192,11 +193,13 @@ func TestExecutableSigningModeMatrix(t *testing.T) {
 			if len(frames) != len(testCase.wantHeaders)+1 {
 				t.Fatalf("EOM frame count = %d", len(frames))
 			}
+			// Top placement inserts the plan in reverse at index 0, so the
+			// queued block reads in plan order above the previous top field.
 			for index, wantName := range testCase.wantHeaders {
-				name, value, ok := splitHeaderAction(frames[index].payload)
-				if frames[index].command != adapterAddHeader || !ok ||
-					name != wantName || value != testCase.actions[index].Value {
-					t.Fatalf("action %d = %q %q %q", index, frames[index].command, name, value)
+				frame := frames[len(testCase.wantHeaders)-1-index]
+				name, value, ok := splitTopInsertedHeaderAction(frame)
+				if !ok || name != wantName || value != testCase.actions[index].Value {
+					t.Fatalf("action %d = %q %q %q", index, frame.command, name, value)
 				}
 			}
 			terminal := frames[len(frames)-1]
@@ -355,8 +358,8 @@ func TestExecutableActionDisconnectRecovers(t *testing.T) {
 	first.sendMessageCallbacks(t)
 	first.send(t, peerEOM, nil)
 	command, prefix := first.receiveFramePrefix(t, 64)
-	if command != adapterAddHeader ||
-		!bytes.HasPrefix(prefix, []byte("Message-Instance\x00")) {
+	if command != adapterInsertHeader ||
+		!bytes.HasPrefix(prefix, []byte("\x00\x00\x00\x00DKIM2-Signature\x00")) {
 		t.Fatalf("first partial action = %q %q", command, prefix)
 	}
 	if unixConnection, ok := first.connection.(*net.UnixConn); ok {
@@ -366,8 +369,8 @@ func TestExecutableActionDisconnectRecovers(t *testing.T) {
 
 	second := dialPublicPeer(t, process.socket)
 	frames := second.standardTransaction(t)
-	if len(frames) != 3 || frames[0].command != adapterAddHeader ||
-		frames[1].command != adapterAddHeader || frames[2].command != adapterAccept {
+	if len(frames) != 3 || frames[0].command != adapterInsertHeader ||
+		frames[1].command != adapterInsertHeader || frames[2].command != adapterAccept {
 		t.Fatalf("post-disconnect listener response = %#v", frames)
 	}
 	second.send(t, peerQuit, nil)
@@ -834,8 +837,8 @@ func TestOriginatorEnvelopeSenderDomainSelectionRunsThroughPublicSocket(t *testi
 	peer.callback(t, peerBody, []byte("body\r\n"))
 	peer.send(t, peerEOM, nil)
 	frames := []adapterFrame{peer.receive(t), peer.receive(t), peer.receive(t)}
-	if len(frames) != 3 || frames[0].command != adapterAddHeader ||
-		frames[1].command != adapterAddHeader || frames[2].command != adapterAccept {
+	if len(frames) != 3 || frames[0].command != adapterInsertHeader ||
+		frames[1].command != adapterInsertHeader || frames[2].command != adapterAccept {
 		t.Fatalf("dynamic originator EOM frames = %#v", frames)
 	}
 	peer.send(t, peerQuit, nil)
@@ -926,8 +929,8 @@ func TestOriginatorHeaderFromNullSenderSignsThroughPublicSocket(t *testing.T) {
 	peer.callback(t, peerBody, []byte("away\r\n"))
 	peer.send(t, peerEOM, nil)
 	frames := []adapterFrame{peer.receive(t), peer.receive(t), peer.receive(t)}
-	if calls != 1 || frames[0].command != adapterAddHeader ||
-		frames[1].command != adapterAddHeader || frames[2].command != adapterAccept {
+	if calls != 1 || frames[0].command != adapterInsertHeader ||
+		frames[1].command != adapterInsertHeader || frames[2].command != adapterAccept {
 		t.Fatalf("header_from null-sender EOM frames = %#v calls=%d", frames, calls)
 	}
 	peer.send(t, peerQuit, nil)
@@ -1084,7 +1087,7 @@ func TestPostfixDSNEvidenceRunsDedicatedRouteThroughPublicSocket(t *testing.T) {
 	peer.callback(t, peerBody, []byte("delivery status\r\n"))
 	peer.send(t, peerEOM, nil)
 	frames := []adapterFrame{peer.receive(t), peer.receive(t), peer.receive(t)}
-	if frames[0].command != adapterAddHeader || frames[1].command != adapterAddHeader ||
+	if frames[0].command != adapterInsertHeader || frames[1].command != adapterInsertHeader ||
 		frames[2].command != adapterAccept {
 		t.Fatalf("Postfix DSN EOM frames = %#v", frames)
 	}
@@ -1310,7 +1313,7 @@ func (p *protocolPeer) messageTransaction(t *testing.T) []adapterFrame {
 	for {
 		response := p.receive(t)
 		responses = append(responses, response)
-		if response.command != adapterAddHeader {
+		if response.command != adapterAddHeader && response.command != adapterInsertHeader {
 			return responses
 		}
 	}
@@ -1537,6 +1540,16 @@ func splitHeaderAction(payload []byte) (string, string, bool) {
 		return "", "", false
 	}
 	return string(payload[:first]), string(payload[first+1 : len(payload)-1]), true
+}
+
+// splitTopInsertedHeaderAction decodes one SMFIR_INSHEADER frame and requires
+// the topmost insertion index 0 used for trace-field placement.
+func splitTopInsertedHeaderAction(frame adapterFrame) (string, string, bool) {
+	if frame.command != adapterInsertHeader || len(frame.payload) < 4 ||
+		binary.BigEndian.Uint32(frame.payload[:4]) != 0 {
+		return "", "", false
+	}
+	return splitHeaderAction(frame.payload[4:])
 }
 
 // containsPrivateMarker reports accidental identity or message disclosure.

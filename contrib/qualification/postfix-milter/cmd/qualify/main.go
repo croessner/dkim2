@@ -1378,7 +1378,8 @@ func runSuccessQualification() error {
 		return qualificationFailure(stageOriginSubmit)
 	}
 	originRaw, err := queuedMessage(originID)
-	if err != nil || validateSignedMessage(originRaw, sender, []string{recipient}) != nil {
+	if err != nil || validateSignedMessage(originRaw, sender, []string{recipient}) != nil ||
+		validateTopTraceOrder(originRaw, milterSignedTraceOrder...) != nil {
 		return qualificationFailure(stageOriginValidation)
 	}
 	before, err := queueIDs()
@@ -1398,7 +1399,8 @@ func runSuccessQualification() error {
 	if err != nil {
 		return qualificationFailure(stageLocalValidation)
 	}
-	if validateSignedMessage(localRaw, sender, []string{recipient}) != nil {
+	if validateSignedMessage(localRaw, sender, []string{recipient}) != nil ||
+		validateTopTraceOrder(localRaw, milterSignedTraceOrder...) != nil {
 		return qualificationFailure(stageLocalValidation)
 	}
 	receivedBefore := countHeader(originRaw, "Received")
@@ -1412,6 +1414,7 @@ func runSuccessQualification() error {
 		observedReceived != receivedBefore ||
 		countHeader(inboundRaw, "Received") != receivedBefore+1 ||
 		countHeader(inboundRaw, "Authentication-Results") != 1 ||
+		validateTopTraceOrder(inboundRaw, inboundTraceOrder...) != nil ||
 		!headerHasExactValue(
 			inboundRaw,
 			"Authentication-Results",
@@ -1428,7 +1431,8 @@ func runSuccessQualification() error {
 		return err
 	}
 	if countHeader(dsnRaw, "Message-Instance") != 1 ||
-		countHeader(dsnRaw, "DKIM2-Signature") != 1 {
+		countHeader(dsnRaw, "DKIM2-Signature") != 1 ||
+		validateTopTraceOrder(dsnRaw, milterSignedDSNTraceOrder...) != nil {
 		return qualificationFailure(stageDSNCardinality)
 	}
 	if validateSignedMessage(
@@ -2437,6 +2441,44 @@ func parseHeaderFields(raw []byte) ([]parsedHeader, error) {
 		})
 	}
 	return headers, nil
+}
+
+// The Milter inserts this hop's trace fields with SMFIR_INSHEADER index 0, so
+// Postfix places them above its own Received field, which Milters never see.
+// These are the exact top-of-header field names each queued message must
+// start with (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6).
+var (
+	// milterSignedTraceOrder is a Milter-signed SMTP or local submission:
+	// this hop's Message-Instance and DKIM2-Signature, then Postfix's own
+	// Received field, then the submitted From field.
+	milterSignedTraceOrder = []string{"Message-Instance", "DKIM2-Signature", "Received", "From"}
+	// milterSignedDSNTraceOrder is a Postfix bounce signed by the
+	// delivery-status Milter: the protocol fields above the Received field
+	// that Postfix's bounce daemon writes first.
+	milterSignedDSNTraceOrder = []string{"Message-Instance", "DKIM2-Signature", "Received"}
+	// inboundTraceOrder is the signed origin message received again by the
+	// inbound Milter: the local Authentication-Results above the inbound
+	// Postfix Received field, above the origin hop's own top block.
+	inboundTraceOrder = []string{
+		"Authentication-Results", "Received",
+		"Message-Instance", "DKIM2-Signature", "Received", "From",
+	}
+)
+
+// validateTopTraceOrder requires the queued header block to start with the
+// exact case-insensitive field names in order. It pins trace placement
+// without inspecting values.
+func validateTopTraceOrder(raw []byte, names ...string) error {
+	headers, err := parseHeaderFields(raw)
+	if err != nil || len(names) == 0 || len(headers) < len(names) {
+		return errQualification
+	}
+	for index, name := range names {
+		if !strings.EqualFold(headers[index].name, name) {
+			return errQualification
+		}
+	}
+	return nil
 }
 
 // countHeader counts one case-insensitive field name through the independent parser.

@@ -247,7 +247,16 @@ Allowed field names are exactly:
 - `Authentication-Results`.
 
 No case variants or arbitrary extensions are accepted. DKIM2 protocol fields
-remain append-only. The sole bounded exception is RFC 8601 trust-boundary
+remain additive: the adapter never changes or removes an existing field.
+Every admitted field is inserted with SMFIR_INSHEADER at index 0. The plan is
+emitted in reverse order, so the hop's fields form one block at the top of the
+header in plan order (`Message-Instance`, `DKIM2-Signature`, then any
+`X-DKIM2-Info`), directly above the previous top field. Under Postfix, index 0
+also places the block above Postfix's own `Received` field, which Milters never
+see. Message-Instance and DKIM2-Signature are trace fields (Draft-08 Sections
+9 and 10, RFC 5322 Section 3.6); placement is outside the signed input. SMFIF_ADDHDRS
+covers both SMFIR_ADDHEADER and SMFIR_INSHEADER and is required at
+negotiation. The sole bounded exception is RFC 8601 trust-boundary
 sanitization: before inserting a local `Authentication-Results` trace field at
 index zero, the adapter deletes untrusted occurrences that claim the
 configured local `authserv-id`. Arbitrary header change/delete, body
@@ -279,7 +288,8 @@ grammar, individual length, aggregate length, and operation-specific
 combination. Validation is side-effect free.
 
 After validation the adapter serializes the complete mutation batch and
-terminal response before its first write. Writes preserve action order. Milter
+terminal response before its first write. Writes are the reverse of action
+order, which yields action order at the top of the queued header. Milter
 does not provide transactional rollback after bytes reach the MTA, so the
 adapter must not claim rollback atomicity: a transport failure after a partial
 write is an indeterminate MTA-side outcome. It closes the connection and never
