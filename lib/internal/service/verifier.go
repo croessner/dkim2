@@ -332,7 +332,7 @@ func verificationErrorHasUnavailableTarget(code verify.ErrorCode, diagnosticTarg
 	switch code {
 	case verify.ErrorCodeLimitExceeded, verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget,
 		verify.ErrorCodeSequenceInvalid, verify.ErrorCodeDuplicateHashAlgorithm,
-		verify.ErrorCodeDuplicateSelector, verify.ErrorCodeTooManySignatures:
+		verify.ErrorCodeDuplicateSelector:
 		return true
 	default:
 		return false
@@ -346,7 +346,7 @@ func unavailableVerificationFailure(code verify.ErrorCode, reason Reason, class 
 		return ReasonMalformedProtocol, CheckProtocol, StatePERMERROR
 	case verify.ErrorCodeLimitExceeded, verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget,
 		verify.ErrorCodeSequenceInvalid, verify.ErrorCodeMalformedState, verify.ErrorCodeDuplicateHashAlgorithm,
-		verify.ErrorCodeDuplicateSelector, verify.ErrorCodeTooManySignatures:
+		verify.ErrorCodeDuplicateSelector:
 		return reason, class, state
 	default:
 		return ReasonInternalContract, CheckInternalContract, StatePERMERROR
@@ -364,8 +364,6 @@ func mapVerificationErrorCode(code verify.ErrorCode) (Reason, CheckClass, State)
 		return ReasonInvalidRecipeJSON, CheckProtocol, StatePERMERROR
 	case verify.ErrorCodeDuplicateSelector:
 		return ReasonDuplicateSelector, CheckProtocol, StatePERMERROR
-	case verify.ErrorCodeTooManySignatures:
-		return ReasonTooManySignatures, CheckProtocol, StatePERMERROR
 	case verify.ErrorCodeMissingTarget:
 		return ReasonMissingProtocol, CheckProtocol, StatePERMERROR
 	case verify.ErrorCodeDuplicateTarget, verify.ErrorCodeSequenceInvalid:

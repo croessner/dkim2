@@ -501,7 +501,10 @@ func appendSignatureInputValueWithoutWSP(output []byte, value []byte) []byte {
 	return output
 }
 
-// renderIncompleteSignatureValue renders target tags with null signature strings.
+// renderIncompleteSignatureValue renders target tags with null signature
+// strings. The s= value comes from the parsed target's group structure
+// through the shared signature renderer, so selectors, algorithm names, and
+// the ":" "," "|" punctuation stay exactly as received (Section 12.8).
 // Tags are separated by semicolons, and the optional final semicolon of
 // Draft-08 Section 8 is retained exactly when the received field carries it,
 // because Section 12.8 signs the incomplete field as it appears in the message.
@@ -530,9 +533,12 @@ func renderIncompleteSignatureValue(unfoldedValue []byte, target signature.Signa
 		}
 
 		sawSignatureTag = true
-		nullValue, renderErr := renderNullSignatureSets(tag.Value(), len(target.SignatureSets()))
-		if renderErr != nil {
-			return nil, signatureAmbiguousSelectionError("dkim2_signature", target.Sequence(), target.HeaderIndex(), renderErr)
+		nullValue, ok := target.UnsignedSignatureValue()
+		if !ok {
+			return nil, signatureAmbiguousSelectionError("dkim2_signature", target.Sequence(), target.HeaderIndex(), newError(ErrorCodeMalformedState, ErrorLocation{Kind: KindSignatureInput}, ErrorDetails{
+				Class:      ErrorClassMalformed,
+				TargetName: targetNameSignatureSet,
+			}, nil))
 		}
 		rendered.Write(nullValue)
 	}
@@ -544,51 +550,6 @@ func renderIncompleteSignatureValue(unfoldedValue []byte, target signature.Signa
 	}
 
 	return rendered.Bytes(), nil
-}
-
-// renderNullSignatureSets keeps selector and algorithm components and blanks signatures.
-func renderNullSignatureSets(value string, expectedCount int) ([]byte, error) {
-	parts := bytes.Split([]byte(value), []byte{','})
-	if len(parts) != expectedCount {
-		return nil, newError(ErrorCodeMalformedState, ErrorLocation{Kind: KindSignatureInput}, ErrorDetails{
-			Class:      ErrorClassMalformed,
-			TargetName: targetNameSignatureSet,
-			Count:      len(parts),
-			Limit:      expectedCount,
-		}, nil)
-	}
-
-	rendered := make([]byte, 0, len(value))
-	for i, part := range parts {
-		components := bytes.Split(part, []byte{':'})
-		if len(components) != 3 {
-			return nil, newError(ErrorCodeMalformedState, ErrorLocation{Kind: KindSignatureInput}, ErrorDetails{
-				Class:      ErrorClassMalformed,
-				TargetName: targetNameSignatureSet,
-				Count:      len(components),
-				Limit:      3,
-			}, nil)
-		}
-
-		selector := trimSignatureInputWSP(components[0])
-		algorithm := trimSignatureInputWSP(components[1])
-		if len(selector) == 0 || len(algorithm) == 0 {
-			return nil, newError(ErrorCodeMalformedState, ErrorLocation{Kind: KindSignatureInput}, ErrorDetails{
-				Class:      ErrorClassMalformed,
-				TargetName: targetNameSignatureSet,
-			}, nil)
-		}
-
-		if i > 0 {
-			rendered = append(rendered, ',')
-		}
-		rendered = append(rendered, selector...)
-		rendered = append(rendered, ':')
-		rendered = append(rendered, algorithm...)
-		rendered = append(rendered, ':')
-	}
-
-	return rendered, nil
 }
 
 // selectSignatureTarget finds exactly one DKIM2-Signature with the target i=.
@@ -676,7 +637,7 @@ func sortSignatureInputRecords(records []signatureInputRecord) {
 	})
 }
 
-// trimSignatureInputWSP removes surrounding WSP before null s= rendering.
+// trimSignatureInputWSP removes surrounding WSP before the final-semicolon check.
 func trimSignatureInputWSP(input []byte) []byte {
 	start := 0
 	for start < len(input) && isSignatureInputWSP(input[start]) {

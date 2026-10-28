@@ -126,7 +126,7 @@ local replay_classes = {
 local verification_reasons = {
   none = true, limit_exceeded = true, malformed_message = true, malformed_protocol = true,
   duplicate_hash_algorithm = true, invalid_recipe_json = true, from_not_authentic = true, duplicate_selector = true,
-  too_many_signatures = true, missing_protocol = true, sequence_invalid = true,
+  missing_protocol = true, sequence_invalid = true,
   unsupported_algorithm = true, hash_mismatch = true, signature_mismatch = true,
   missing_key = true, invalid_key = true, ambiguous_key = true, revoked_key = true,
   unsupported_key_type = true, key_algorithm_mismatch = true, provider_temporary = true,

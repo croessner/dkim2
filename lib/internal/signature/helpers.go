@@ -31,7 +31,7 @@ func ValidNonceSyntax(value []byte) bool {
 	return true
 }
 
-// splitCommaList splits a non-empty DKIM2 comma list without interpreting values.
+// splitCommaList splits a non-empty DKIM2 comma list (rt=, f=) without interpreting values.
 func splitCommaList(input []byte) [][]byte {
 	if len(input) == 0 {
 		return nil

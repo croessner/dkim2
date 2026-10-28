@@ -128,13 +128,16 @@ adapter, daemon, and Exim binaries.
 
 ## Draft-08 compatibility boundaries
 
-Draft-08 deliberately tightens duplicate Message-Instance hash names,
-non-lowercase decoded Recipe header keys, selector uniqueness, and the limit of
-two occurrences per signing algorithm. The four corresponding protocol
+Draft-08 deliberately tightens duplicate Message-Instance hash names (across
+every `h=` group), non-lowercase decoded Recipe header keys, and selector
+uniqueness (across every `s=` group). The three corresponding protocol
 infractions are distinct PERMERROR reasons:
-`duplicate_hash_algorithm`, `invalid_recipe_json`, `duplicate_selector`, and
-`too_many_signatures`. They are verification results, not HTTP JSON-decode
-errors, and do not become SMTP 4xx outcomes.
+`duplicate_hash_algorithm`, `invalid_recipe_json`, and `duplicate_selector`.
+They are verification results, not HTTP JSON-decode errors, and do not become
+SMTP 4xx outcomes. Draft-08 Section 10.9 removed the Draft-07 limit of two
+occurrences per signing algorithm and with it the `too_many_signatures`
+reason; only the local `max_signature_sets` and `max_hash_sets` bounds of 16,
+counted across all groups, remain (`limit_exceeded`).
 
 The verifier now accepts SHA-512-only and agreeing dual-hash
 Message-Instances, a second same-algorithm signature with a distinct selector,

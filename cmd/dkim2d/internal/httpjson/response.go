@@ -752,8 +752,6 @@ func mapVerificationReason(value dkim2.ReasonCode) (generated.VerificationReason
 		return generated.VerificationReasonFromNotAuthentic, true
 	case dkim2.ReasonDuplicateSelector:
 		return generated.VerificationReasonDuplicateSelector, true
-	case dkim2.ReasonTooManySignatures:
-		return generated.VerificationReasonTooManySignatures, true
 	case dkim2.ReasonMissingProtocol:
 		return generated.VerificationReasonMissingProtocol, true
 	case dkim2.ReasonSequenceInvalid:

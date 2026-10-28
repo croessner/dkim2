@@ -20,6 +20,8 @@ func FuzzParseMessageInstance(f *testing.F) {
 		[]byte("m=1; h=sha256:not_base64:" + base64OfByte(0x22, 32) + ";"),
 		[]byte("m=1; h=sha256:" + base64OfByte(0x11, 32) + ":" + base64OfByte(0x22, 32) + "; r=c2VjcmV0LXJlY2lwZQ;"),
 		[]byte("m=1; h=missing-final-terminator"),
+		[]byte("m=1; h=sha256:" + base64OfByte(0x11, 32) + ":" + base64OfByte(0x22, 32) + " | future:" + base64OfByte(0x33, 8) + ":" + base64OfByte(0x44, 8) + ";"),
+		[]byte("m=1; h=sha256:" + base64OfByte(0x11, 32) + ":" + base64OfByte(0x22, 32) + ",|future:YQ==:Yg==;"),
 	}
 	for _, seed := range seeds {
 		f.Add(seed)
@@ -52,8 +54,11 @@ func FuzzParseMessageInstance(f *testing.F) {
 
 			return
 		}
-		_, parseErr := parser.ParseField(field)
+		parsed, parseErr := parser.ParseField(field)
 		_, repeatedErr := parser.ParseField(repeatedField)
+		if parseErr == nil && (!parsed.HashLayout().Valid() || parsed.HashLayout().Sets() != len(parsed.HashSets())) {
+			t.Fatalf("accepted hash layout %v does not describe %d sets", parsed.HashLayout().GroupSizes(), len(parsed.HashSets()))
+		}
 		if !bytes.Equal(input, before) {
 			t.Fatal("ParseField mutated caller-owned input")
 		}

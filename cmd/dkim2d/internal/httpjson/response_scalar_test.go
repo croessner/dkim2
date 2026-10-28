@@ -28,7 +28,6 @@ func TestDraft08VersionAndProtocolReasons(t *testing.T) {
 		{dkim2.ReasonDuplicateHashAlgorithm, generated.VerificationReasonDuplicateHashAlgorithm},
 		{dkim2.ReasonInvalidRecipeJSON, generated.VerificationReasonInvalidRecipeJson},
 		{dkim2.ReasonDuplicateSelector, generated.VerificationReasonDuplicateSelector},
-		{dkim2.ReasonTooManySignatures, generated.VerificationReasonTooManySignatures},
 	} {
 		mapped, ok := mapVerificationReason(testCase.input)
 		if !ok || mapped != testCase.want || !mapped.Valid() {
@@ -177,7 +176,6 @@ func TestVerificationReasonMappingExcludesErrorOnlyValue(t *testing.T) {
 		{dkim2.ReasonDuplicateHashAlgorithm, generated.VerificationReasonDuplicateHashAlgorithm},
 		{dkim2.ReasonInvalidRecipeJSON, generated.VerificationReasonInvalidRecipeJson},
 		{dkim2.ReasonDuplicateSelector, generated.VerificationReasonDuplicateSelector},
-		{dkim2.ReasonTooManySignatures, generated.VerificationReasonTooManySignatures},
 		{dkim2.ReasonInternalContract, generated.VerificationReasonInternalContract},
 	})
 

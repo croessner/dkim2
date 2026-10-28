@@ -17,7 +17,6 @@ const (
 	VerificationReasonInvalidRecipeJSON       VerificationReason = "invalid_recipe_json"
 	VerificationReasonFromNotAuthentic        VerificationReason = "from_not_authentic"
 	VerificationReasonDuplicateSelector       VerificationReason = "duplicate_selector"
-	VerificationReasonTooManySignatures       VerificationReason = "too_many_signatures"
 	VerificationReasonMissingProtocol         VerificationReason = "missing_protocol"
 	VerificationReasonSequenceInvalid         VerificationReason = "sequence_invalid"
 	VerificationReasonUnsupportedAlgorithm    VerificationReason = "unsupported_algorithm"
@@ -45,7 +44,7 @@ func (r VerificationReason) Known() bool {
 	switch r {
 	case VerificationReasonNone, VerificationReasonLimitExceeded, VerificationReasonMalformedMessage,
 		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON, VerificationReasonFromNotAuthentic,
-		VerificationReasonDuplicateSelector, VerificationReasonTooManySignatures, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
+		VerificationReasonDuplicateSelector, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
 		VerificationReasonUnsupportedAlgorithm, VerificationReasonHashMismatch, VerificationReasonSignatureMismatch,
 		VerificationReasonMissingKey, VerificationReasonInvalidKey, VerificationReasonAmbiguousKey,
 		VerificationReasonRevokedKey, VerificationReasonUnsupportedKeyType, VerificationReasonKeyAlgorithmMismatch,
@@ -89,8 +88,6 @@ const (
 	PreTargetDuplicateHashAlgorithm PreTargetReason = "duplicate_hash_algorithm"
 	// PreTargetDuplicateSelector reports a repeated selector before target selection.
 	PreTargetDuplicateSelector PreTargetReason = "duplicate_selector"
-	// PreTargetTooManySignatures reports excessive per-algorithm occurrences before target selection.
-	PreTargetTooManySignatures PreTargetReason = "too_many_signatures"
 	// PreTargetMissingProtocol reports absent required DKIM2 state.
 	PreTargetMissingProtocol PreTargetReason = "missing_protocol"
 	// PreTargetSequenceInvalid reports invalid DKIM2 sequencing.
@@ -103,7 +100,7 @@ const (
 func (r PreTargetReason) Known() bool {
 	switch r {
 	case PreTargetLimitExceeded, PreTargetMalformedMessage, PreTargetMalformedProtocol, PreTargetDuplicateHashAlgorithm,
-		PreTargetDuplicateSelector, PreTargetTooManySignatures,
+		PreTargetDuplicateSelector,
 		PreTargetMissingProtocol, PreTargetSequenceInvalid, PreTargetInternalContract:
 		return true
 	default:
@@ -488,7 +485,7 @@ func (p Projection) eligiblePermanentPrimaryCoherent() bool {
 	if p.verificationReason == VerificationReasonMalformedMessage || p.verificationReason == VerificationReasonMalformedProtocol ||
 		p.verificationReason == VerificationReasonDuplicateHashAlgorithm || p.verificationReason == VerificationReasonInvalidRecipeJSON ||
 		p.verificationReason == VerificationReasonFromNotAuthentic ||
-		p.verificationReason == VerificationReasonDuplicateSelector || p.verificationReason == VerificationReasonTooManySignatures ||
+		p.verificationReason == VerificationReasonDuplicateSelector ||
 		p.verificationReason == VerificationReasonMissingProtocol || p.verificationReason == VerificationReasonSequenceInvalid {
 		return false
 	}
@@ -529,7 +526,7 @@ func permanentProjectionReasonRank(reason VerificationReason) int {
 	for index, candidate := range []VerificationReason{
 		VerificationReasonInternalContract, VerificationReasonLimitExceeded, VerificationReasonMalformedMessage,
 		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON, VerificationReasonFromNotAuthentic,
-		VerificationReasonDuplicateSelector, VerificationReasonTooManySignatures, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
+		VerificationReasonDuplicateSelector, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
 		VerificationReasonUnsupportedAlgorithm, VerificationReasonMissingKey, VerificationReasonRevokedKey,
 		VerificationReasonUnsupportedKeyType, VerificationReasonKeyAlgorithmMismatch, VerificationReasonInvalidKey,
 		VerificationReasonAmbiguousKey, VerificationReasonProviderPermanent, VerificationReasonProviderContract,

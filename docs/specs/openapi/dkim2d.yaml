@@ -2451,7 +2451,6 @@ components:
             - invalid_recipe_json
             - from_not_authentic
             - duplicate_selector
-            - too_many_signatures
             - missing_protocol
             - sequence_invalid
             - unsupported_algorithm
@@ -2581,7 +2580,6 @@ components:
         - invalid_recipe_json
         - from_not_authentic
         - duplicate_selector
-        - too_many_signatures
         - missing_protocol
         - sequence_invalid
         - unsupported_algorithm

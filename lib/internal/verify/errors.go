@@ -49,8 +49,6 @@ const (
 	ErrorCodeInvalidRecipeJSON ErrorCode = "invalid_recipe_json"
 	// ErrorCodeDuplicateSelector reports a repeated selector within one signature field.
 	ErrorCodeDuplicateSelector ErrorCode = "duplicate_selector"
-	// ErrorCodeTooManySignatures reports more signature sets than the protocol maximum.
-	ErrorCodeTooManySignatures ErrorCode = "too_many_signatures"
 	// ErrorCodeSequenceInvalid reports non-contiguous or duplicate extracted numbering.
 	ErrorCodeSequenceInvalid ErrorCode = "sequence_invalid"
 	// ErrorCodeMissingTarget reports a missing signature or instance target.
@@ -445,8 +443,6 @@ func classForCode(code ErrorCode) ErrorClass {
 		return ErrorClassDuplicate
 	case ErrorCodeInvalidRecipeJSON:
 		return ErrorClassMalformed
-	case ErrorCodeTooManySignatures:
-		return ErrorClassLimit
 	case ErrorCodeHashMismatch:
 		return ErrorClassHash
 	case ErrorCodeSignatureMismatch:

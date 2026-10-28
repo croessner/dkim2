@@ -296,7 +296,6 @@ func TestDraft08PermanentReasonsDoNotDefer(t *testing.T) {
 		generated.VerificationReasonDuplicateHashAlgorithm,
 		generated.VerificationReasonInvalidRecipeJson,
 		generated.VerificationReasonDuplicateSelector,
-		generated.VerificationReasonTooManySignatures,
 	} {
 		value := validProcessFixture()
 		value.Actions = generated.ActionPlan{}

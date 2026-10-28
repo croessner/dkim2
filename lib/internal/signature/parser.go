@@ -82,7 +82,7 @@ func (p Parser) ParseField(field rawmsg.HeaderField) (Signature, error) {
 	if err != nil {
 		return Signature{}, err
 	}
-	signatures, err := parseSignatureSets(signaturesTag.Value(), p.limits, field.Index())
+	signatures, setLayout, err := parseSignatureSets(signaturesTag.Value(), p.limits, field.Index())
 	if err != nil {
 		return Signature{}, err
 	}
@@ -93,6 +93,7 @@ func (p Parser) ParseField(field rawmsg.HeaderField) (Signature, error) {
 		timestamp:      timestamp,
 		domain:         domain,
 		signatures:     signatures,
+		setLayout:      setLayout,
 		headerIndex:    field.Index(),
 	}
 	if err := p.parseEnvelopeForm(tagField, field.Index(), &signature); err != nil {

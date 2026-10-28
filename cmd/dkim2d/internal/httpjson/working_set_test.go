@@ -401,11 +401,11 @@ func assertProtocolWorkingSetSourceBounds(t testing.TB) {
 		signatureLimits.MaxFlags != 32 ||
 		signature.MaxEnvelopePathBytes != maxSMTPPathBytes ||
 		recipeLimits.MaxDecodedRecipeBytes != 49_152 ||
-		unsafe.Sizeof(instance.MessageInstance{}) != 120 ||
+		unsafe.Sizeof(instance.MessageInstance{}) != 144 ||
 		unsafe.Sizeof(instance.HashSet{}) != 216 ||
-		unsafe.Sizeof(signature.Signature{}) != 272 ||
+		unsafe.Sizeof(signature.Signature{}) != 296 ||
 		unsafe.Sizeof(signature.EnvelopePath{}) != 96 ||
-		unsafe.Sizeof(signature.Set{}) != 112 ||
+		unsafe.Sizeof(signature.Set{}) != 128 ||
 		unsafe.Sizeof(signature.Flag{}) != 24 ||
 		unsafe.Sizeof(tagvalue.Tag{}) != 40 {
 		t.Fatal("protocol extraction working-set source bounds drifted")

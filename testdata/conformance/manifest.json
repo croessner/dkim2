@@ -130,7 +130,7 @@
     {
       "id": "openapi-negative-source",
       "path": "cmd/dkim2ctl/internal/testclient/negative_test.go",
-      "sha256": "e4629bdbf43fe309299ec2c0c411d289b78938a611bc82757c92ee1cf6a937b9",
+      "sha256": "3267172602fe4e721d046ae2a2c00b39b6637f6e6c3a208eedf45a2bd1dfb280",
       "module": "cmd/dkim2ctl"
     },
     {
@@ -178,7 +178,7 @@
     {
       "id": "policy-invalid-recipe-source",
       "path": "lib/policy_projection_test.go",
-      "sha256": "19082899bf0301b23da89e14172bcf35221d8fa7a8753374e4e5978241b50491",
+      "sha256": "048315b0258a5ad83d0ef3680f33f92cc8da5cf8a70eb76283e31254c9ec7b84",
       "module": "lib"
     },
     {
@@ -280,13 +280,13 @@
     {
       "id": "service-draft08-source",
       "path": "lib/internal/service/draft08_test.go",
-      "sha256": "eecebd7e289b4afcb1cf0b07f51c7d9eb20e17be6c9b1462d3b247c6868a0a54",
+      "sha256": "1c8c34bd9570ca7d20715ec65b0e29bb9b904c4c8de1480d10a90b493bc3098e",
       "module": "lib"
     },
     {
       "id": "signature-negative-source",
       "path": "lib/internal/signature/parser_test.go",
-      "sha256": "4f677ec1782d23432a0c6ef29f86cee462b32c0f6a407b4f2ec1c3f637aa8248",
+      "sha256": "cbcbf0b8630700370644eb633ec19f714ef82c38d9e3baf0687ed88d702c5d14",
       "module": "lib"
     },
     {

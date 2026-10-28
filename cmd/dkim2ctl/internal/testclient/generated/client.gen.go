@@ -102,7 +102,6 @@ const (
 	AuthenticationResultPrimaryReasonSequenceInvalid                 AuthenticationResultPrimaryReason = "sequence_invalid"
 	AuthenticationResultPrimaryReasonSignatureMismatch               AuthenticationResultPrimaryReason = "signature_mismatch"
 	AuthenticationResultPrimaryReasonTimestampInvalid                AuthenticationResultPrimaryReason = "timestamp_invalid"
-	AuthenticationResultPrimaryReasonTooManySignatures               AuthenticationResultPrimaryReason = "too_many_signatures"
 	AuthenticationResultPrimaryReasonUnsupportedAlgorithm            AuthenticationResultPrimaryReason = "unsupported_algorithm"
 	AuthenticationResultPrimaryReasonUnsupportedKeyType              AuthenticationResultPrimaryReason = "unsupported_key_type"
 )
@@ -167,8 +166,6 @@ func (e AuthenticationResultPrimaryReason) Valid() bool {
 	case AuthenticationResultPrimaryReasonSignatureMismatch:
 		return true
 	case AuthenticationResultPrimaryReasonTimestampInvalid:
-		return true
-	case AuthenticationResultPrimaryReasonTooManySignatures:
 		return true
 	case AuthenticationResultPrimaryReasonUnsupportedAlgorithm:
 		return true
@@ -1125,7 +1122,6 @@ const (
 	VerificationReasonSequenceInvalid         VerificationReason = "sequence_invalid"
 	VerificationReasonSignatureMismatch       VerificationReason = "signature_mismatch"
 	VerificationReasonTimestampInvalid        VerificationReason = "timestamp_invalid"
-	VerificationReasonTooManySignatures       VerificationReason = "too_many_signatures"
 	VerificationReasonUnsupportedAlgorithm    VerificationReason = "unsupported_algorithm"
 	VerificationReasonUnsupportedKeyType      VerificationReason = "unsupported_key_type"
 )
@@ -1184,8 +1180,6 @@ func (e VerificationReason) Valid() bool {
 	case VerificationReasonSignatureMismatch:
 		return true
 	case VerificationReasonTimestampInvalid:
-		return true
-	case VerificationReasonTooManySignatures:
 		return true
 	case VerificationReasonUnsupportedAlgorithm:
 		return true

@@ -731,7 +731,7 @@ func knownErrorCode(code verify.ErrorCode) bool {
 		verify.ErrorCodeUnsupportedKeyType, verify.ErrorCodeKeyAlgorithmMismatch, verify.ErrorCodeWrongKeyType,
 		verify.ErrorCodeKeyPolicyRejected, verify.ErrorCodeProviderError, verify.ErrorCodeMalformedState,
 		verify.ErrorCodeDuplicateHashAlgorithm, verify.ErrorCodeInvalidRecipeJSON,
-		verify.ErrorCodeDuplicateSelector, verify.ErrorCodeTooManySignatures,
+		verify.ErrorCodeDuplicateSelector,
 		verify.ErrorCodeSequenceInvalid,
 		verify.ErrorCodeMissingTarget, verify.ErrorCodeDuplicateTarget, verify.ErrorCodeHashMismatch,
 		verify.ErrorCodeSignatureMismatch, verify.ErrorCodeTimestampInvalid, verify.ErrorCodeEnvelopeMismatch,
@@ -803,7 +803,7 @@ func classForReason(reason Reason) CheckClass {
 
 // reasonRank makes equal-precedence primary reasons independent of input order.
 func reasonRank(reason Reason) int {
-	for index, candidate := range []Reason{ReasonInternalContract, ReasonLimitExceeded, ReasonTooManySignatures, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonFromNotAuthentic, ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonMissingKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonHashMismatch, ReasonSignatureMismatch, ReasonProviderTemporary, ReasonNone} {
+	for index, candidate := range []Reason{ReasonInternalContract, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonFromNotAuthentic, ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonMissingKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonHashMismatch, ReasonSignatureMismatch, ReasonProviderTemporary, ReasonNone} {
 		if reason == candidate {
 			return index
 		}

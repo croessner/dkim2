@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"slices"
 
+	"github.com/croessner/dkim2/internal/combine"
 	"github.com/croessner/dkim2/internal/tagvalue"
 )
 
@@ -39,7 +40,7 @@ func (s HashSelectionStatus) Known() bool {
 type Limits struct {
 	// TagLimits bounds shared DKIM2 tag-list and base64string parsing.
 	TagLimits tagvalue.Limits
-	// MaxHashSets bounds comma-separated h= hash sets.
+	// MaxHashSets bounds h= hash sets counted across all groups.
 	MaxHashSets int
 	// MaxInstances bounds Message-Instance fields in one message.
 	MaxInstances int
@@ -76,6 +77,7 @@ func (l Limits) Validate() error {
 type MessageInstance struct {
 	number      uint64
 	hashes      []HashSet
+	hashLayout  combine.Layout
 	recipe      tagvalue.Base64String
 	hasRecipe   bool
 	headerIndex int
@@ -94,6 +96,12 @@ func (m MessageInstance) HeaderIndex() int {
 // HashSets returns immutable copies of h= hash sets in field order.
 func (m MessageInstance) HashSets() []HashSet {
 	return cloneHashSets(m.hashes)
+}
+
+// HashLayout returns the Draft-08 Section 9.3 hash-any/hash-all group
+// structure of HashSets.
+func (m MessageInstance) HashLayout() combine.Layout {
+	return m.hashLayout
 }
 
 // Recipe returns the parsed r= base64 container when present.

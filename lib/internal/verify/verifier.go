@@ -99,9 +99,6 @@ func (v Verifier) extractVerificationInput(request Request, maxDecodedRecipeByte
 		if signature.IsErrorCode(err, signature.ErrorCodeDuplicateSelector) {
 			return verificationInput{}, newError(ErrorCodeDuplicateSelector, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassDuplicate}, nil)
 		}
-		if signature.IsErrorCode(err, signature.ErrorCodeTooManySignatures) {
-			return verificationInput{}, newError(ErrorCodeTooManySignatures, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
-		}
 		if signature.IsErrorCode(err, signature.ErrorCodeLimitExceeded) {
 			return verificationInput{}, newError(ErrorCodeLimitExceeded, ErrorLocation{Check: CheckKindSignature}, ErrorDetails{Class: ErrorClassLimit}, nil)
 		}

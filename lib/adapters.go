@@ -117,8 +117,6 @@ func preTargetReasonMatchesService(reason policy.PreTargetReason, serviceReason 
 		return serviceReason == service.ReasonDuplicateHashAlgorithm
 	case policy.PreTargetDuplicateSelector:
 		return serviceReason == service.ReasonDuplicateSelector
-	case policy.PreTargetTooManySignatures:
-		return serviceReason == service.ReasonTooManySignatures
 	case policy.PreTargetMissingProtocol:
 		return serviceReason == service.ReasonMissingProtocol
 	case policy.PreTargetSequenceInvalid:

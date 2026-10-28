@@ -6,6 +6,7 @@ import (
 	"io"
 	"strconv"
 
+	"github.com/croessner/dkim2/internal/combine"
 	"github.com/croessner/dkim2/internal/tagvalue"
 )
 
@@ -100,7 +101,8 @@ func NewForSigning(request SigningRequest) (MessageInstance, error) {
 		name: HashAlgorithmSHA256, known: true, headerHash: headerHash, bodyHash: bodyHash,
 		headerHashValue: []byte(headerHash.EncodedString()), bodyHashValue: []byte(bodyHash.EncodedString()),
 	}
-	model := MessageInstance{number: request.Number, hashes: []HashSet{hashSet}}
+	layout, _ := combine.SingleGroup(1)
+	model := MessageInstance{number: request.Number, hashes: []HashSet{hashSet}, hashLayout: layout}
 	if request.RecipePresent {
 		recipe, recipeErr := parseGeneratedBase64(request.Recipe)
 		if recipeErr != nil {

@@ -97,8 +97,9 @@ current-only and authenticated multi-instance results. Its closed policy enums
 contain only states produced by the current verifier and policy projection;
 there are no deprecated aliases, version fallbacks, or alternate legacy
 values. Draft-06 intentionally replaces the `DraftVersion` enum and adds the
-four closed verification reasons `duplicate_hash_algorithm`,
-`invalid_recipe_json`, `duplicate_selector`, and `too_many_signatures`.
+closed verification reasons `duplicate_hash_algorithm`,
+`invalid_recipe_json`, and `duplicate_selector`; Draft-08 removed the
+Draft-06/07 `too_many_signatures` reason together with the per-algorithm cap.
 Signature-set result rows are positional and are not keyed or merged by
 algorithm. The daemon, Milter, Exim adapter, delivery-status propagator, and every
 generated client are regenerated from the same OpenAPI source and must be

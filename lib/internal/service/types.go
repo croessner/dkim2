@@ -143,8 +143,6 @@ const (
 	ReasonFromNotAuthentic Reason = "from_not_authentic"
 	// ReasonDuplicateSelector reports a repeated selector in one signature field.
 	ReasonDuplicateSelector Reason = "duplicate_selector"
-	// ReasonTooManySignatures reports a third signature occurrence for one algorithm.
-	ReasonTooManySignatures Reason = "too_many_signatures"
 	// ReasonMissingProtocol reports absent required DKIM2 state.
 	ReasonMissingProtocol Reason = "missing_protocol"
 	// ReasonSequenceInvalid reports invalid signature or instance numbering.
@@ -190,7 +188,7 @@ const (
 // Known reports whether the reason belongs to the closed service vocabulary.
 func (r Reason) Known() bool {
 	switch r {
-	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonFromNotAuthentic, ReasonDuplicateSelector, ReasonTooManySignatures, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonInternalContract:
+	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonFromNotAuthentic, ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonOutOfBandRequired, ReasonInternalContract:
 		return true
 	default:
 		return false

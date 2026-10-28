@@ -3,6 +3,7 @@ package instance
 import (
 	"bytes"
 
+	"github.com/croessner/dkim2/internal/combine"
 	"github.com/croessner/dkim2/internal/tagvalue"
 )
 
@@ -15,22 +16,27 @@ type supportedHashAlgorithm struct {
 	digestBytes int
 }
 
-// parseHashSets parses the Message-Instance h= hash-set list.
-func parseHashSets(value string, limits Limits, fieldIndex int) ([]HashSet, error) {
-	parts := splitHashSetList([]byte(value))
-	if len(parts) == 0 {
-		return nil, newError(ErrorCodeMalformedHashSet, ErrorLocation{FieldIndex: fieldIndex}, ErrorDetails{
-			TagName: "h",
-		}, nil)
+// parseHashSets parses the Draft-08 Section 9.3 h= value
+// (hash-any of hash-all groups of hash-set) into hash sets in field order and
+// their group layout. The max_hash_sets bound counts sets across all groups
+// and is enforced before any set content is parsed; a hash algorithm name
+// must not repeat anywhere in the field.
+func parseHashSets(value string, limits Limits, fieldIndex int) ([]HashSet, combine.Layout, error) {
+	if len(value) == 0 {
+		return nil, combine.Layout{}, malformedHashSetError(fieldIndex, 0)
 	}
-	if len(parts) > limits.MaxHashSets {
-		return nil, newError(ErrorCodeLimitExceeded, ErrorLocation{FieldIndex: fieldIndex}, ErrorDetails{
+	if count := combine.CountSets([]byte(value)); count > limits.MaxHashSets {
+		return nil, combine.Layout{}, newError(ErrorCodeLimitExceeded, ErrorLocation{FieldIndex: fieldIndex}, ErrorDetails{
 			Class:     ErrorClassLimit,
 			TagName:   "h",
 			LimitName: "max_hash_sets",
 			Limit:     limits.MaxHashSets,
-			Count:     len(parts),
+			Count:     count,
 		}, nil)
+	}
+	parts, layout, ok := combine.Split([]byte(value))
+	if !ok {
+		return nil, combine.Layout{}, malformedHashSetError(fieldIndex, 0)
 	}
 
 	seen := make(map[string]struct{}, len(parts))
@@ -38,10 +44,10 @@ func parseHashSets(value string, limits Limits, fieldIndex int) ([]HashSet, erro
 	for i, part := range parts {
 		hashSet, err := parseHashSet(part, limits.TagLimits, fieldIndex, i)
 		if err != nil {
-			return nil, err
+			return nil, combine.Layout{}, err
 		}
 		if _, exists := seen[hashSet.name]; exists {
-			return nil, newError(ErrorCodeDuplicateHashName, ErrorLocation{FieldIndex: fieldIndex, HashIndex: i}, ErrorDetails{
+			return nil, combine.Layout{}, newError(ErrorCodeDuplicateHashName, ErrorLocation{FieldIndex: fieldIndex, HashIndex: i}, ErrorDetails{
 				Class:   ErrorClassDuplicate,
 				TagName: "h",
 			}, nil)
@@ -49,11 +55,28 @@ func parseHashSets(value string, limits Limits, fieldIndex int) ([]HashSet, erro
 		seen[hashSet.name] = struct{}{}
 		hashes = append(hashes, hashSet)
 	}
+	if err := rejectAlternativeHashGroups(layout, fieldIndex); err != nil {
+		return nil, combine.Layout{}, err
+	}
 
-	return hashes, nil
+	return hashes, layout, nil
 }
 
-// parseHashSet parses one hash-name:header-hash:body-hash tuple.
+// rejectAlternativeHashGroups fails closed on more than one hash-all group
+// until the Section 14.7 combination algebra evaluates alternatives.
+func rejectAlternativeHashGroups(layout combine.Layout, fieldIndex int) error {
+	if layout.Groups() > 1 {
+		return malformedHashSetError(fieldIndex, 0)
+	}
+	return nil
+}
+
+// parseHashSet parses one hash-set = hash-name [FWS] ":" header-hash ":"
+// body-hash. White space may surround hash-name (the [FWS] around separators
+// and the textstring FWS) and may appear inside both base64string values,
+// including before their first character; it may not follow the "=" padding
+// of header-hash, because the base64string production ends at the padding
+// and the grammar admits no FWS before the second colon.
 func parseHashSet(input []byte, tagLimits tagvalue.Limits, fieldIndex int, hashIndex int) (HashSet, error) {
 	components := bytes.Split(input, []byte{':'})
 	if len(components) != 3 {
@@ -64,7 +87,7 @@ func parseHashSet(input []byte, tagLimits tagvalue.Limits, fieldIndex int, hashI
 	rawHeaderHash, _ := trimWSP(components[1])
 	rawBodyHash, _ := trimWSP(components[2])
 	name, ok := tagvalue.ParseTextstring(rawName)
-	if !ok || len(rawHeaderHash) == 0 || len(rawBodyHash) == 0 {
+	if !ok || len(rawHeaderHash) == 0 || len(rawBodyHash) == 0 || paddedBase64FollowedByWSP(components[1]) {
 		return HashSet{}, malformedHashSetError(fieldIndex, hashIndex)
 	}
 	if !validUnknownHashComponent(rawHeaderHash) || !validUnknownHashComponent(rawBodyHash) {
@@ -133,13 +156,15 @@ func supportedHashAlgorithmForName(name string) (supportedHashAlgorithm, bool) {
 	}
 }
 
-// splitHashSetList splits the h= value at comma separators.
-func splitHashSetList(input []byte) [][]byte {
-	if len(input) == 0 {
-		return nil
+// paddedBase64FollowedByWSP reports whether a raw base64string component
+// ends in "=" padding followed by white space, which the Section 2.14
+// base64string production does not admit.
+func paddedBase64FollowedByWSP(component []byte) bool {
+	end := len(component)
+	for end > 0 && isWSP(component[end-1]) {
+		end--
 	}
-
-	return bytes.Split(input, []byte{','})
+	return end > 0 && end < len(component) && component[end-1] == '='
 }
 
 // malformedHashSetError constructs a bounded h= syntax error.

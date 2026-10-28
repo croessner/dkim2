@@ -359,18 +359,19 @@ func TestParseAllowsTwoSameAlgorithmDifferentSelectors(t *testing.T) {
 	}
 }
 
-// TestParseRejectsThirdSameAlgorithm proves the Draft-08 per-algorithm upper bound.
-func TestParseRejectsThirdSameAlgorithm(t *testing.T) {
+// TestParseAcceptsThirdSameAlgorithm pins Draft-08 Section 10.9: more than
+// one signature with the same algorithm MAY be present with distinct
+// selectors, and the Draft-07 per-algorithm cap of two is gone.
+func TestParseAcceptsThirdSameAlgorithm(t *testing.T) {
 	value := "one:" + testExtensionAlgorithm + ":" + base64OfByte(0xaa, 48) +
 		", two:" + testExtensionAlgorithm + ":" + base64OfByte(0xbb, 48) +
 		", three:" + testExtensionAlgorithm + ":" + base64OfByte(0xcc, 48)
-	_, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("s", value)))
-	if !IsErrorCode(err, ErrorCodeTooManySignatures) {
-		t.Fatalf("Parse() error = %v, want too many signatures", err)
+	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("s", value)))
+	if err != nil {
+		t.Fatalf("Parse() error = %v, want three same-algorithm sets", err)
 	}
-	var typed *Error
-	if !errors.As(err, &typed) || typed.Code() != ErrorCodeTooManySignatures || typed.Class() != ErrorClassLimit || typed.Limit() != 2 || typed.Count() != 3 {
-		t.Fatalf("Parse() typed error = %#v, want code=%s class=%s limit=2 count=3", typed, ErrorCodeTooManySignatures, ErrorClassLimit)
+	if sets := parsed.SignatureSets(); len(sets) != 3 {
+		t.Fatalf("SignatureSets() len = %d, want 3", len(sets))
 	}
 }
 

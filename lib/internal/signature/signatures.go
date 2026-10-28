@@ -3,44 +3,68 @@ package signature
 import (
 	"bytes"
 
+	"github.com/croessner/dkim2/internal/combine"
 	"github.com/croessner/dkim2/internal/tagvalue"
 )
 
 const ed25519SignatureBytes = 64
 
-// parseSignatureSets parses comma-separated s= selector signatures.
-func parseSignatureSets(value string, limits Limits, fieldIndex int) ([]Set, error) {
-	parts := splitCommaList([]byte(value))
-	if len(parts) == 0 {
-		return nil, malformedSignatureSetError(fieldIndex, 0)
+// parseSignatureSets parses the Draft-08 Section 10.9 s= value (sig-any of
+// sig-all groups of sig-set) into sets in field order and their group
+// layout. The max_signature_sets bound counts sets across all groups and is
+// enforced before any set content is parsed; a selector must not repeat
+// anywhere in the field, while several sets may share one algorithm.
+func parseSignatureSets(value string, limits Limits, fieldIndex int) ([]Set, combine.Layout, error) {
+	if len(value) == 0 {
+		return nil, combine.Layout{}, malformedSignatureSetError(fieldIndex, 0)
 	}
-	if len(parts) > limits.MaxSignatureSets {
-		return nil, newError(ErrorCodeLimitExceeded, ErrorLocation{FieldIndex: fieldIndex}, ErrorDetails{
+	if count := combine.CountSets([]byte(value)); count > limits.MaxSignatureSets {
+		return nil, combine.Layout{}, newError(ErrorCodeLimitExceeded, ErrorLocation{FieldIndex: fieldIndex}, ErrorDetails{
 			Class:     ErrorClassLimit,
 			TagName:   "s",
 			LimitName: "max_signature_sets",
 			Limit:     limits.MaxSignatureSets,
-			Count:     len(parts),
+			Count:     count,
 		}, nil)
 	}
+	parts, layout, ok := combine.Split([]byte(value))
+	if !ok {
+		return nil, combine.Layout{}, malformedSignatureSetError(fieldIndex, 0)
+	}
 
-	cardinality := newSignatureSetCardinality(len(parts))
+	selectors := newSelectorUniqueness(len(parts))
 	sets := make([]Set, 0, len(parts))
 	for i, part := range parts {
 		set, err := parseSignatureSet(part, limits.TagLimits, fieldIndex, i)
 		if err != nil {
-			return nil, err
+			return nil, combine.Layout{}, err
 		}
-		if err := cardinality.add(set.selector, set.algorithm, fieldIndex, i); err != nil {
-			return nil, err
+		if err := selectors.add(set.selector, fieldIndex, i); err != nil {
+			return nil, combine.Layout{}, err
 		}
 		sets = append(sets, set)
 	}
+	if err := rejectAlternativeSignatureGroups(layout, fieldIndex); err != nil {
+		return nil, combine.Layout{}, err
+	}
 
-	return sets, nil
+	return sets, layout, nil
 }
 
-// parseSignatureSet parses one selector:algorithm:signature tuple.
+// rejectAlternativeSignatureGroups fails closed on more than one sig-all
+// group until the Section 14.6 combination algebra evaluates alternatives.
+func rejectAlternativeSignatureGroups(layout combine.Layout, fieldIndex int) error {
+	if layout.Groups() > 1 {
+		return malformedSignatureSetError(fieldIndex, 0)
+	}
+	return nil
+}
+
+// parseSignatureSet parses one sig-set = selector [FWS] ":" [FWS] sig-name
+// [FWS] ":" message-sig. White space may surround selector and sig-name and
+// may appear inside or before the message-sig base64string; it may not
+// appear inside a selector (an RFC 5321 Domain) or a sig-name textstring.
+// The raw selector spelling is kept for the Section 12.8 unsigned target.
 func parseSignatureSet(input []byte, limits tagvalue.Limits, fieldIndex int, signatureIndex int) (Set, error) {
 	components := bytes.Split(input, []byte{':'})
 	if len(components) != 3 {
@@ -68,6 +92,7 @@ func parseSignatureSet(input []byte, limits tagvalue.Limits, fieldIndex int, sig
 
 	set := Set{
 		selector:       selector,
+		rawSelector:    string(rawSelector),
 		algorithm:      algorithm,
 		knownAlgorithm: knownSignatureAlgorithm(algorithm),
 		signature:      signature,

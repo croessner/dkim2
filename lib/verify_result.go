@@ -157,8 +157,6 @@ const (
 	ReasonFromNotAuthentic ReasonCode = "from_not_authentic"
 	// ReasonDuplicateSelector reports a repeated selector in one signature field.
 	ReasonDuplicateSelector ReasonCode = "duplicate_selector"
-	// ReasonTooManySignatures reports a third signature occurrence for one algorithm.
-	ReasonTooManySignatures ReasonCode = "too_many_signatures"
 	// ReasonMissingProtocol reports required DKIM2 protocol state is absent.
 	ReasonMissingProtocol ReasonCode = "missing_protocol"
 	// ReasonSequenceInvalid reports invalid instance or signature numbering.
@@ -206,7 +204,7 @@ func (r ReasonCode) Known() bool {
 	switch r {
 	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage,
 		ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonFromNotAuthentic,
-		ReasonDuplicateSelector, ReasonTooManySignatures, ReasonMissingProtocol, ReasonSequenceInvalid,
+		ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid,
 		ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch,
 		ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary,
 		ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid,

@@ -40,7 +40,6 @@ func TestDraft08ProtocolInfractionsMapToDistinctPermanentReasons(t *testing.T) {
 		{verify.ErrorCodeDuplicateHashAlgorithm, ReasonDuplicateHashAlgorithm},
 		{verify.ErrorCodeInvalidRecipeJSON, ReasonInvalidRecipeJSON},
 		{verify.ErrorCodeDuplicateSelector, ReasonDuplicateSelector},
-		{verify.ErrorCodeTooManySignatures, ReasonTooManySignatures},
 	}
 	seen := make(map[Reason]struct{}, len(tests))
 	for _, test := range tests {

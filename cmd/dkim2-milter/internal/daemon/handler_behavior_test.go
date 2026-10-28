@@ -932,7 +932,6 @@ func TestDraft08PermanentReasonsDoNotTempfail(t *testing.T) {
 		generated.VerificationReasonDuplicateHashAlgorithm,
 		generated.VerificationReasonInvalidRecipeJson,
 		generated.VerificationReasonDuplicateSelector,
-		generated.VerificationReasonTooManySignatures,
 	} {
 		value := validProcessResponse()
 		value.Actions = generated.ActionPlan{}

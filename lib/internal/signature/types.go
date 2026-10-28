@@ -6,6 +6,7 @@ import (
 	"io"
 	"slices"
 
+	"github.com/croessner/dkim2/internal/combine"
 	"github.com/croessner/dkim2/internal/tagvalue"
 )
 
@@ -61,7 +62,7 @@ type Limits struct {
 	TagLimits tagvalue.Limits
 	// MaxRecipients bounds comma-separated rt= forward paths.
 	MaxRecipients int
-	// MaxSignatureSets bounds comma-separated s= selector signatures.
+	// MaxSignatureSets bounds s= selector signatures counted across all groups.
 	MaxSignatureSets int
 	// MaxFlags bounds comma-separated f= flags.
 	MaxFlags int
@@ -116,6 +117,7 @@ type Signature struct {
 	hasNextDomain  bool
 	domain         string
 	signatures     []Set
+	setLayout      combine.Layout
 	flags          Flags
 	nonce          []byte
 	hasNonce       bool
@@ -175,9 +177,15 @@ func (s Signature) Domain() string {
 	return s.domain
 }
 
-// SignatureSets returns immutable copies of s= selector signatures.
+// SignatureSets returns immutable copies of s= selector signatures in field order.
 func (s Signature) SignatureSets() []Set {
 	return cloneSignatureSets(s.signatures)
+}
+
+// SignatureLayout returns the Draft-08 Section 10.9 sig-any/sig-all group
+// structure of SignatureSets.
+func (s Signature) SignatureLayout() combine.Layout {
+	return s.setLayout
 }
 
 // Flags returns immutable f= flag data.
@@ -234,6 +242,7 @@ func (p EnvelopePath) clone() EnvelopePath {
 // Set stores one immutable selector:algorithm:signature tuple.
 type Set struct {
 	selector       string
+	rawSelector    string
 	algorithm      string
 	knownAlgorithm bool
 	signature      tagvalue.Base64String

@@ -127,6 +127,7 @@ func Targets() []FuzzTarget {
 		target("lib/internal/canonical/fuzz_test.go", "FuzzBodyHashInput", "body hash input", "draft_normative", "bounded byte-preserving canonicalization"),
 		target("lib/internal/canonical/fuzz_test.go", "FuzzHeaderHashInput", "header hash input", "draft_normative", "bounded occurrence-preserving canonicalization"),
 		target("lib/internal/canonical/fuzz_test.go", "FuzzSignatureInput", "signature input", "draft_normative", "bounded deterministic signature framing"),
+		target("lib/internal/combine/layout_test.go", "FuzzSplit", "h= and s= group split", "draft_normative", "exact rejoin and non-empty group layout"),
 		target("lib/internal/datasource/flatfile/fuzz_test.go", "FuzzCrossReferences", "flat-file cross references", "local_security_policy", "bounded exact same-generation resolution"),
 		target("lib/internal/datasource/flatfile/fuzz_test.go", "FuzzProviderParity", "flat-file provider parity", "local_security_policy", "closed storage-neutral projection"),
 		target("lib/internal/datasource/flatfile/fuzz_test.go", "FuzzStrictJSON", "flat-file JSON", "local_security_policy", "strict bounded duplicate-free decoding"),

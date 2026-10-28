@@ -1194,9 +1194,11 @@ Generation rules:
 
 The active `DraftVersion` enum contains only
 `draft-ietf-dkim-dkim2-spec-08`. Since Draft-06 the public verification reasons
-include `duplicate_hash_algorithm`, `invalid_recipe_json`, `duplicate_selector`, and
-`too_many_signatures`; the OpenAPI document owns these values and every
-generated consumer must reject unknown enum values rather than default them.
+include `duplicate_hash_algorithm`, `invalid_recipe_json`, and
+`duplicate_selector`; Draft-08 Section 10.9 removed the per-algorithm cap, so
+the Draft-06/07 `too_many_signatures` reason no longer exists. The OpenAPI
+document owns these values and every generated consumer must reject unknown
+enum values rather than default them.
 
 Domain packages should not import generated REST types. HTTP handlers adapt
 generated DTOs into explicit DKIM2 domain requests and adapt domain results

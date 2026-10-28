@@ -58,7 +58,7 @@ func (p Parser) ParseField(field rawmsg.HeaderField) (MessageInstance, error) {
 	if err != nil {
 		return MessageInstance{}, err
 	}
-	hashes, err := parseHashSets(hashTag.Value(), p.limits, field.Index())
+	hashes, hashLayout, err := parseHashSets(hashTag.Value(), p.limits, field.Index())
 	if err != nil {
 		return MessageInstance{}, err
 	}
@@ -66,6 +66,7 @@ func (p Parser) ParseField(field rawmsg.HeaderField) (MessageInstance, error) {
 	instance := MessageInstance{
 		number:      number,
 		hashes:      hashes,
+		hashLayout:  hashLayout,
 		headerIndex: field.Index(),
 	}
 	if recipeTag, ok := tagField.Get("r"); ok {

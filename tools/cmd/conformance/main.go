@@ -595,7 +595,7 @@ var portableDefinitions = []runnerDefinition{
 			{key: "signing\x00draft08-duplicate-selector", testName: "TestParseRejectsDuplicateSelectors", artifacts: []string{signatureNegativeArtifact}},
 			{key: "signing\x00draft08-optional-final-semicolon", testName: "TestParseAcceptsOptionalFinalSemicolon", artifacts: []string{signatureNegativeArtifact}},
 			{key: "signing\x00draft08-same-algorithm-pair", testName: "TestParseAllowsTwoSameAlgorithmDifferentSelectors", artifacts: []string{signatureNegativeArtifact}},
-			{key: "signing\x00draft08-third-same-algorithm", testName: "TestParseRejectsThirdSameAlgorithm", artifacts: []string{signatureNegativeArtifact}},
+			{key: "signing\x00draft08-third-same-algorithm", testName: "TestParseAcceptsThirdSameAlgorithm", artifacts: []string{signatureNegativeArtifact}},
 			{key: "signing\x00signature-grammar-negative", testName: "TestParseRejectsSharedTagSyntaxErrors", artifacts: []string{signatureNegativeArtifact}},
 			{key: "signing\x00tag-case-interpretation", testName: "TestParseRejectsMixedCaseTagNames", artifacts: []string{signatureNegativeArtifact}},
 		},

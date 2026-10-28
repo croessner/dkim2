@@ -21,6 +21,9 @@ func FuzzParseDKIM2Signature(f *testing.F) {
 		[]byte(signatureValueWith("s", "selector1:future-sha999:"+base64OfByte(0xbb, 48)) + ";"),
 		[]byte(signatureValueWith("n", "nonce-secret;bad") + ";"),
 		[]byte(validSignatureValue()),
+		[]byte(signatureValueWith("s", "one:ed25519-sha256:"+base64OfByte(0xaa, 64)+" | two:future-sha999:"+base64OfByte(0xbb, 48)) + ";"),
+		[]byte(signatureValueWith("s", "one:rsa-sha256:"+base64OfByte(0xaa, 128)+",two:ed25519-sha256:"+base64OfByte(0xbb, 64)+"|three:mldsa44:"+base64OfByte(0xcc, 48)) + ";"),
+		[]byte(signatureValueWith("s", "one:ed25519-sha256:"+base64OfByte(0xaa, 64)+"||") + ";"),
 	}
 	for _, seed := range seeds {
 		f.Add(seed)
@@ -56,14 +59,31 @@ func FuzzParseDKIM2Signature(f *testing.F) {
 
 			return
 		}
-		_, parseErr := parser.ParseField(field)
+		parsed, parseErr := parser.ParseField(field)
 		_, repeatedErr := parser.ParseField(repeatedField)
+		if parseErr == nil {
+			assertSignatureGroupInvariants(t, parsed)
+		}
 		if !bytes.Equal(input, before) {
 			t.Fatal("ParseField mutated caller-owned input")
 		}
 		assertSameSignatureFuzzClassification(t, parseErr, repeatedErr)
 		assertNoSignatureFuzzSecretLeak(t, parseErr, before)
 	})
+}
+
+// assertSignatureGroupInvariants checks that an accepted s= value has a
+// layout describing every set and a white-space-free unsigned rendering.
+func assertSignatureGroupInvariants(t *testing.T, parsed Signature) {
+	t.Helper()
+	layout := parsed.SignatureLayout()
+	if !layout.Valid() || layout.Sets() != len(parsed.SignatureSets()) {
+		t.Fatalf("accepted signature layout %v does not describe %d sets", layout.GroupSizes(), len(parsed.SignatureSets()))
+	}
+	unsigned, ok := parsed.UnsignedSignatureValue()
+	if !ok || bytes.ContainsAny(unsigned, " \t") {
+		t.Fatalf("accepted signature has unusable unsigned rendering ok=%t", ok)
+	}
 }
 
 // assertSameSignatureFuzzClassification checks deterministic success and typed error facts.

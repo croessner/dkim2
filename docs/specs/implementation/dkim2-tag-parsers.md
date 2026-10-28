@@ -305,15 +305,26 @@ syntax that the DNS record format copies from DKIM2.
 - Parsed `Message-Instance` collections must validate that instance numbers are
   contiguous from `1` with no gaps. Gaps make verification impossible and are
   reported as structured parser or validation errors.
-- `h=` contains one or more hash sets separated by commas. Each hash set
-  contains hash name, header hash, and body hash separated by colons.
+- `h=` follows the Draft-08 Section 9.3 grammar
+  `hash-any = hash-all *([FWS] "|" [FWS] hash-all)`,
+  `hash-all = hash-set *([FWS] "," [FWS] hash-set)`, and
+  `hash-set = hash-name [FWS] ":" header-hash ":" body-hash`. The parser keeps
+  the group structure (`MessageInstance.HashLayout`, owned by
+  `lib/internal/combine`) next to the hash sets in field order. Values are
+  already unfolded, so FWS is WSP: it is accepted after `=`, around `,` and
+  `|`, around the hash name, and before or inside both base64string hashes; it
+  is rejected inside a hash name and between the `=` padding of the header
+  hash and the second colon, which no production admits. Empty groups and
+  leading, trailing, or doubled separators are syntax errors
+  (`malformed_hash_set`). The `max_hash_sets` bound of 16 counts sets across
+  all groups and is enforced before set contents are parsed.
 - `sha256` is the known baseline hash name. Unknown hash names are represented
   but cannot create verification success in later milestones. Header and body
   components for unknown algorithms still parse as strict base64string values.
 - `sha256` header and body hashes must decode from valid padded base64string
   values to 32 bytes.
-- Duplicate hash algorithm names within one `h=` value are invalid for M2.
-  This prevents ambiguous selection and keeps later hash comparison fail-closed.
+- Duplicate hash algorithm names within one `h=` value are invalid in any
+  group (Section 9.3: an algorithm MUST NOT be present more than once).
 - `r=` is parsed as syntactically valid base64string and stores decoded bytes
   plus canonical encoded form. M2 does not parse the decoded JSON recipe
   object; recipe semantics remain owned by `lib/internal/recipe`.
@@ -366,19 +377,34 @@ syntax that the DNS record format copies from DKIM2.
   syntax, rejects empty labels, leading or trailing dot, label length over 63,
   total length over 253, and control or whitespace bytes. IDNA, Unicode, and
   EAI semantics remain deferred because the DKIM2 EAI section is TBA.
-- `s=` contains one or more signature sets separated by commas. Each set
-  contains selector, signature algorithm name, and message signature separated
-  by colons.
+- `s=` follows the Draft-08 Section 10.9 grammar
+  `sig-any = sig-all *([FWS] "|" [FWS] sig-all)`,
+  `sig-all = sig-set *([FWS] "," [FWS] sig-set)`, and
+  `sig-set = selector [FWS] ":" [FWS] sig-name [FWS] ":" message-sig`. The
+  parser keeps the group structure (`Signature.SignatureLayout`) next to the
+  sets in field order and the received selector spelling for Section 12.8.
+  WSP is accepted after `=`, around `,` and `|`, around the selector and the
+  sig-name, and before or inside the message-sig base64string; it is rejected
+  inside a selector (an RFC 5321 `Domain`) or a sig-name. Empty groups and
+  leading, trailing, or doubled separators are syntax errors
+  (`malformed_signature_set`). The `max_signature_sets` bound of 16 counts
+  sets across all groups.
+- `Signature.UnsignedSignatureValue` is the single Section 12.8 renderer of
+  the unsigned `s=` value: selectors, algorithm names, both colons, and the
+  `,` and `|` separators stay exactly where they were, the signature values
+  are null, and no WSP is emitted. Verifier canonicalization and the signer's
+  completion proof both use it; the signer's folded unsigned field is proven
+  to reduce to the same bytes.
 - Known signature algorithm names are `rsa-sha256` and `ed25519-sha256`.
   Unknown algorithm names are represented but cannot create verification
   success in later milestones.
 - For `ed25519-sha256`, M2 may enforce the stable 64-byte Ed25519 signature
   length after base64 decoding. RSA signature lengths and key matching remain
   deferred to M4 and DNS milestones.
-- Duplicate signature algorithms or duplicate selectors inside one `s=` value
-  are invalid when they would make later selection ambiguous. If implementation
-  evidence shows legitimate same-algorithm multi-selector behavior is needed,
-  update this spec before accepting it.
+- A selector must not repeat anywhere in one `s=` value, across all groups
+  (`duplicate_selector`). Several sets may use the same algorithm with
+  distinct selectors; Draft-08 removed the Draft-07 per-algorithm cap of two
+  and the `too_many_signatures` error.
 - `n=` is optional, simple printable ASCII excluding semicolon, and must not
   exceed 64 characters. Unknown semantics are preserved only as bounded parser
   data; it must not become a correlation key in default logs or metrics.
@@ -724,9 +750,7 @@ document the exact blocker.
 - Settled: Recipe JSON semantics are deferred to `lib/internal/recipe`.
 - Settled: Current SMTP envelope matching is deferred to verification and
   Milter/service milestones.
-- Open: Whether same-algorithm multi-selector `s=` sets should be accepted for
-  algorithmic dexterity remains conservative in M2. The initial parser rejects
-  ambiguous duplicates unless a later spec update documents a legitimate
-  selection model.
+- Settled: Same-algorithm multi-selector `s=` sets are accepted with distinct
+  selectors (Draft-08 Section 10.9).
 - Open: The final public facade shape for parsed DKIM2 fields remains deferred
   until the service layer needs it.

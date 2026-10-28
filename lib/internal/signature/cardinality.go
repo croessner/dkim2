@@ -1,42 +1,26 @@
 package signature
 
-// maxSignatureSetsPerAlgorithm is the Draft-08 per-algorithm selector
-// cardinality within one DKIM2-Signature (at most two sets of the same
-// algorithm, for key rollover). It is not a credential-per-profile bound.
-const maxSignatureSetsPerAlgorithm = 2
-
-// signatureSetCardinality owns selector uniqueness and per-algorithm occurrence bounds.
-type signatureSetCardinality struct {
+// selectorUniqueness owns the Draft-08 Section 10.9 rule that a Selector
+// appears at most once in one DKIM2-Signature, across every sig-all group.
+// Several sets may use the same algorithm with distinct selectors.
+type selectorUniqueness struct {
 	selectors map[string]struct{}
-	counts    map[string]int
 }
 
-// newSignatureSetCardinality constructs bounded state sized for the enclosing set limit.
-func newSignatureSetCardinality(capacity int) signatureSetCardinality {
-	return signatureSetCardinality{
-		selectors: make(map[string]struct{}, capacity),
-		counts:    make(map[string]int, capacity),
-	}
+// newSelectorUniqueness constructs bounded state sized for the enclosing set limit.
+func newSelectorUniqueness(capacity int) selectorUniqueness {
+	return selectorUniqueness{selectors: make(map[string]struct{}, capacity)}
 }
 
-// add validates one already-canonical selector and algorithm without retaining raw values.
-func (c *signatureSetCardinality) add(selector string, algorithm string, fieldIndex int, signatureIndex int) error {
-	if _, exists := c.selectors[selector]; exists {
+// add records one already-canonical selector and rejects a repeat without
+// retaining raw values in the error.
+func (u *selectorUniqueness) add(selector string, fieldIndex int, signatureIndex int) error {
+	if _, exists := u.selectors[selector]; exists {
 		return newError(ErrorCodeDuplicateSelector, ErrorLocation{FieldIndex: fieldIndex, SignatureIndex: signatureIndex}, ErrorDetails{
 			Class:   ErrorClassDuplicate,
 			TagName: TagNameSignatures,
 		}, nil)
 	}
-	next := c.counts[algorithm] + 1
-	if next > maxSignatureSetsPerAlgorithm {
-		return newError(ErrorCodeTooManySignatures, ErrorLocation{FieldIndex: fieldIndex, SignatureIndex: signatureIndex}, ErrorDetails{
-			Class:   ErrorClassLimit,
-			TagName: TagNameSignatures,
-			Limit:   maxSignatureSetsPerAlgorithm,
-			Count:   next,
-		}, nil)
-	}
-	c.selectors[selector] = struct{}{}
-	c.counts[algorithm] = next
+	u.selectors[selector] = struct{}{}
 	return nil
 }

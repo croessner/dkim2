@@ -332,3 +332,45 @@ because the draft identifier is bound into the replay frame.
   `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-spec-07/`.
 - Qualification and `dkim2ctl` fixtures compute hashes at run time through
   the library and carry no frozen digests over these fields.
+
+## 9. Package 3 state
+
+- C13, C15: the `h=` and `s=` parsers follow the exact Draft-08 Section 9.3
+  and 10.9 ABNF. `lib/internal/combine` owns the group structure (`Layout`:
+  ordered groups of sets in field order) and the separator split shared by
+  both parsers; `MessageInstance.HashLayout` and `Signature.SignatureLayout`
+  expose it next to the sets in field order. Values are unfolded, so FWS is
+  WSP. Tests pin every white-space position: accepted after `=`, around `,`
+  and `|`, around hash names, selectors, and sig-names, and before or inside
+  base64string values; rejected inside a hash name, selector, or sig-name and
+  between header-hash `=` padding and the second colon. Empty groups and
+  leading, trailing, or doubled separators are `malformed_hash_set` /
+  `malformed_signature_set` (PERMERROR `malformed_protocol`).
+- Duplicate hash names and duplicate selectors are rejected across all
+  groups. The per-algorithm cap of two and the `too_many_signatures` reason
+  are removed from the parser, the signer, the verify, service, and policy
+  vocabularies, the public `ReasonCode` set, the OpenAPI `VerificationReason`
+  and `primary_reason` enums with every generated server and client, the
+  daemon mapping, the Milter, Exim, and `dkim2ctl` tests, the Rspamd contrib,
+  and the documentation. The local bounds `max_signature_sets` and
+  `max_hash_sets` of 16 count sets across all groups (`limit_exceeded`).
+- C22: `Signature.UnsignedSignatureValue` is the single Section 12.8 unsigned
+  `s=` renderer. It renders from the parsed structure with the received
+  selector spelling, the algorithm names, both colons, and the `,` and `|`
+  separators, nulls only the signature values, and emits no white space. The
+  verifier canonicalization (`canonical.renderIncompleteSignatureValue`) and
+  the signer's completion proof (`RebuildUnsignedFromComplete`) both use it,
+  and `NewUnsignedTarget` proves that the folded unsigned field the signer
+  emits reduces to the same bytes.
+- D3: the signer layout is derived from the canonically ordered credentials
+  before any signature value is computed. Classical algorithms
+  (`rsa-sha256`, `ed25519-sha256`) form the first `sig-all` group; any other
+  algorithm (the `mldsa44` credential of package 6) starts a separate `|`
+  group. With today's two algorithms the output stays one `,` group, and the
+  Message-Instance `h=` emission stays one `sha256` set.
+- Until package 4 enables the Section 14.6/14.7 algebra, a value with more
+  than one group fails closed (PERMERROR `malformed_protocol`); a public-path
+  test pins this for `s=` and `h=`.
+- Fuzz targets: `FuzzSplit` (exact rejoin and layout invariants) and the
+  existing parser fuzzers with group seeds and layout and unsigned-rendering
+  invariants.

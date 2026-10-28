@@ -841,7 +841,6 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 		"VerificationReason": {
 			"none", "limit_exceeded", "malformed_message", "malformed_protocol",
 			"duplicate_hash_algorithm", "invalid_recipe_json", "from_not_authentic", "duplicate_selector",
-			"too_many_signatures",
 			"missing_protocol", "sequence_invalid", "unsupported_algorithm",
 			"hash_mismatch", "signature_mismatch", "missing_key", "invalid_key",
 			"ambiguous_key", "revoked_key", "unsupported_key_type",

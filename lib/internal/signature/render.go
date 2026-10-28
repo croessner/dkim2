@@ -191,7 +191,30 @@ func NewUnsignedTarget(request TargetRequest, limits RenderLimits) (UnsignedTarg
 	if err != nil {
 		return UnsignedTarget{}, err
 	}
+	if !unsignedFieldMatchesSharedRenderer(unsigned, canonical.Sets) {
+		return UnsignedTarget{}, newError(ErrorCodeRenderInvariant, ErrorLocation{}, ErrorDetails{}, nil)
+	}
 	return UnsignedTarget{request: canonical, limits: resolved, unsigned: unsigned}, nil
+}
+
+// unsignedFieldMatchesSharedRenderer proves that the folded unsigned field
+// the signer emits reduces, after Section 12.8 white-space deletion, to the
+// s= value of the shared unsigned renderer the verifier also uses.
+func unsignedFieldMatchesSharedRenderer(unsigned []byte, plans []SetPlan) bool {
+	expected, ok := unsignedSetListFromPlans(plans)
+	if !ok {
+		return false
+	}
+	field, err := parseRenderedSignatureField(unsigned)
+	if err != nil {
+		return false
+	}
+	tags, err := tagvalue.ScanHeader(field.UnfoldedValue(), knownSignatureTags, tagvalue.DefaultLimits())
+	if err != nil {
+		return false
+	}
+	tag, ok := tags.Get(string(TagNameSignatures))
+	return ok && bytes.Equal(signatureValueWithoutWSP(tag.Value()), expected)
 }
 
 // UnsignedBytes returns detached canonical bytes for the signing input target.
@@ -280,7 +303,7 @@ func (t UnsignedTarget) RebuildUnsignedFromComplete(complete CompleteField) (Uns
 		return UnsignedTarget{}, renderConstructionError("s")
 	}
 	unsignedTags, err := tagvalue.ScanHeader(unsignedField.UnfoldedValue(), knownSignatureTags, tagvalue.DefaultLimits())
-	if err != nil || !matchesUnsignedTagSequence(completeTags, unsignedTags) {
+	if err != nil || !matchesUnsignedTagSequence(completeTags, parsed, unsignedTags) {
 		return UnsignedTarget{}, renderConstructionError("s")
 	}
 
@@ -308,8 +331,10 @@ func parseRenderedSignatureField(field []byte) (rawmsg.HeaderField, error) {
 	return fields[0], nil
 }
 
-// matchesUnsignedTagSequence compares exact Section 12.8 logical tags after nulling every signature.
-func matchesUnsignedTagSequence(complete tagvalue.Field, unsigned tagvalue.Field) bool {
+// matchesUnsignedTagSequence compares exact Section 12.8 logical tags after
+// nulling every signature of the reparsed complete field through the shared
+// unsigned renderer.
+func matchesUnsignedTagSequence(complete tagvalue.Field, parsed Signature, unsigned tagvalue.Field) bool {
 	completeTags := complete.Tags()
 	unsignedTags := unsigned.Tags()
 	if len(completeTags) != len(unsignedTags) {
@@ -319,7 +344,7 @@ func matchesUnsignedTagSequence(complete tagvalue.Field, unsigned tagvalue.Field
 		if completeTags[index].Name() != unsignedTags[index].Name() {
 			return false
 		}
-		completeValue, ok := logicalUnsignedTagValue(completeTags[index])
+		completeValue, ok := logicalUnsignedTagValue(completeTags[index], parsed)
 		if !ok || !bytes.Equal(completeValue, signatureValueWithoutWSP(unsignedTags[index].Value())) {
 			return false
 		}
@@ -327,32 +352,13 @@ func matchesUnsignedTagSequence(complete tagvalue.Field, unsigned tagvalue.Field
 	return true
 }
 
-// logicalUnsignedTagValue removes WSP and blanks all completed s= payloads atomically.
-func logicalUnsignedTagValue(tag tagvalue.Tag) ([]byte, bool) {
-	value := signatureValueWithoutWSP(tag.Value())
+// logicalUnsignedTagValue removes WSP and, for s=, renders the unsigned
+// value of the parsed complete field.
+func logicalUnsignedTagValue(tag tagvalue.Tag, parsed Signature) ([]byte, bool) {
 	if tag.Name() != string(TagNameSignatures) {
-		return value, true
+		return signatureValueWithoutWSP(tag.Value()), true
 	}
-
-	sets := bytes.Split(value, []byte{','})
-	if len(sets) == 0 {
-		return nil, false
-	}
-	unsigned := make([]byte, 0, len(value))
-	for index, set := range sets {
-		components := bytes.Split(set, []byte{':'})
-		if len(components) != 3 || len(components[0]) == 0 || len(components[1]) == 0 || len(components[2]) == 0 {
-			return nil, false
-		}
-		if index > 0 {
-			unsigned = append(unsigned, ',')
-		}
-		unsigned = append(unsigned, components[0]...)
-		unsigned = append(unsigned, ':')
-		unsigned = append(unsigned, components[1]...)
-		unsigned = append(unsigned, ':')
-	}
-	return unsigned, true
+	return parsed.UnsignedSignatureValue()
 }
 
 // signatureValueWithoutWSP applies the Section 12.8 WSP deletion rule to one tag value.
@@ -579,32 +585,30 @@ func canonicalizeEnvelope(request *TargetRequest, limits RenderLimits) error {
 	return nil
 }
 
-// canonicalizeSetPlans validates, sorts, and detaches generated signature plans.
+// canonicalizeSetPlans validates, sorts, and detaches generated signature
+// plans. Selectors must be distinct across every group; the fixed signer
+// layout is derived from the sorted plans.
 func canonicalizeSetPlans(input []SetPlan, limits RenderLimits) ([]SetPlan, error) {
-	if len(input) == 0 {
+	if len(input) == 0 || len(input) > limits.MaxSignatureSets {
 		return nil, renderLimitError("max_signature_sets", limits.MaxSignatureSets, len(input))
 	}
-	inspectionCount := len(input)
-	if inspectionCount > limits.MaxSignatureSets {
-		inspectionCount = min(inspectionCount, maxSignatureSetsPerAlgorithm+1)
-	}
-	cardinality := newSignatureSetCardinality(inspectionCount)
-	output := make([]SetPlan, 0, min(len(input), limits.MaxSignatureSets))
-	for index, plan := range input[:inspectionCount] {
+	selectors := newSelectorUniqueness(len(input))
+	output := make([]SetPlan, 0, len(input))
+	for index, plan := range input {
 		selector, ok := canonicalDNSName([]byte(plan.Selector))
 		algorithm, algorithmOK := tagvalue.ParseTextstring([]byte(plan.Algorithm))
 		if !ok || !algorithmOK {
 			return nil, renderConstructionError("s")
 		}
-		if err := cardinality.add(selector, algorithm, 0, index); err != nil {
+		if err := selectors.add(selector, 0, index); err != nil {
 			return nil, err
 		}
 		output = append(output, SetPlan{Selector: selector, Algorithm: Algorithm(algorithm)})
 	}
-	if len(input) > limits.MaxSignatureSets {
-		return nil, renderLimitError("max_signature_sets", limits.MaxSignatureSets, len(input))
-	}
 	slices.SortFunc(output, compareSetPlans)
+	if _, ok := generatedSetLayout(output); !ok {
+		return nil, renderConstructionError("s")
+	}
 	return output, nil
 }
 
@@ -753,9 +757,14 @@ func emitTarget(emitter *fieldEmitter, request TargetRequest, values []renderSet
 	emitter.text(";")
 	emitter.crlf()
 	emitter.text("\ts=")
+	layout, layoutOK := generatedSetLayout(request.Sets)
+	if !layoutOK {
+		emitter.fail(renderConstructionError("s"))
+		return
+	}
 	for index, plan := range request.Sets {
-		if index > 0 {
-			emitter.text(",")
+		if separator := layout.SeparatorBefore(index); separator != 0 {
+			emitter.text(string(separator))
 			emitter.crlf()
 			emitter.text("\t")
 		}
@@ -793,6 +802,13 @@ func (e *fieldEmitter) text(value string) {
 	e.textCount(len(value))
 	if e.err == nil && e.builder != nil {
 		e.builder.WriteString(value)
+	}
+}
+
+// fail records the first emission error.
+func (e *fieldEmitter) fail(err error) {
+	if e.err == nil {
+		e.err = err
 	}
 }
 

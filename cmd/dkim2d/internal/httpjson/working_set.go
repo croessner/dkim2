@@ -122,7 +122,7 @@ const (
 	// Current extraction retains every parser result even though only one target
 	// is verified. These coefficients are locked to parser hard limits and Go
 	// object sizes by source-drift probes.
-	maximumLibraryInstanceValuesBytes        = uint64(128 * 120)
+	maximumLibraryInstanceValuesBytes        = uint64(128 * 144)
 	maximumLibraryInstanceHashSetBytes       = uint64(128 * 16 * 216)
 	maximumLibraryDecodedRecipeBytes         = uint64(128 * 49_152)
 	maximumLibraryProtocolCloneOriginalBytes = uint64(1 * 1024 * 1024)
@@ -135,19 +135,25 @@ const (
 		maximumLibraryProtocolCloneEncodedBytes +
 		maximumLibraryProtocolCloneDecodedBytes
 
-	maximumLibrarySignatureValuesBytes    = uint64(128 * 272)
+	maximumLibrarySignatureValuesBytes    = uint64(128 * 296)
 	maximumLibrarySignatureRecipientBytes = uint64(128 * 2_000 * 96)
-	maximumLibrarySignatureSetBytes       = uint64(128 * 16 * 112)
-	maximumLibrarySignatureFlagBytes      = uint64(128 * 32 * 24)
-	maximumLibraryTargetRecipientBytes    = uint64(2_000 * 96)
-	maximumLibraryTargetSetBytes          = uint64(16 * 112)
-	maximumLibraryTargetFlagBytes         = uint64(32 * 24)
-	maximumLibrarySignatureBytes          = maximumLibrarySignatureValuesBytes +
+	maximumLibrarySignatureSetBytes       = uint64(128 * 16 * 128)
+	// Each set retains its received selector spelling (at most a 253-byte
+	// DNS name) for the Section 12.8 unsigned target.
+	maximumLibrarySignatureSelectorBytes = uint64(128 * 16 * 253)
+	maximumLibrarySignatureFlagBytes     = uint64(128 * 32 * 24)
+	maximumLibraryTargetRecipientBytes   = uint64(2_000 * 96)
+	maximumLibraryTargetSetBytes         = uint64(16 * 128)
+	maximumLibraryTargetSelectorBytes    = uint64(16 * 253)
+	maximumLibraryTargetFlagBytes        = uint64(32 * 24)
+	maximumLibrarySignatureBytes         = maximumLibrarySignatureValuesBytes +
 		maximumLibrarySignatureRecipientBytes +
 		maximumLibrarySignatureSetBytes +
+		maximumLibrarySignatureSelectorBytes +
 		maximumLibrarySignatureFlagBytes +
 		maximumLibraryTargetRecipientBytes +
 		maximumLibraryTargetSetBytes +
+		maximumLibraryTargetSelectorBytes +
 		maximumLibraryTargetFlagBytes
 
 	// HeaderHashInput and SignatureInput each overlap per-field records, the

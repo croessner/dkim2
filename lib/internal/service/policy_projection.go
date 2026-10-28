@@ -79,8 +79,6 @@ func buildUnavailablePolicyProjection(reason Reason) (policy.Projection, error) 
 		mapped = policy.PreTargetDuplicateHashAlgorithm
 	case ReasonDuplicateSelector:
 		mapped = policy.PreTargetDuplicateSelector
-	case ReasonTooManySignatures:
-		mapped = policy.PreTargetTooManySignatures
 	case ReasonMissingProtocol:
 		mapped = policy.PreTargetMissingProtocol
 	case ReasonSequenceInvalid:

@@ -29,13 +29,14 @@ func TestDraft08EnumsFailClosed(t *testing.T) {
 		generated.VerificationReasonDuplicateHashAlgorithm,
 		generated.VerificationReasonInvalidRecipeJson,
 		generated.VerificationReasonDuplicateSelector,
-		generated.VerificationReasonTooManySignatures,
 	} {
 		if !reason.Valid() {
 			t.Fatalf("Draft-08 reason %q is not generated", reason)
 		}
 	}
-	for _, reason := range []generated.VerificationReason{"", "future"} {
+	// Draft-08 Section 10.9 removed the per-algorithm cap, so the Draft-07
+	// too_many_signatures reason no longer exists.
+	for _, reason := range []generated.VerificationReason{"", "future", "too_many_signatures"} {
 		if reason.Valid() {
 			t.Fatalf("unknown verification reason %q was admitted", reason)
 		}
