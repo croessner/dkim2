@@ -50,6 +50,18 @@ if grep -RE '(packages|id-token|attestations):[[:space:]]*write' \
   fail 'only the release workflow may publish or attest artifacts'
 fi
 
+# The real-server Redis replay harness runs in Guardrails against the exact
+# Valkey commit pinned in the toolchain manifest, built with TLS support.
+valkey_commit=$(jq -er '.fixtures.valkey.commit' build/ci/toolchain.json)
+grep -Fq "ref: $valkey_commit" "$workflows/guardrails.yml" ||
+  fail 'Redis harness must check out the Valkey commit pinned in the toolchain manifest'
+grep -Fq 'run: scripts/install-valkey-ci.sh' "$workflows/guardrails.yml" ||
+  fail 'Redis harness must build the pinned Valkey server through the install script'
+grep -Fq 'run: make test-redis' "$workflows/guardrails.yml" ||
+  fail 'Guardrails must run the real-server Redis replay harness'
+grep -Fq 'BUILD_TLS=yes' scripts/install-valkey-ci.sh ||
+  fail 'the pinned Valkey server must be built with TLS for the TLS harness lane'
+
 mirror_workflow="$workflows/mirror.yml"
 grep -Fq "github.repository == 'go-dkim2/dkim2'" "$mirror_workflow" ||
   fail 'mirror workflow must run only in the organization mirror'

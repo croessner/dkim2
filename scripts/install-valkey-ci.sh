@@ -10,7 +10,14 @@ test -d "$source_directory"
 test ! -L "$source_directory"
 test "$(git -C "$source_directory" rev-parse HEAD)" = "$expected_commit"
 
-make -C "$source_directory" -j2 BUILD_TLS=no
+# The real-server harness exercises a mutual-TLS standalone lane, so the
+# server is built with OpenSSL support; Sentinel mode is part of every
+# valkey-server build and is selected at runtime with --sentinel.
+if test ! -f /usr/include/openssl/ssl.h; then
+  printf '%s\n' 'OpenSSL development headers (libssl-dev) are required' >&2
+  exit 1
+fi
+make -C "$source_directory" -j2 BUILD_TLS=yes
 sudo install -o root -g root -m 0755 \
   "$source_directory/src/valkey-server" /usr/local/bin/valkey-server
 rm -rf -- "$source_directory"
