@@ -193,15 +193,7 @@ func NewVerifier(provider KeyProvider, options ...Option) (Verifier, error) {
 	if err := resolved.Validate(); err != nil {
 		return Verifier{}, err
 	}
-	recipeLimits := recipe.DefaultLimits()
-	recipeLimits.MaxDecodedRecipeBytes = resolved.RevisionLimits.MaxDecodedRecipeBytes
-	recipeLimits.MaxTotalLiteralBytes = min(
-		recipeLimits.MaxTotalLiteralBytes, recipeLimits.MaxDecodedRecipeBytes,
-	)
-	recipeLimits.MaxDataStringBytes = min(
-		recipeLimits.MaxDataStringBytes, recipeLimits.MaxTotalLiteralBytes,
-	)
-	revisionParser, err := recipe.NewParser(recipeLimits, canonical.NewHeaderRelevance())
+	revisionParser, err := newRevisionRecipeParser(resolved.RevisionLimits)
 	if err != nil {
 		return Verifier{}, invalidOptionError("history_parser", 0)
 	}
@@ -369,4 +361,18 @@ func knownAlgorithm(algorithm Algorithm) bool {
 // systemClock returns wall-clock time for default timestamp policy.
 func systemClock() time.Time {
 	return time.Now()
+}
+
+// newRevisionRecipeParser builds the inherited-Recipe parser bounded by the all-hop decoded
+// Recipe ceiling, so literal and data-string budgets never exceed one decoded Recipe.
+func newRevisionRecipeParser(limits RevisionLimits) (recipe.Parser, error) {
+	recipeLimits := recipe.DefaultLimits()
+	recipeLimits.MaxDecodedRecipeBytes = limits.MaxDecodedRecipeBytes
+	recipeLimits.MaxTotalLiteralBytes = min(
+		recipeLimits.MaxTotalLiteralBytes, recipeLimits.MaxDecodedRecipeBytes,
+	)
+	recipeLimits.MaxDataStringBytes = min(
+		recipeLimits.MaxDataStringBytes, recipeLimits.MaxTotalLiteralBytes,
+	)
+	return recipe.NewParser(recipeLimits, canonical.NewHeaderRelevance())
 }

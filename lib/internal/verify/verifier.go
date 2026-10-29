@@ -64,9 +64,15 @@ func (v Verifier) verifyCurrent(ctx context.Context, request Request, deliverySt
 
 // extractVerificationInput parses protocol fields once through their authoritative owners.
 func (v Verifier) extractVerificationInput(request Request, maxDecodedRecipeBytes int) (verificationInput, error) {
+	return extractVerificationInputWithin(request, v.options.Limits, maxDecodedRecipeBytes)
+}
+
+// extractVerificationInputWithin parses protocol fields under explicit limits; it needs no key
+// provider, so provider-free consumers share the exact verifier extraction rules.
+func extractVerificationInputWithin(request Request, verificationLimits Limits, maxDecodedRecipeBytes int) (verificationInput, error) {
 	recipeLimits := recipe.DefaultLimits()
 	recipeLimits.MaxDecodedRecipeBytes = maxDecodedRecipeBytes
-	instanceParser, err := instance.NewParser(verifierInstanceLimits(v.options.Limits.MaxInstanceHashSets, recipeLimits))
+	instanceParser, err := instance.NewParser(verifierInstanceLimits(verificationLimits.MaxInstanceHashSets, recipeLimits))
 	if err != nil {
 		return verificationInput{}, malformedStateError(CheckKindSignature, Target{}, err)
 	}
@@ -89,8 +95,8 @@ func (v Verifier) extractVerificationInput(request Request, maxDecodedRecipeByte
 		return verificationInput{}, malformedStateError(CheckKindSignature, Target{}, err)
 	}
 	signatureParser, err := signature.NewParser(signature.Limits{
-		MaxRecipients:    v.options.Limits.MaxEnvelopeRecipients,
-		MaxSignatureSets: v.options.Limits.MaxSignatureSets,
+		MaxRecipients:    verificationLimits.MaxEnvelopeRecipients,
+		MaxSignatureSets: verificationLimits.MaxSignatureSets,
 	})
 	if err != nil {
 		return verificationInput{}, malformedStateError(CheckKindSignature, Target{}, err)

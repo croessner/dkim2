@@ -124,6 +124,28 @@ Draft-08 migration (`v0.1.48`):
   `SigningCredential`.
 - Changed: `DraftIdentifier`, `NewDSNSigningEvidenceRequest`.
 
+Recorded chain description (after `v0.2.0`):
+
+- Added: `DescribeRecordedChain`, `RecordedHop`, `RecordedHop.Format`,
+  `RecordedHop.GoString`, `RecordedHop.IntroducesInstance`,
+  `RecordedHop.MessageInstance`, `RecordedHop.Recipe`,
+  `RecordedHop.RecipeMode`, `RecordedHop.Sequence`,
+  `RecordedHop.SignerDomain`, `RecordedHop.String`, `RecordedHop.Valid`.
+
+`DescribeRecordedChain` parses the CRLF header section with the verifier's
+extraction and collection rules under the default limits and returns what each
+hop recorded, ordered by `i=`: signer domain, Message-Instance, and a
+privacy-minimized Recipe descriptor. It looks up no key and verifies nothing.
+Consumers such as mail clients present it only for a message that a verifier
+they trust (their own receiving server, through its Authentication-Results)
+reported as PASS; a PASS covers the complete chain and so every recorded field.
+A Recipe is attributed only to the hop that introduced its Message-Instance
+(`RecordedHop.IntroducesInstance`), whereas `VerifierHop.RecipeMode` reports
+`applied` for every signer of a Recipe-carrying instance and the verifier
+projection keeps header-occurrence order. A body mode of `unavailable` can be
+described but never accompanies a PASS (Draft-08 Section 13), and a verifier
+configured with larger limits may pass a message this function rejects.
+
 `SignatureStatusIgnored` leaves the `SignatureStatus` constant block: an
 unknown algorithm is reported as `SignatureStatusPERMERROR` with
 `ReasonUnsupportedAlgorithm` (Draft-08 Section 14.6 step 4); the declaration

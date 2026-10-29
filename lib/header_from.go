@@ -56,16 +56,12 @@ const maxContentTypeValueBytes = 8192
 // eligible; DSNs stay on the dedicated Section 16 route. Only the header
 // section is parsed, so the body is never copied.
 func ClassifyHeaderFromNullSender(rawMessage []byte) (string, HeaderFromNullSenderClass) {
-	if end := bytes.Index(rawMessage, []byte("\r\n\r\n")); end >= 0 {
-		rawMessage = rawMessage[:end+2]
-	}
-	message, err := rawmsg.Parse(rawMessage)
+	message, err := parseHeaderSection(rawMessage)
 	if err != nil {
 		return "", HeaderFromNullSenderAuthorUnusable
 	}
 	headers := message.Headers()
-	if len(headers.FieldsByName("dkim2-signature")) != 0 ||
-		len(headers.FieldsByName("message-instance")) != 0 {
+	if hasProtocolFields(headers) {
 		return "", HeaderFromNullSenderProtocolFields
 	}
 	contentTypes := headers.FieldsByName("content-type")
@@ -138,4 +134,18 @@ func headerFromMailboxDomain(value []byte) (string, bool) {
 		return "", false
 	}
 	return canonical, true
+}
+
+// parseHeaderSection parses only the header section of a CRLF message (through the CRLF that
+// ends its last field), so a body is never copied or parsed.
+func parseHeaderSection(rawMessage []byte) (rawmsg.Message, error) {
+	if end := bytes.Index(rawMessage, []byte("\r\n\r\n")); end >= 0 {
+		rawMessage = rawMessage[:end+2]
+	}
+	return rawmsg.Parse(rawMessage)
+}
+
+// hasProtocolFields reports whether a header section carries any DKIM2 protocol field.
+func hasProtocolFields(headers rawmsg.HeaderBlock) bool {
+	return len(headers.FieldsByName("dkim2-signature")) != 0 || len(headers.FieldsByName("message-instance")) != 0
 }
