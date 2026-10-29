@@ -15,7 +15,9 @@ import (
 const (
 	// KeyAlgorithm identifies the frozen HMAC replay-key algorithm.
 	KeyAlgorithm = "dkim2-replay-hmac-sha256-v2"
-	// StoredValue is the exact bounded marker retained by enabled stores.
+	// StoredValue is the legacy nonce-free first-seen marker written by
+	// earlier providers; ParseFirstSeenValue still accepts it as a foreign
+	// record. New writes use FirstSeenValue.
 	StoredValue = "v1"
 
 	keyDomainLabel       = "dkim2-replay-v2"

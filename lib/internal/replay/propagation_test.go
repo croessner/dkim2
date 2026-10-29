@@ -98,10 +98,8 @@ const propagationVectorSuffix = "1ibPLIe4Z2xyuKyBealCZeKyKfswVS4ThF_avXIAkBE"
 // TestPropagationStoredValueVocabulary proves the closed stored values round-trip and reject other strings.
 func TestPropagationStoredValueVocabulary(t *testing.T) {
 	expiry := time.Unix(1_700_000_000, 250_000_000)
-	pending := FormatPropagationPending(expiry)
-	if pending != "pending:1700000000250" {
-		t.Fatalf("pending value=%q", pending)
-	}
+	// The legacy nonce-free form written by earlier providers stays readable.
+	pending := "pending:1700000000250"
 	state, lease, ok := ParsePropagationValue(pending)
 	if !ok || state != PropagationStatePending || !lease.Equal(expiry) {
 		t.Fatalf("parsed pending state=%q lease=%v ok=%t", state, lease, ok)

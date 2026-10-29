@@ -768,3 +768,36 @@ func assertNoExportedReplayFields(t *testing.T, value reflect.Type) {
 		}
 	}
 }
+
+// TestReplayFacadeValueGrammarDelegatesCore proves the provider-facing value
+// helpers render and parse exactly the core nonce-bearing and legacy forms.
+func TestReplayFacadeValueGrammarDelegatesCore(t *testing.T) {
+	nonce, err := NewReplayNonce(strings.NewReader("\x00\x11\x22\x33\x44\x55\x66\x77"))
+	if err != nil || !nonce.Valid() {
+		t.Fatalf("NewReplayNonce() valid=%t err=%v", nonce.Valid(), err)
+	}
+	firstSeen, err := ReplayFirstSeenValue(nonce)
+	if err != nil || firstSeen != ReplayFirstSeenValuePrefix+"0011223344556677" {
+		t.Fatalf("ReplayFirstSeenValue() = %q, %v", firstSeen, err)
+	}
+	if parsed, legacy, ok := ParseReplayFirstSeenValue(firstSeen); !ok || legacy || parsed != nonce {
+		t.Fatal("ParseReplayFirstSeenValue() did not round-trip")
+	}
+	if _, legacy, ok := ParseReplayFirstSeenValue(ReplayStoredValue); !ok || !legacy {
+		t.Fatal("ParseReplayFirstSeenValue() rejected the legacy marker")
+	}
+	expiry := time.UnixMilli(1_700_000_000_250)
+	pending, err := ReplayPropagationPendingValue(expiry, nonce)
+	if err != nil || pending != "pending:1700000000250:0011223344556677" {
+		t.Fatalf("ReplayPropagationPendingValue() = %q, %v", pending, err)
+	}
+	for _, value := range []string{pending, "pending:1700000000250"} {
+		state, parsedExpiry, ok := ParseReplayPropagationValue(value)
+		if !ok || state != ReplayPropagationStatePending || !parsedExpiry.Equal(expiry) {
+			t.Fatalf("ParseReplayPropagationValue(%q) state=%q ok=%t", value, state, ok)
+		}
+	}
+	if _, err := NewReplayNonce(strings.NewReader("short")); ReplayErrorCodeOf(err) != ReplayErrorInternalInvariant {
+		t.Fatalf("short nonce source code = %q", ReplayErrorCodeOf(err))
+	}
+}

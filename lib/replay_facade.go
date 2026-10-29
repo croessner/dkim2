@@ -2,6 +2,7 @@ package dkim2
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/croessner/dkim2/internal/replay"
@@ -10,9 +11,32 @@ import (
 const (
 	// ReplayKeyAlgorithm identifies the frozen privacy-preserving replay-key algorithm.
 	ReplayKeyAlgorithm = replay.KeyAlgorithm
-	// ReplayStoredValue is the exact bounded marker stored by enabled replay providers.
+	// ReplayStoredValue is the legacy nonce-free first-seen marker that
+	// ParseReplayFirstSeenValue still accepts as a foreign record.
 	ReplayStoredValue = replay.StoredValue
+	// ReplayFirstSeenValuePrefix starts the nonce-bearing first-seen value.
+	ReplayFirstSeenValuePrefix = replay.FirstSeenValuePrefix
 )
+
+// ReplayNonce is one random write identity embedded in a stored replay value
+// so a retried provider write recognizes its own earlier commit.
+type ReplayNonce = replay.Nonce
+
+// NewReplayNonce reads one non-zero nonce from random, or from crypto/rand when random is nil.
+func NewReplayNonce(random io.Reader) (ReplayNonce, error) {
+	return replay.NewNonce(random)
+}
+
+// ReplayFirstSeenValue renders the nonce-bearing first-seen value "v2:<nonce>".
+func ReplayFirstSeenValue(nonce ReplayNonce) (string, error) {
+	return replay.FirstSeenValue(nonce)
+}
+
+// ParseReplayFirstSeenValue decodes one stored first-seen value, accepting the
+// nonce-bearing form and the legacy ReplayStoredValue.
+func ParseReplayFirstSeenValue(value string) (nonce ReplayNonce, legacy bool, ok bool) {
+	return replay.ParseFirstSeenValue(value)
+}
 
 // ReplayKey is an opaque fixed-length replay-storage capability.
 type ReplayKey = replay.Key
@@ -192,12 +216,14 @@ const (
 	ReplayPropagationPendingPrefix = replay.PropagationPendingPrefix
 )
 
-// FormatReplayPropagationPending renders the stored pending value for one lease expiry.
-func FormatReplayPropagationPending(leaseExpiry time.Time) string {
-	return replay.FormatPropagationPending(leaseExpiry)
+// ReplayPropagationPendingValue renders the nonce-bearing pending value
+// "pending:<unixms>:<nonce>" for one lease expiry and write nonce.
+func ReplayPropagationPendingValue(leaseExpiry time.Time, nonce ReplayNonce) (string, error) {
+	return replay.PropagationPendingValue(leaseExpiry, nonce)
 }
 
-// ParseReplayPropagationValue decodes one stored propagation value.
+// ParseReplayPropagationValue decodes one stored propagation value in the
+// committed, nonce-bearing pending, or legacy pending form.
 func ParseReplayPropagationValue(value string) (ReplayPropagationState, time.Time, bool) {
 	return replay.ParsePropagationValue(value)
 }

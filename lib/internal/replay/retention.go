@@ -57,7 +57,7 @@ func (r Retention) Duration() time.Duration {
 	return duration
 }
 
-// Milliseconds returns the signed Valkey PX value or zero for an invalid value.
+// Milliseconds returns the signed Redis-protocol PX value or zero for an invalid value.
 func (r Retention) Milliseconds() int64 {
 	if !r.Valid() {
 		return 0

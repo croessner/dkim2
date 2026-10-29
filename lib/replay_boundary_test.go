@@ -12,13 +12,13 @@ import (
 )
 
 const (
-	replayModulePath             = "github.com/croessner/dkim2"
-	replayInternalPrefix         = replayModulePath + "/internal/"
-	replayCoreImportPath         = replayModulePath + "/internal/replay"
-	approvedValkeyProductionPath = "cmd/dkim2d/internal/replay/valkey"
-	replayMemoryConfigType       = "ReplayMemoryConfig"
-	useStorageKeyFunction        = "UseStorageKey"
-	useReplayStorageKeyFunction  = "UseReplayStorageKey"
+	replayModulePath            = "github.com/croessner/dkim2"
+	replayInternalPrefix        = replayModulePath + "/internal/"
+	replayCoreImportPath        = replayModulePath + "/internal/replay"
+	approvedReplayProviderPath  = "cmd/dkim2d/internal/replay/redisstore"
+	replayMemoryConfigType      = "ReplayMemoryConfig"
+	useStorageKeyFunction       = "UseStorageKey"
+	useReplayStorageKeyFunction = "UseReplayStorageKey"
 )
 
 // TestReplayPublicAPIDeclaresNoConstructorOrRawFactEscape guards the root surface.
@@ -96,7 +96,7 @@ var use = UseReplayStorageKey
 	})
 	t.Run("approved provider reference", func(t *testing.T) {
 		root := t.TempDir()
-		writeReplayGuardSource(t, root, approvedValkeyProductionPath+"/use.go", `package valkey
+		writeReplayGuardSource(t, root, approvedReplayProviderPath+"/use.go", `package redisstore
 import dkim2 "github.com/croessner/dkim2"
 var use = dkim2.UseReplayStorageKey
 `)
@@ -295,7 +295,9 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 			"NewReplayDeriver": true, "NewReplayMemoryStore": true,
 			"NewReplayDisabledStore": true, useReplayStorageKeyFunction: true,
 			"NewAuthenticator": true, "NewDisabledAuthenticator": true, "DirectDeliveryReplayCountingPolicy": true, "WithDirectDeliveryReplayCounting": true,
-			"NewReplayLease": true, "FormatReplayPropagationPending": true, "ParseReplayPropagationValue": true,
+			"NewReplayLease": true, "ParseReplayPropagationValue": true,
+			"NewReplayNonce": true, "ReplayFirstSeenValue": true, "ParseReplayFirstSeenValue": true,
+			"ReplayPropagationPendingValue": true,
 		},
 		types: map[string]bool{
 			"ReplayKey": true, "ReplayCheck": true, "ReplayStoreState": true,
@@ -307,10 +309,10 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 			"AuthenticationReplayClass": true, "AuthenticationReason": true,
 			"AuthenticationResult": true, "Authenticator": true,
 			"ReplayLease": true, "ReplayPropagationState": true, "ReplayPropagationReservation": true,
-			"ReplayPropagationCommit": true, "ReplayPropagationStore": true,
+			"ReplayPropagationCommit": true, "ReplayPropagationStore": true, "ReplayNonce": true,
 		},
 		constants: map[string]bool{
-			"ReplayKeyAlgorithm": true, "ReplayStoredValue": true,
+			"ReplayKeyAlgorithm": true, "ReplayStoredValue": true, "ReplayFirstSeenValuePrefix": true,
 			"ReplayCheckFirstSeen": true, "ReplayCheckReplayed": true, "ReplayCheckDisabled": true,
 			"ReplayStoreReady": true, "ReplayStoreDegraded": true, "ReplayStoreDisabled": true,
 			"ReplayStoreClosing": true, "ReplayStoreClosed": true,
@@ -499,7 +501,7 @@ func auditProtectedReplayReferences(root string, files []parsedReplayFile) prote
 						audit.violation = "internal protected-key seam referenced by " + relative
 					}
 				case imported == replayModulePath && value.Sel.Name == useReplayStorageKeyFunction:
-					if filepath.Dir(relative) != approvedValkeyProductionPath {
+					if !approvedReplayProviderDirectory(filepath.ToSlash(filepath.Dir(relative))) {
 						audit.violation = "public protected-key seam referenced by " + relative
 					}
 				}
@@ -526,6 +528,13 @@ func auditProtectedReplayReferences(root string, files []parsedReplayFile) prote
 		}
 	}
 	return audit
+}
+
+// approvedReplayProviderDirectory reports whether one repository-relative
+// directory may reference the public protected-key seam. The Redis-compatible
+// provider is the only approved owner.
+func approvedReplayProviderDirectory(directory string) bool {
+	return directory == approvedReplayProviderPath
 }
 
 // protectedReplayDeclarationPositions identifies only exact function declaration identifiers.

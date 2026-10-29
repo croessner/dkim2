@@ -158,14 +158,25 @@ type PropagationStore interface {
 	CommitPropagation(context.Context, Key) (PropagationCommit, error)
 }
 
-// FormatPropagationPending renders the stored pending value for one lease expiry.
-func FormatPropagationPending(leaseExpiry time.Time) string {
-	return PropagationPendingPrefix + strconv.FormatInt(leaseExpiry.UnixMilli(), 10)
+// PropagationPendingValue renders the nonce-bearing pending value
+// "pending:<unixms>:<16 lowercase hex nonce>". The expiry must be a positive
+// Unix millisecond instant within the closed digit bound and the nonce must
+// be valid, so every rendered value parses back through ParsePropagationValue.
+func PropagationPendingValue(leaseExpiry time.Time, nonce Nonce) (string, error) {
+	milliseconds := leaseExpiry.UnixMilli()
+	digits := strconv.FormatInt(milliseconds, 10)
+	if milliseconds <= 0 || len(digits) > maxLeaseExpiryDigits || !nonce.Valid() {
+		return "", NewError(ErrorCodeInvalidRequest)
+	}
+	return PropagationPendingPrefix + digits + ":" + nonce.encode(), nil
 }
 
-// ParsePropagationValue decodes one stored propagation value. It reports the
-// closed state, the lease expiry for pending values, and false for every
-// string outside the closed grammar.
+// ParsePropagationValue decodes one stored propagation value. It accepts
+// "committed", the nonce-bearing pending form
+// "pending:<unixms>:<16 lowercase hex nonce>", and the legacy pending form
+// "pending:<unixms>" written by earlier providers. It reports the closed
+// state, the lease expiry for pending values, and false for every string
+// outside the closed grammar.
 func ParsePropagationValue(value string) (PropagationState, time.Time, bool) {
 	if value == PropagationCommittedValue {
 		return PropagationStateCommitted, time.Time{}, true
@@ -173,18 +184,33 @@ func ParsePropagationValue(value string) (PropagationState, time.Time, bool) {
 	if !strings.HasPrefix(value, PropagationPendingPrefix) {
 		return "", time.Time{}, false
 	}
-	digits := value[len(PropagationPendingPrefix):]
-	if len(digits) == 0 || len(digits) > maxLeaseExpiryDigits {
+	digits, nonceText, nonceForm := strings.Cut(value[len(PropagationPendingPrefix):], ":")
+	if nonceForm {
+		if _, ok := parseNonce(nonceText); !ok {
+			return "", time.Time{}, false
+		}
+	}
+	expiry, ok := parseLeaseExpiry(digits)
+	if !ok {
 		return "", time.Time{}, false
+	}
+	return PropagationStatePending, expiry, true
+}
+
+// parseLeaseExpiry decodes the bounded positive decimal Unix millisecond
+// lease expiry shared by both pending value forms.
+func parseLeaseExpiry(digits string) (time.Time, bool) {
+	if len(digits) == 0 || len(digits) > maxLeaseExpiryDigits {
+		return time.Time{}, false
 	}
 	for _, character := range digits {
 		if character < '0' || character > '9' {
-			return "", time.Time{}, false
+			return time.Time{}, false
 		}
 	}
 	milliseconds, err := strconv.ParseInt(digits, 10, 64)
 	if err != nil || milliseconds <= 0 {
-		return "", time.Time{}, false
+		return time.Time{}, false
 	}
-	return PropagationStatePending, time.UnixMilli(milliseconds), true
+	return time.UnixMilli(milliseconds), true
 }
