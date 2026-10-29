@@ -16,7 +16,7 @@ to follow each message path.
 This guide is the durable deployment entry point. Use
 [`cmd/dkim2d/README.md`](../../cmd/dkim2d/README.md) for typed configuration,
 protected generations, process/sign/revise capabilities, flat-file signing,
-disabled/memory/Valkey replay, readiness, HTTP limits, and observability;
+disabled/memory/Redis replay, readiness, HTTP limits, and observability;
 [`cmd/dkim2-milter/README.md`](../../cmd/dkim2-milter/README.md) for Milter
 modes, message fidelity, ordered actions, Authentication-Results, failure
 policy, probes, and socket ownership; and
@@ -79,9 +79,10 @@ immutable after validation. The generation name is the exact
 selected protected path is a direct child of that generation and an
 owner-`2000` regular file with one link and mode `0400` or
 `0600`. No selected children may alias one inode. Capability and replay HMAC
-files contain exactly 32 raw nonzero random bytes. Valkey password children
+files contain exactly 32 raw nonzero random bytes. Redis password children
 contain 1 through 1,024 opaque bytes without NUL, CR, or LF; the private CA
-bundle and optional OTLP CA must satisfy their bounded PEM loaders. The
+bundle, optional Redis client certificate pair, and optional OTLP CA must
+satisfy their bounded PEM loaders. The
 signing manifest and PKCS#8 children follow the signing-store contract in
 [`cmd/dkim2d/README.md`](../../cmd/dkim2d/README.md). The flat-file datasource
 is one complete validated `dkim2-datasource-v1` generation.
@@ -133,7 +134,7 @@ CA child and only the required outbound DNS/HTTPS reachability. This does not
 authorize publishing or proxying the daemon's loopback-only HTTP listener.
 
 Inbound uses the process capability and may use disabled, memory, or a
-separately operated directly addressed Valkey replay backend. Originator uses
+separately operated Redis or Valkey replay backend (`replay.backend: redis`). Originator uses
 the sign capability. Ordinary transit uses the revise capability. Only the
 daemon loads the flat-file datasource, private manifest, and PKCS#8 children.
 
@@ -323,7 +324,7 @@ Postfix, and configuration together to their previous digest-pinned set; never
 roll back only one side of the DSN API.
 
 Validate every route through the final read-only mounts. The daemon validation
-performs the complete protected generation, replay/Valkey, OTLP CA, datasource,
+performs the complete protected generation, replay/Redis configuration, OTLP CA, datasource,
 signing manifest, PKCS#8, selector, ownership, mode, link-count, and stable-read
 checks. Both commands are silent on success and content-free on failure:
 
@@ -842,8 +843,8 @@ identifier is bound into the replay HMAC frame, so Draft-07 never reads or
 overwrites Draft-06 records, which expire by TTL. A message first seen under
 Draft-06 that still verifies under Draft-07 can be accepted once more after
 the upgrade, bounded by the configured retention period. See
-[`../replay-store-valkey.md`](../replay-store-valkey.md); the Valkey
-namespace, key width, ACL, and topology do not change.
+[`../replay-store-redis.md`](../replay-store-redis.md#replay-identity-contract); the
+replay namespace and key width do not change.
 
 The message baseline change does not migrate the DNS identifier. Keep
 `draft-ietf-dkim-dkim2-dns-01` and its versioned vectors until the deferred
@@ -913,12 +914,12 @@ credentials:
 
 - every retained immutable protected generation and active YAML selector;
 - flat-file datasource and signing registry/PKCS#8 material;
-- Valkey according to its persistence and replay-loss policy;
+- the Redis or Valkey replay store according to its persistence and replay-loss policy;
 - the Postfix queue volume while Postfix is consistently stopped or through a
   Postfix-supported snapshot procedure; and
 - immutable image digests plus SBOM, provenance, and vulnerability evidence.
 
-These backups are not a globally atomic snapshot. Postfix, Valkey, datasource,
+These backups are not a globally atomic snapshot. Postfix, the replay store, datasource,
 and signer state each require their own component-consistent capture point and
 documented replay-loss window; completing them at nearby times does not create
 one transaction.
@@ -926,7 +927,7 @@ one transaction.
 Restore into new empty offline destinations with numeric ownership, modes,
 link counts and immutable generation names preserved. Never extract
 over an active generation. Validate generation cross-references,
-private/public key bindings, Valkey TLS/credential configuration, and every
+private/public key bindings, Redis TLS/credential configuration, and every
 daemon/Milter configuration through the final mounts before startup. Restore
 Postfix queue ownership using Postfix-supported procedures and without passing
 queue contents through DKIM2 tooling. A filesystem-copy restore can change
@@ -946,7 +947,7 @@ capabilities, key files, messages, envelope values, selectors, DNS TXT,
 datasource records, replay keys, or raw errors.
 
 The daemon OpenAPI, `dkim2ctl`, typed configuration, flat-file provider,
-disabled/memory/Valkey replay, observability, Milter modes, fidelity,
+disabled/memory/Redis replay, observability, Milter modes, fidelity,
 Authentication-Results, and failure policy are documented in the component
 READMEs and linked durable specs.
 

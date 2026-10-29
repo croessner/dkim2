@@ -669,7 +669,7 @@ the route over the disabled backend even if a loader were bypassed. The
 two-phase propagation coordinate is the only bound on how many signed
 notifications one captured DSN can extract from this daemon, so a propagation
 route without replay storage would be an unbounded signing oracle. There is no
-opt-out; propagation requires the `memory` or `valkey` backend.
+opt-out; propagation requires the `memory` or `redis` backend.
 
 `process.default_tenant` names the administrative tenant that `/v1/process`
 uses when a request carries no `context.tenant`. Locality of a received
@@ -865,7 +865,7 @@ only the originator's `i=1` DKIM2-Signature is a direct delivery, reports the
 replay class `not_eligible`, and touches no store. A receiver that acts on
 every accepted message, such as a public reflector, may set
 `replay.count_direct_deliveries: true` (`DKIM2D_REPLAY_COUNT_DIRECT_DELIVERIES`)
-with the memory or Valkey backend. Direct deliveries are then counted like
+with the memory or Redis backend. Direct deliveries are then counted like
 re-sent messages: the first is `first_seen`, an identical later one is
 `replayed`. The key is rejected with `replay.backend: disabled`.
 
@@ -877,10 +877,12 @@ ordinary mailbox receivers. With it enabled:
 - when a sending MTA splits recipients into separate transactions, only the
   first transaction is delivered.
 
-### Production Valkey replay
+### Production Redis replay
 
-Valkey is the default backend, but missing authority or attestation fields
-fail configuration; there is no fallback. A complete shape is:
+`redis` is the default backend and the production choice. It talks to a
+Redis 7.0+ or Valkey 7.2+ server through go-redis v9 in `standalone`,
+`sentinel`, or `cluster` mode. Missing mode-specific keys fail configuration;
+there is no fallback. A standalone shape with TLS and an ACL user is:
 
 ```yaml
 config:
@@ -892,44 +894,40 @@ server:
 replay:
   hmac_key_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/hmac
   epoch: 1
-  valkey:
-    address: 127.0.0.1:6379
-    server_name: replay.example
-    ca_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/ca
-    application_username: application
-    application_password_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/application-password
-    auditor_username: auditor
-    auditor_password_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/auditor-password
-    attestation:
-      persistence_mode: rdb
-      append_fsync_policy: inactive
-      save_schedule: "60 1"
-      min_replicas_to_write: 0
-      min_replicas_max_lag_seconds: 30
-      loss_window_acceptance: asynchronous_acknowledged
-      rotation_state: unchanged
-      no_global_exactly_once_claim: true
-      dedicated_deployment: true
-      dedicated_database_zero: true
-      direct_ip_authority: true
-      no_endpoint_substitution: true
-      standalone_authority: true
-      shared_draft: true
-      shared_algorithm: true
-      shared_namespace: true
-      shared_epoch: true
-      shared_secret_set: true
-      shared_retention: true
+  redis:
+    mode: standalone
+    standalone:
+      address: 127.0.0.1:6380
+    auth:
+      username: application
+      password_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/redis-password
+    tls:
+      ca_file: /var/lib/dkim2d/protected/0123456789abcdef0123456789abcdef/ca
+      server_name: replay.example
 ```
 
-The supported authority is one directly addressed standalone Valkey primary,
-database zero, with TLS 1.3, exact peer identity, private roots, separate
-application and auditor principals, no retries, and no endpoint substitution.
-Cluster, Sentinel, redirects, DNS authority selection, replicas, load
-balancers, Unix sockets, active-active products, and automatic failover are
-unsupported. See
-[`docs/replay-store-valkey.md`](../../docs/replay-store-valkey.md) for the ACL,
-persistence, replication, loss-window, and rotation contract.
+Sentinel uses `sentinel.master_name`, a comma-separated
+`sentinel.addresses` scalar, and optional `sentinel.username` and
+`sentinel.password_file`; cluster uses a comma-separated `cluster.addresses`
+scalar and `cluster.max_redirects`. TLS is on by default (minimum TLS 1.2,
+`tls.min_tls_version: TLS1.3` available) and may be disabled with
+`tls.enabled: false` for a private network. Passwords, the CA bundle, and an
+optional client certificate pair (`tls.cert`, `tls.key`) are protected
+generation children. `key_prefix` namespaces the keys on a shared instance.
+Pool, timeouts, `retries.*`, `health.*`, and `require_noeviction` have bounded
+defaults.
+
+Writes may be retried and may follow failover or redirects: each write embeds
+a per-operation nonce, so a retried attempt recognizes its own earlier commit,
+and an unprovable outcome stays a temporary failure. Startup refuses a server
+below the version floor or a primary without `maxmemory-policy noeviction`.
+See [`docs/replay-store-redis.md`](../../docs/replay-store-redis.md) for every
+key, the ACLs, eviction, persistence, the loss window, TLS, credentials, and
+rotation, and
+[`docs/operator/replay-redis-migration.md`](../../docs/operator/replay-redis-migration.md)
+for moving from the removed `valkey` backend. `replay.valkey.*`,
+`replay.revalidate_interval`, and `replay.backend: valkey` fail with
+`config_removed_field`.
 
 ## Protected Generation
 
@@ -979,8 +977,9 @@ Exactly these paths are routable:
 Health and readiness support their declared strong-ETag conditional behavior.
 Readiness is `200` only after immutable configuration and protected loading,
 dependency construction, listener and serve ownership, open process
-admission, and replay authority are ready. Valkey readiness uses the
-provider-owned unexpired audit evidence and performs no Valkey call.
+admission, and replay authority are ready. Redis readiness reads the
+provider's recovery state, which the startup checks and the health probe
+maintain, and performs no Redis call.
 
 The process request carries bounded Base64 message bytes and separate SMTP
 reverse/forward path spellings. After JSON and Base64 validation, the adapter
@@ -1072,18 +1071,20 @@ margin. Any ambiguous or incomplete startup fails without readiness.
 Shutdown first withdraws readiness and closes admission, then joins the
 listener and serve loop, performs the configured graceful drain, and uses a
 bounded forced close when graceful drain or handler quiescence is not proven.
-Only after handlers join does it stop revalidation, cancel DNS, close replay,
+Only after handlers join does it stop the replay health probe, cancel DNS, close replay,
 flush the instance telemetry provider within five seconds, and release
 protected material. If an accept or handler owner cannot be joined, the daemon
 reports failure and deliberately retains dependencies rather than tearing
 them down underneath live work.
 
-Valkey is audited before readiness and revalidated at the configured interval,
-which must be 10 through 60 seconds. Calls do not overlap. Evidence is valid
-for strictly less than five minutes. Authority loss, stale evidence, or
-revalidation-clearable degradation withdraws readiness; restart-only
-credential and contract failures require provider reconstruction or process
-restart.
+The Redis store passes `PING`, the version floor, and the `noeviction` check
+on every primary before readiness is published. A start-to-start health loop
+then sends `PING` to every primary every `replay.redis.health.interval`
+(1 to 60 seconds, default 5) with `health.timeout`; calls do not overlap.
+`health.failure_threshold` consecutive failures, or a replay operation that
+fails with a recoverable condition, withdraw readiness; the next successful
+probe or operation restores it without a restart. Authentication, permission,
+grammar, and internal contract failures are sticky until process restart.
 
 ## Deliberately Unsupported
 
@@ -1095,8 +1096,8 @@ The current daemon does not provide:
 - OAuth, bearer tokens, request-selected policy, or remote authentication;
 - HTTP/2, h2c, persistent connections, or effective-config output;
 - hot configuration, secret, certificate, capability, or replay-key reload;
-- Valkey cluster, Sentinel, redirects, endpoint discovery, automatic failover,
-  or global exactly-once replay claims.
+- replica reads, client-side caching, or global exactly-once replay claims
+  (asynchronous replication and failover keep a documented loss window).
 
 ## Verification
 
@@ -1109,6 +1110,6 @@ make lint
 make race
 make check-openapi
 make check-vendor
-make test-valkey
+make test-redis
 make guardrails
 ```

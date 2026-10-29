@@ -147,7 +147,7 @@ now defined through the raw-message owner and rose from 32 MiB to 128 MiB
 The table distinguishes executable qualification from a broader product-family
 assumption. The digest-pinned subjects in
 [`scripts/test-datasource-services.sh`](../../scripts/test-datasource-services.sh)
-and the exact Valkey binary check are authoritative for the current candidate.
+and the exact `valkey-server` binary check of the Redis replay harness are authoritative for the current candidate.
 A nearby patch, later minor, vendor rebuild, proxy, managed service, fork, or
 wire-compatible product is unqualified until the same security and parity
 evidence passes.
@@ -158,7 +158,7 @@ evidence passes.
 | PostgreSQL signing datasource | PostgreSQL `18.3-alpine` image at the pinned digest | DDL/upgrades, roles, verified TLS, v2/v3 loading, v3 onboarding and observed lock contention, runtime signing, parity, and denials | no automatic older/newer PostgreSQL claim |
 | MySQL signing datasource | MySQL `8.4` image at the pinned digest | DDL/upgrades, exact grants/definers, verified TLS, v2/v3 loading, v3 onboarding and observed lock contention, runtime signing, parity, and denials | no generic MySQL 8 claim |
 | MariaDB signing datasource | MariaDB `10.11` image at the pinned digest | common MySQL contract, exact grants/definers, verified TLS, v2/v3 loading, v3 onboarding and observed lock contention, runtime signing, parity, and denials | no other MariaDB line or MySQL-compatible fork claim |
-| Valkey replay | Valkey `9.1.2` exact binary | TLS/authority policy, ACL audit, persistence and topology attestation, atomic command, parity, and recovery | no cluster, Sentinel, managed, or alternate-version claim |
+| Redis replay | Valkey `9.1.2` exact binary as the harness server | standalone with TLS and an ACL user, Sentinel with forced failover, three-primary cluster, nonce-bearing commands, retry idempotency, startup checks, health probe, parity, and propagation | Redis 7.0+ and Valkey 7.2+ are supported by contract only; no managed-service, proxy, or other-version evidence claim |
 | Flat-file signing datasource | current supported Linux and macOS filesystem implementations | descriptor confinement, ownership/mode/link checks, atomic reload, race and abuse evidence | unsupported platforms return `unsupported_platform` |
 
 MySQL and MariaDB deliberately share `signing.backend: mysql`; qualification is

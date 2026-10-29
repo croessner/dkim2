@@ -86,7 +86,10 @@ for document in \
   docs/operator/examples/dkim2d-rotation-admin-ldap.yaml \
   docs/operator/examples/dkim2d-domain-intent.yaml \
   contrib/schema/mysql/002_least_privilege_grants.sql.example \
-  docs/replay-store-valkey.md \
+  docs/replay-store-redis.md \
+  docs/operator/replay-redis-migration.md \
+  docs/specs/implementation/replay-store-redis.md \
+  docs/specs/implementation/replay-store-valkey.md \
   docs/reference/README.md \
   docs/reference/compatibility.md \
   docs/reference/draft-issues.md \
@@ -176,6 +179,83 @@ for evidence in \
 done
 
 grep -Fq 'docs/reference/README.md' README.md
+
+# The Redis replay store contract, its implementation spec, and the Valkey
+# provider migration guide stay linked and name the operator-visible rules.
+replay_guide=docs/replay-store-redis.md
+replay_spec=docs/specs/implementation/replay-store-redis.md
+replay_migration=docs/operator/replay-redis-migration.md
+test ! -e docs/replay-store-valkey.md
+grep -Fqx '## Replay Identity Contract' "$replay_guide"
+grep -Fqx '## Redis Store' "$replay_spec"
+grep -Fq 'Superseded provider record' docs/specs/implementation/replay-store-valkey.md
+grep -Fq 'replay-store-redis.md' docs/specs/implementation/replay-store-valkey.md
+for reference in 'docs/replay-store-redis.md' 'docs/operator/replay-redis-migration.md'; do
+  grep -Fq "$reference" README.md
+done
+grep -Fq 'replay-store-redis.md' "$daemon"
+grep -Fq 'replay-redis-migration.md' "$daemon"
+grep -Fq 'docs/operator/replay-redis-migration.md' cmd/dkim2d/internal/config/removed.go
+for required in \
+  'standalone' \
+  'sentinel' \
+  'cluster' \
+  'Redis 7.0' \
+  'Valkey 7.2' \
+  'maxmemory-policy noeviction' \
+  'require_noeviction' \
+  '+evalsha' \
+  'sentinel|get-master-addr-by-name' \
+  '&+switch-master' \
+  'key_prefix' \
+  'server_name' \
+  'insecure_skip_verify' \
+  'tls.enabled: false' \
+  'retries.max_attempts' \
+  'health.failure_threshold' \
+  '/readyz' \
+  'global' \
+  'exactly-once' \
+  'drain-only' \
+  'Sentinel password' \
+  'make test-redis' \
+  'v9.22.0'; do
+  grep -Fq -e "$required" "$replay_guide"
+done
+for required in \
+  'SET <key> v2:<nonce> NX GET PX' \
+  'pending:<expiry-ms>:<nonce>' \
+  'KEEPTTL' \
+  'EVALSHA' \
+  'NOSCRIPT' \
+  'commit_unresolved' \
+  'indeterminate' \
+  'StartupError' \
+  'Probe'; do
+  grep -Fq -e "$required" "$replay_spec"
+done
+for required in \
+  'replay.valkey.address' \
+  'replay.redis.standalone.address' \
+  'replay.valkey.application_username' \
+  'replay.redis.auth.username' \
+  'replay.revalidate_interval' \
+  'replay.valkey.attestation' \
+  'auditor' \
+  'config_removed_field' \
+  'tls.enabled: false' \
+  'requirepass' \
+  'v0.2.0' \
+  'v0.1.x' \
+  'Rolling Upgrade' \
+  'Rollback'; do
+  grep -Fq -e "$required" "$replay_migration"
+done
+refute 'make test-valkey' README.md "$daemon" "$replay_guide" docs/reference/known-limitations.md
+refute 'replay-store-valkey.md' README.md "$daemon" docs/ci.md docs/conformance.md \
+  docs/operator/datasource-backends.md docs/operator/deployment-walkthrough.md \
+  docs/operator/postfix-admin.md docs/operator/postfix-compose.md
+refute 'Production Valkey replay' "$daemon"
 
 # The Draft-08 operator migration guide is linked from the entry points and
 # names every operator-visible change the upgrade and its rollback depend on.

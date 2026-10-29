@@ -175,6 +175,13 @@ it verifies under Draft-08. A notification propagated before the upgrade may
 be propagated once more within the at-least-once contract. The Valkey key
 grammar, namespace, ACL, and commands do not change.
 
+Release v0.2.0 later removed the `valkey` backend and its
+`replay.valkey.attestation.*` keys; a v0.2.0 daemon refuses them. When
+upgrading to v0.2.0 or later, configure `replay.backend: redis` as described in
+[`replay-redis-migration.md`](replay-redis-migration.md); the in-place draft
+upgrade rule above is unchanged and needs only the same epoch and HMAC
+secret.
+
 ## Rollback
 
 - Roll back with the previous image digests of every component and the

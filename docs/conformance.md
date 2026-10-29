@@ -38,7 +38,7 @@ a real-MTA SMTPUTF8 signing run is qualified separately.
 | Milter inbound, originator, ordinary-transit, and Postfix DSN modes | partial | Public Milter-v6 socket fixtures; Postfix DSN covers the upstream `bounce` origin with EOH confirmation and dedicated daemon capability; real-Postfix qualification of the exact upstream implementation or approved backport remains required |
 | Received delivery-status evaluation and Draft-08 Section 16.3 propagation | supported | Byte-exact received-DSN and propagation golden vectors, daemon route and two-phase replay tests, and the adapter fail-closed matrix; the opt-in real-Postfix profile qualifies the deployment path without any MTA patch |
 | Postfix SMTP and local `sendmail(1)` intake | partial | Linux Docker profile with Postfix 3.11.7 and exact immutable image identities |
-| Replay detection | supported local policy | Memory and Valkey evidence; replay outcome is deliberately separate from DKIM2 cryptographic verification |
+| Replay detection | supported local policy | Memory and Redis-provider evidence against the pinned Valkey server; replay outcome is deliberately separate from DKIM2 cryptographic verification |
 | LDAP and PostgreSQL signing datasources | supported local policy | Exact schema/DDL, shared provider parity, verified-TLS loaders, immutable generation and protected-registry tests |
 | Offline OpenDKIM migration | supported administrative policy | Bounded inventory, protected key import, fresh DNS proof, fenced publication, and higher-generation rollback tests |
 | Exim | `unqualified_draft08` | Source-linked implementation remains available, but the five-row Linux evidence is Draft-04-only and cannot qualify the Draft-08 candidate; active portable and full reports contain no Exim suite or evidence import |
@@ -179,7 +179,7 @@ named ARC fields are excluded and an unknown `ARC-*` field is signed. The
 manifest contains one executable incompatibility case in each direction.
 Replay identity is draft-bound inside the replay HMAC frame, so a draft
 upgrade runs in place with the same epoch and secret; see
-[`replay-store-valkey.md`](replay-store-valkey.md) for the key separation
+[`replay-store-redis.md`](replay-store-redis.md#replay-identity-contract) for the key separation
 evidence and the retention-bounded loss of replay continuity.
 
 The separate repository security profile consumes these reports without

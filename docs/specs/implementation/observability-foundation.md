@@ -117,13 +117,19 @@ draft policy_mode route method status_class replay_state disposition
 lifecycle_state ready tracing_exporter debug_module duration_bucket
 message_size_bucket recipient_count_bucket signature_count_bucket
 chain_length_bucket dns_result cache_result replay_store_result
+config_warning
 ```
 
 Unknown keys/groups, `slog.Any`, `LogValuer`, bytes, errors, URLs, paths, and
 arbitrary strings are rejected before encoding. Exact event IDs are
 `config.accepted`, `lifecycle.transition`, `readiness.transition`,
 `http.request.completed`, `process.completed`, `dns.lookup.completed`,
-`replay.coordinate.completed`, and `telemetry.export.failed`.
+`replay.coordinate.completed`, `telemetry.export.failed`, and
+`replay.config.warning`. The last is emitted at `WARN` once per accepted
+weakened Redis replay setting during replay runtime construction, with
+`operation=config`, `result=success`, and `config_warning` set to exactly
+`tls_insecure_skip_verify` or `noeviction_unchecked`; it never carries an
+address, username, path, or secret.
 
 DNS and replay detail events require their debug module. `message_shape` adds
 only the four bucket fields to process completion. Exporter error classes are

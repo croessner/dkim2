@@ -15,7 +15,7 @@ Available skills:
 - `dkim2-openapi-service`: `dkim2d` OpenAPI contract, generated server/client
   code, REST DTO/domain mapping, and `dkim2ctl` test-client workflows.
 - `dkim2-datasource-provider`: datasource interfaces, flat-file, LDAP,
-  PostgreSQL, MySQL, and MariaDB providers, Valkey replay storage, provider
+  PostgreSQL, MySQL, and MariaDB providers, Redis/Valkey replay storage, provider
   errors, and redaction.
 - `dkim2-observability`: `slog`, OpenTelemetry, Prometheus, low-cardinality
   metrics, debug modules, and telemetry redaction.

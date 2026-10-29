@@ -90,6 +90,7 @@
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Moved trace-field placement to the top of the header block (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6 SHOULD): the Milter inserts this hop's `Message-Instance`, `DKIM2-Signature`, and optional `X-DKIM2-Info` with `SMFIR_INSHEADER` index 0 in reverse plan order, which lands above Postfix's own `Received` field, and the Exim transport filter prepends the same block above Exim's `Received` field. The action plan is unchanged and documents the top-down block order. Verification and the Section 16.3 rebuild are placement-independent. Library completed-message outputs still append. The Postfix profile pins the queued top-of-header order. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Moved library completed-message placement to the top of the header block through the single owner `rawmsg.PrependValidatedFields`. The signing completion proof identifies this hop's fields by `m=` and `i=` instead of the last physical `DKIM2-Signature` and still rejects forged, altered, or reordered protocol fields. `/v1/revise/batch` `insertion_offset` is always 0 and its fields are top-down. Propagated DSNs are top-placed and pinned by the Postfix profile. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Completed the Draft-08/DNS-02 migration: the Postfix not_local fixture reports a foreign-addressed message as Section 16.2 requires, the datasource hard limits follow the one-handle-per-credential derivation (393216 handles, 1179648 records), `VerifierHop.signature_algorithms` lists only the verified Section 3 algorithms (no `rsa-sha512` or `ed25519-sha512`, at most three), the Rspamd Policy E2E projection bindings follow the producer for Draft-08, `make guardrails` also runs the tools-module runner tests and the Rspamd projection binding lock, the reviewed library API baseline moved to the Draft-08 surface, and the operator guide `docs/operator/draft-08-migration.md` records the upgrade and rollback. |
+| 0.1.0-draft | 2026-10-29 | Christian Roessner / Claude | Replaced the standalone-only `valkey` replay backend (valkey-go, auditor principal, operator attestation, revalidation loop) with the `redis` backend (`cmd/dkim2d/internal/replay/redisstore`, go-redis v9.22.0) for standalone, Sentinel, and cluster Redis 7.0+ or Valkey 7.2+, configured under `replay.redis`. Writes carry a per-operation nonce (`v2:<nonce>`, `pending:<expiry-ms>:<nonce>`) so client retries, failover, and redirects recognize their own commit; the lease takeover is a single-key Lua compare-and-set; legacy `v1` and `pending:<expiry-ms>` values stay readable and key derivation is unchanged. Startup checks the version floor and `noeviction`, a `PING` health probe drives readiness, and `replay.valkey.*`, `replay.revalidate_interval`, and backend `valkey` fail with `config_removed_field` pointing to `docs/operator/replay-redis-migration.md`. Breaking configuration change for release v0.2.0. |
 
 ## 1. Purpose
 
@@ -1451,9 +1452,10 @@ General datasource provider classes:
   sessions, immutable InnoDB generations, and singleton-lock publication
   fencing.
 
-Replay storage is modeled separately in the replay-store interface. Valkey is
-the default production replay backend, but it must not become the general
-datasource abstraction or leak into protocol packages.
+Replay storage is modeled separately in the replay-store interface. The
+Redis-compatible provider (Redis or Valkey) is the default production replay
+backend, but it must not become the general datasource abstraction or leak
+into protocol packages.
 
 Provider rules:
 
@@ -1984,18 +1986,22 @@ The replay store must be separated from the protocol library. The library
 defines replay-check interfaces and result types; `dkim2d` wires concrete
 storage providers and local policy.
 
-The default production replay backend should be Valkey. Valkey gives the
-reference implementation a permissive open-source baseline, low-latency
-key-value operations, native expiry, and an atomic first-seen operation shaped
-like `SET replay-key replay-value NX PX retention-milliseconds`. The implementation
-must not treat Valkey as a protocol dependency. It is the first production
-provider behind a replay-store interface.
+The default production replay backend is a Redis-compatible server: Redis
+7.0 or later, or Valkey 7.2 or later. It gives the reference implementation
+open-source server choices, low-latency key-value operations, native expiry,
+and an atomic first-seen operation shaped like
+`SET replay-key replay-value NX GET PX retention-milliseconds`. The
+implementation must not treat Redis or Valkey as a protocol dependency. It is
+the production provider behind a replay-store interface.
 
-Initial replay provider set:
+Replay provider set:
 
 - `memory`: deterministic test and example provider.
-- `valkey`: default production provider; the first secure implementation binds
-  one directly addressed standalone primary.
+- `redis`: default production provider in
+  `cmd/dkim2d/internal/replay/redisstore`, built on go-redis v9, for
+  standalone, Sentinel, and cluster topologies. It replaced the earlier
+  standalone-only `valkey` provider, whose configuration is refused with
+  migration guidance.
 - `disabled`: explicit disabled provider for deployments that choose not to run
   replay detection.
 
@@ -2004,7 +2010,7 @@ Cassandra-compatible stores, or other open-source backends. Adding a provider
 must not change protocol packages, public result semantics, OpenAPI response
 contracts, or Milter adapter behavior.
 
-The replay-store interface should model intent, not Valkey commands:
+The replay-store interface should model intent, not Redis commands:
 
 ```go
 type ReplayStore interface {
@@ -2019,14 +2025,25 @@ failures; degraded is separate store state. Local policy decides how successful
 checks, typed failures, and store state map to accept, reject, tempfail, or
 observe-only behavior.
 
-Valkey-specific design notes:
+Redis provider design notes:
 
-- Use a single-key first implementation. Production cluster routing is deferred
-  until an owned audited router can confine every dispatch to an immutable
-  authority set and surface redirects before execution; a dependency-managed
-  MOVED/ASK refresh must never route a replay write to an unaudited node.
+- Every operation touches exactly one key, so cluster slot routing, Sentinel
+  failover, and `MOVED`/`ASK` redirects need no cross-slot coordination. The
+  lease-takeover compare-and-set is a single-key Lua script.
+- The client may retry and re-route. Every write therefore embeds a
+  per-operation `crypto/rand` nonce in its value (`v2:<nonce>`,
+  `pending:<expiry-ms>:<nonce>`) and returns the previous value, so a retried
+  attempt that finds its own value proves its own earlier commit instead of
+  reporting a replay. When no attempt can be proven, the outcome stays
+  `indeterminate`. The library owns this value grammar, including the legacy
+  nonce-free forms that remain readable.
+- Readiness follows a `PING` health probe and startup checks (version floor,
+  `noeviction` on every primary) instead of an audited authority; persistence
+  and replication remain operator responsibilities, documented in
+  `docs/replay-store-redis.md`.
 - Prefer privacy-preserving digest keys with a stable namespace prefix and
-  algorithm/version marker.
+  algorithm/version marker; an optional operator key prefix supports shared
+  instances.
 - Store only bounded metadata needed for diagnosis and policy, never raw
   messages, raw recipient addresses, private keys, bearer tokens, or protected
   configuration.
@@ -2888,8 +2905,9 @@ interpretation choices in code.
    consistency, paging, cancellation, redaction, RNS LDAP OID allocation, and
    legacy OpenDKIM bootstrap contracts are implemented without introducing a
    driver into the standalone library.
-   Replay storage is tracked separately: Valkey is the first production replay
-   store backend, behind a storage-neutral replay interface. All datasource and
+   Replay storage is tracked separately: the Redis-compatible provider (Redis
+   or Valkey) is the production replay store backend, behind a
+   storage-neutral replay interface. All datasource and
    replay interfaces must be designed so providers can be added without
    changing protocol packages or public domain contracts.
 9. Storage-backed replay detection:
@@ -2899,11 +2917,14 @@ interpretation choices in code.
    handling, and clear policy semantics. It is implemented in daemon/service
    layers rather than as hidden protocol-core behavior.
 10. Default replay store backend:
-    Valkey is the default production replay-store backend. The first secure
-    implementation supports one directly addressed standalone primary only;
-    Valkey cluster production remains deferred until an owned audited routing
-    boundary prevents redirects or topology refresh from selecting an unaudited
-    authority. The architecture still requires a storage-neutral replay-store
+    A Redis-compatible server (Redis 7.0+ or Valkey 7.2+) is the default
+    production replay-store backend (`replay.backend: redis`), reached through
+    go-redis v9 in standalone, Sentinel, or cluster topology. It replaced the
+    first standalone-only Valkey provider, whose audited single-authority
+    model forbade retries and topology changes. Retry and redirect safety now
+    comes from nonce-bearing self-identifying writes rather than from
+    forbidding retries; unprovable outcomes stay `indeterminate`, and no
+    global exactly-once claim is made. The architecture still requires a storage-neutral replay-store
     interface so later PostgreSQL, Cassandra-compatible, LDAP-adjacent, or
     other open-source providers can be added without changing protocol
     packages, public result semantics, OpenAPI contracts, or Milter adapter

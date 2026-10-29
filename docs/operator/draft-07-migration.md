@@ -44,7 +44,7 @@ more, and only if it still verifies under Draft-07; its next copy is detected
 again. A delivery-status notification propagated before the upgrade may be
 propagated once more, within the at-least-once propagation contract. The exposure
 ends when the Draft-06 records would have expired. See
-[`../replay-store-valkey.md`](../replay-store-valkey.md) for the key
+[`../replay-store-redis.md`](../replay-store-redis.md#replay-identity-contract) for the key
 derivation evidence and for the drain-only procedure that still applies to
 secret or epoch rotation.
 

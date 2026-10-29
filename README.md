@@ -109,8 +109,11 @@ Current contents:
   transition, the consumers that move together, and rollback.
 - `docs/operator/draft-07-migration.md`: historical Draft-07/DNS-01 upgrade, replay-store
   transition, removed configuration, mail-flow changes, and known limitations.
-- `docs/replay-store-valkey.md`: production replay-store topology, ACL,
-  persistence, replication, rotation, integration, and dependency guidance.
+- `docs/replay-store-redis.md`: production Redis/Valkey replay-store
+  topologies, ACLs, eviction, persistence, loss window, retries, health,
+  TLS, rotation, integration, and dependency guidance.
+- `docs/operator/replay-redis-migration.md`: moving from the removed `valkey`
+  replay backend to `redis` (v0.2.0 breaking configuration change).
 - `docs/conformance.md`: public evidence classes, tested capability boundaries,
   adapter limitations, reproducible report commands, and the separate real
   Exim qualification boundary.
@@ -207,8 +210,9 @@ static reference implementation. The flat-file provider accepts a strict,
 bounded `dkim2-datasource-v1` JSON snapshot through an owned confined directory
 descriptor and publishes reloads atomically. Replay detection now has a
 storage-neutral library contract, bounded memory and disabled providers, and a
-daemon-owned standalone-primary Valkey provider using privacy-preserving keys
-and one non-retryable `SET NX PX` operation. The daemon now owns strict typed
+daemon-owned Redis-compatible provider (Redis 7.0+ or Valkey 7.2+, standalone,
+Sentinel, or cluster) using privacy-preserving keys and nonce-bearing
+`SET NX GET PX` writes that stay correct under client retries. The daemon now owns strict typed
 configuration, protected-generation loading, the generated process, sign, and
 revise OpenAPI boundary, distinct local route-capability authentication,
 replay and signing-store wiring, readiness, and bounded Fx lifecycle. LDAP
@@ -242,7 +246,7 @@ GOEXPERIMENT=runtimesecret go test ./cmd/dkim2-milter/...
 GOEXPERIMENT=runtimesecret go test ./cmd/dkim2ctl/...
 GOEXPERIMENT=runtimesecret go test ./cmd/dkim2-dsn-propagator/...
 make test
-make test-valkey
+make test-redis
 make check-conformance
 make conformance
 make conformance-postfix

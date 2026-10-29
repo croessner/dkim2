@@ -115,7 +115,7 @@ flowchart LR
 | `dkim2-exim` | Source-linked Exim `local_scan()` inbound service plus one-shot originator and ordinary-transit transport filters; capability `unqualified_draft08` | The capability of its configured operation | Draft-08 qualification evidence |
 | `dkim2ctl` | Generated-client smoke and fixture runner for a test deployment | Whichever route capabilities the operator hands it for that test | Operator mutation commands |
 | Signing datasource | Flat-file, LDAP, PostgreSQL, MySQL, or MariaDB source of signing profiles, policies, and native keys | Immutable committed generations | A signing capability of its own |
-| Replay store | Valkey, process-local memory, or explicitly disabled; first-seen coordinates and propagation coordinates | Privacy-preserving HMAC-derived keys | Message content, addresses |
+| Replay store | Redis or Valkey (standalone, Sentinel, or cluster), process-local memory, or explicitly disabled; first-seen coordinates and propagation coordinates | Privacy-preserving HMAC-derived keys | Message content, addresses |
 
 The separation exists so that the compromise of one adapter authorizes only
 that adapter's route. A compromised inbound Milter can ask the daemon to
@@ -714,7 +714,7 @@ unused signing capability to make the datasource acceptable. Whenever a
 backend is configured, it is a readiness dependency, and a later outage is
 reported as `local_hop: temperror`, never as `not_local`. Backend setup is in
 [`datasource-backends.md`](datasource-backends.md); the replay store contract
-is in [`docs/replay-store-valkey.md`](../replay-store-valkey.md).
+is in [`docs/replay-store-redis.md`](../replay-store-redis.md).
 
 ## 5. What a visitor should take away
 

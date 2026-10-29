@@ -22,7 +22,7 @@ before substantial work in its area:
   DNS mail behavior, and Milter fidelity.
 - `dkim2-openapi-service` for `dkim2d`, OpenAPI, generated server/client code,
   and `dkim2ctl`.
-- `dkim2-datasource-provider` for datasource contracts, Valkey replay storage,
+- `dkim2-datasource-provider` for datasource contracts, Redis/Valkey replay storage,
   and flat-file, LDAP, PostgreSQL, MySQL, and MariaDB providers.
 - `dkim2-observability` for `slog`, OpenTelemetry, Prometheus, debug modules,
   labels, and redaction.

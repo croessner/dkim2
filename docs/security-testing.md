@@ -114,7 +114,7 @@ make fuzz-security
 ```
 
 Run the complete release-blocking profile, including vulnerability,
-conformance, Valkey, and real Postfix evidence:
+conformance, Redis replay (pinned Valkey server), and real Postfix evidence:
 
 ```text
 make security

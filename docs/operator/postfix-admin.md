@@ -60,7 +60,7 @@ because it is private.
 | 1. Select a matching release | [Container supply chain](container-supply-chain.md) | Record immutable daemon, adapter and Postfix image digests, supported platform and draft baseline. |
 | 2. Choose signing storage | [Datasource backends](datasource-backends.md) | Validated flat-file generation or independently operated LDAP/SQL with verified TLS and least-privilege runtime identity. |
 | 3. Provision domains and publish DNS | [Native onboarding](native-domain-onboarding.md), or [OpenDKIM migration](opendkim-migration.md) | Public key publication and DNS proof completed before activation; private keys stay in protected storage. Native onboarding applies to native LDAP/SQL providers. |
-| 4. Choose replay policy | [Replay store](../replay-store-valkey.md) | Explicit disabled/memory/Valkey choice; documented restart/loss behavior. In-memory state does not provide durable shared replay detection. |
+| 4. Choose replay policy | [Replay store](../replay-store-redis.md) | Explicit disabled/memory/Redis choice (Redis or Valkey, with `noeviction`); documented restart/loss behavior. In-memory state does not provide durable shared replay detection. |
 | 5. Provision protected route state | [Compose prerequisites](postfix-compose.md#host-and-protected-state-prerequisites) | Correct numeric owners, modes, immutable generations and separate route capabilities through the final mounts. |
 | 6. Size the whole pipeline | [Message sizing](message-size.md) | Consistent Postfix, adapter, daemon and DSN limits, timeout budget and measured memory headroom. |
 | 7. Validate and start | [Start and verify](postfix-compose.md#start-and-verify) | Daemons ready, adapters validated, sockets owned and reachable; only then start SMTP admission. |

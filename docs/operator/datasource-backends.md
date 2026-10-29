@@ -8,7 +8,7 @@ are not an onboarding substitute.
 This is the canonical operator guide for `dkim2d` signing datasources. The
 daemon selects exactly one signing backend. Replay storage is an independent
 choice and is documented separately in
-[`replay-store-valkey.md`](../replay-store-valkey.md).
+[`replay-store-redis.md`](../replay-store-redis.md).
 
 The storage-neutral field model and failure semantics are defined in
 [`datasource-ldap-sql-design.md`](../datasource-ldap-sql-design.md). LDAP object

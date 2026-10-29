@@ -109,13 +109,20 @@ certification, or universal interoperability claim.
   and this system evaluates and propagates it once more from that hop before
   the genuine previous hop receives it. This is an accepted one-hop cost;
   every pass is bounded by its own replay coordinate.
-- The Valkey replay parity gate accepts only the exact `valkey-server` 9.1.2
-  binary pinned in `build/ci/toolchain.json`. Nearby patch versions are not
-  evidence substitutes. The real-server suite includes propagation reservation,
-  expired-lease re-serve and commit cases; execute `make test-valkey` on the
-  selected version when changing that pin. Historical reports against 9.1.0
-  or hosts carrying 9.1.1 do not qualify this version.
-- Flat-file, LDAP, PostgreSQL, MySQL, MariaDB, and Valkey datasource paths are implemented.
+- The Redis replay real-server gate (`make test-redis`) accepts only the exact
+  `valkey-server` 9.1.2 binary pinned in `build/ci/toolchain.json`. Nearby
+  patch versions are not evidence substitutes. The suite covers standalone,
+  Sentinel failover, and cluster topologies plus propagation reservation,
+  expired-lease re-serve and commit cases; execute `make test-redis` on the
+  selected version when changing that pin. Other Redis 7.0+ and Valkey 7.2+
+  servers are supported by contract but carry no repository evidence.
+- Redis replay makes no global exactly-once claim. Asynchronous replication,
+  Sentinel or cluster failover, restore, and operator deletion can lose a
+  remembered record, and an indeterminate write may have committed; see
+  `docs/replay-store-redis.md`. The go-redis client keeps the Sentinel
+  password as an immutable string for the life of the store.
+- Flat-file, LDAP, PostgreSQL, MySQL, and MariaDB signing datasources and the
+  Redis-compatible replay store are implemented.
   The offline OpenDKIM migration requires separately managed verified-TLS
   services, explicit mapping, and distinct least-authority principals.
 - The online daemon has no key-generation, DNS-mutation, or datasource-write
