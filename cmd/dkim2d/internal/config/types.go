@@ -57,7 +57,6 @@ const (
 	pathReplayPruneBudget                 = "replay.limits.prune_budget"
 	pathReplayMaxInFlight                 = "replay.limits.max_in_flight"
 	pathReplayMaxAdmission                = "replay.limits.max_admission_waiters"
-	pathReplayRevalidate                  = "replay.revalidate_interval"
 	pathReplayCountDirect                 = "replay.count_direct_deliveries"
 	pathSigningBackend                    = "signing.backend"
 	pathSigningDatasource                 = "signing.datasource_file"
@@ -104,23 +103,45 @@ const (
 	pathSigningMySQLMaxConns              = "signing.mysql.max_connections"
 	pathSigningMySQLIdleConns             = "signing.mysql.idle_connections"
 
-	pathValkeyAddress          = "replay.valkey.address"
-	pathValkeyServerName       = "replay.valkey.server_name"
-	pathValkeyCAFile           = "replay.valkey.ca_file"
-	pathValkeyApplicationUser  = "replay.valkey.application_username"
-	pathValkeyApplicationPass  = "replay.valkey.application_password_file"
-	pathValkeyAuditorUser      = "replay.valkey.auditor_username"
-	pathValkeyAuditorPass      = "replay.valkey.auditor_password_file"
-	pathValkeyDialTimeout      = "replay.valkey.dial_timeout"
-	pathValkeyTCPKeepalive     = "replay.valkey.tcp_keepalive"
-	pathValkeyWriteTimeout     = "replay.valkey.connection_write_timeout"
-	pathAttestationPersistence = "replay.valkey.attestation.persistence_mode"
-	pathAttestationFsync       = "replay.valkey.attestation.append_fsync_policy"
-	pathAttestationSave        = "replay.valkey.attestation.save_schedule"
-	pathAttestationMinReplicas = "replay.valkey.attestation.min_replicas_to_write"
-	pathAttestationMaxLag      = "replay.valkey.attestation.min_replicas_max_lag_seconds"
-	pathAttestationLossWindow  = "replay.valkey.attestation.loss_window_acceptance"
-	pathAttestationRotation    = "replay.valkey.attestation.rotation_state"
+	pathRedisMode                   = "replay.redis.mode"
+	pathRedisStandaloneAddress      = "replay.redis.standalone.address"
+	pathRedisSentinelMasterName     = "replay.redis.sentinel.master_name"
+	pathRedisSentinelAddresses      = "replay.redis.sentinel.addresses"
+	pathRedisSentinelUsername       = "replay.redis.sentinel.username"
+	pathRedisSentinelPasswordFile   = "replay.redis.sentinel.password_file"
+	pathRedisClusterAddresses       = "replay.redis.cluster.addresses"
+	pathRedisClusterMaxRedirects    = "replay.redis.cluster.max_redirects"
+	pathRedisAuthUsername           = "replay.redis.auth.username"
+	pathRedisAuthPasswordFile       = "replay.redis.auth.password_file"
+	pathRedisDatabaseNumber         = "replay.redis.database_number"
+	pathRedisKeyPrefix              = "replay.redis.key_prefix"
+	pathRedisProtocol               = "replay.redis.protocol"
+	pathRedisTLSEnabled             = "replay.redis.tls.enabled"
+	pathRedisTLSCAFile              = "replay.redis.tls.ca_file"
+	pathRedisTLSCertificate         = "replay.redis.tls.cert"
+	pathRedisTLSKey                 = "replay.redis.tls.key"
+	pathRedisTLSServerName          = "replay.redis.tls.server_name"
+	pathRedisTLSMinVersion          = "replay.redis.tls.min_tls_version"
+	pathRedisTLSInsecureSkipVerify  = "replay.redis.tls.insecure_skip_verify"
+	pathRedisPoolSize               = "replay.redis.pool_size"
+	pathRedisMinIdleConnections     = "replay.redis.min_idle_connections"
+	pathRedisPoolTimeout            = "replay.redis.pool_timeout"
+	pathRedisDialTimeout            = "replay.redis.dial_timeout"
+	pathRedisReadTimeout            = "replay.redis.read_timeout"
+	pathRedisWriteTimeout           = "replay.redis.write_timeout"
+	pathRedisRetriesMaxAttempts     = "replay.redis.retries.max_attempts"
+	pathRedisRetriesMinBackoff      = "replay.redis.retries.min_backoff"
+	pathRedisRetriesMaxBackoff      = "replay.redis.retries.max_backoff"
+	pathRedisHealthInterval         = "replay.redis.health.interval"
+	pathRedisHealthTimeout          = "replay.redis.health.timeout"
+	pathRedisHealthFailureThreshold = "replay.redis.health.failure_threshold"
+	pathRedisRequireNoEviction      = "replay.redis.require_noeviction"
+
+	valueRedisStandalone = "standalone"
+	valueRedisSentinel   = "sentinel"
+	valueRedisCluster    = "cluster"
+	valueTLS12           = "TLS1.2"
+	valueTLS13           = "TLS1.3"
 
 	defaultListenAddress = "127.0.0.1:8080"
 	defaultListenerMode  = "loopback"
@@ -138,9 +159,8 @@ const (
 
 	valuePolicyStrict    = "strict"
 	valueListenerPrivate = "tls_private_network"
-	valueBackendValkey   = "valkey"
 	valueBackendDisabled = "disabled"
-	valuePersistenceRDB  = "rdb"
+	valueBackendRedis    = "redis"
 
 	valueUnsignedOriginalReject   = "reject"
 	valueUnsignedOriginalContinue = "continue"
@@ -157,27 +177,15 @@ const (
 	canonicalInfo  = "info"
 	canonicalNone  = "none"
 
-	pathAttestationNoGlobalExactlyOnce = "replay.valkey.attestation.no_global_exactly_once_claim"
-	pathAttestationDedicatedDeployment = "replay.valkey.attestation.dedicated_deployment"
-	pathAttestationDedicatedDatabase   = "replay.valkey.attestation.dedicated_database_zero"
-	pathAttestationDirectIPAuthority   = "replay.valkey.attestation.direct_ip_authority"
-	pathAttestationNoSubstitution      = "replay.valkey.attestation.no_endpoint_substitution"
-	pathAttestationStandaloneAuthority = "replay.valkey.attestation.standalone_authority"
-	pathAttestationSharedDraft         = "replay.valkey.attestation.shared_draft"
-	pathAttestationSharedAlgorithm     = "replay.valkey.attestation.shared_algorithm"
-	pathAttestationSharedNamespace     = "replay.valkey.attestation.shared_namespace"
-	pathAttestationSharedEpoch         = "replay.valkey.attestation.shared_epoch"
-	pathAttestationSharedSecretSet     = "replay.valkey.attestation.shared_secret_set"
-	pathAttestationSharedRetention     = "replay.valkey.attestation.shared_retention"
-	pathLoggingLevel                   = "observability.logging.level"
-	pathDebugMessageShape              = "observability.debug.message_shape"
-	pathDebugDNS                       = "observability.debug.dns"
-	pathDebugReplay                    = "observability.debug.replay"
-	pathTracingExporter                = "observability.tracing.exporter"
-	pathTracingEndpoint                = "observability.tracing.endpoint"
-	pathTracingCAFile                  = "observability.tracing.ca_file"
-	pathTracingSamplePerMillion        = "observability.tracing.sample_per_million"
-	pathTracingExportTimeout           = "observability.tracing.export_timeout"
+	pathLoggingLevel            = "observability.logging.level"
+	pathDebugMessageShape       = "observability.debug.message_shape"
+	pathDebugDNS                = "observability.debug.dns"
+	pathDebugReplay             = "observability.debug.replay"
+	pathTracingExporter         = "observability.tracing.exporter"
+	pathTracingEndpoint         = "observability.tracing.endpoint"
+	pathTracingCAFile           = "observability.tracing.ca_file"
+	pathTracingSamplePerMillion = "observability.tracing.sample_per_million"
+	pathTracingExportTimeout    = "observability.tracing.export_timeout"
 )
 
 // Source identifies the winning configuration layer without retaining its value.
@@ -327,7 +335,7 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathDNSPositiveTTLCap, env: "DKIM2D_DNS_CACHE_POSITIVE_TTL_CAP", kind: valueDuration, defaultVal: "1h", hasDefault: true},
 		{path: pathDNSNegativeTTLCap, env: "DKIM2D_DNS_CACHE_NEGATIVE_TTL_CAP", kind: valueDuration, defaultVal: "5m", hasDefault: true},
 		{path: pathDNSStableErrorTTLCap, env: "DKIM2D_DNS_CACHE_STABLE_ERROR_TTL_CAP", kind: valueDuration, defaultVal: "1m", hasDefault: true},
-		{path: pathReplayBackend, env: "DKIM2D_REPLAY_BACKEND", flag: flagReplayBackend, kind: valueString, defaultVal: valueBackendValkey, hasDefault: true},
+		{path: pathReplayBackend, env: "DKIM2D_REPLAY_BACKEND", flag: flagReplayBackend, kind: valueString, defaultVal: valueBackendRedis, hasDefault: true},
 		{path: pathReplayHMACFile, env: "DKIM2D_REPLAY_HMAC_KEY_FILE", kind: valueString},
 		{path: pathReplayEpoch, env: "DKIM2D_REPLAY_EPOCH", kind: valueUint},
 		{path: pathReplayRetention, env: "DKIM2D_REPLAY_RETENTION", kind: valueDuration, defaultVal: "336h", hasDefault: true},
@@ -336,8 +344,40 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathReplayPruneBudget, env: "DKIM2D_REPLAY_LIMITS_PRUNE_BUDGET", kind: valueUint, defaultVal: "4096", hasDefault: true},
 		{path: pathReplayMaxInFlight, env: "DKIM2D_REPLAY_LIMITS_MAX_IN_FLIGHT", kind: valueUint, defaultVal: "1024", hasDefault: true},
 		{path: pathReplayMaxAdmission, env: "DKIM2D_REPLAY_LIMITS_MAX_ADMISSION_WAITERS", kind: valueUint, defaultVal: "1024", hasDefault: true},
-		{path: pathReplayRevalidate, env: "DKIM2D_REPLAY_REVALIDATE_INTERVAL", kind: valueDuration, defaultVal: defaultReadTimeout, hasDefault: true},
 		{path: pathReplayCountDirect, env: "DKIM2D_REPLAY_COUNT_DIRECT_DELIVERIES", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathRedisMode, env: "DKIM2D_REPLAY_REDIS_MODE", kind: valueString, defaultVal: valueRedisStandalone, hasDefault: true},
+		{path: pathRedisStandaloneAddress, env: "DKIM2D_REPLAY_REDIS_STANDALONE_ADDRESS", kind: valueString},
+		{path: pathRedisSentinelMasterName, env: "DKIM2D_REPLAY_REDIS_SENTINEL_MASTER_NAME", kind: valueString},
+		{path: pathRedisSentinelAddresses, env: "DKIM2D_REPLAY_REDIS_SENTINEL_ADDRESSES", kind: valueString},
+		{path: pathRedisSentinelUsername, env: "DKIM2D_REPLAY_REDIS_SENTINEL_USERNAME", kind: valueString},
+		{path: pathRedisSentinelPasswordFile, env: "DKIM2D_REPLAY_REDIS_SENTINEL_PASSWORD_FILE", kind: valueString},
+		{path: pathRedisClusterAddresses, env: "DKIM2D_REPLAY_REDIS_CLUSTER_ADDRESSES", kind: valueString},
+		{path: pathRedisClusterMaxRedirects, env: "DKIM2D_REPLAY_REDIS_CLUSTER_MAX_REDIRECTS", kind: valueUint, defaultVal: "8", hasDefault: true},
+		{path: pathRedisAuthUsername, env: "DKIM2D_REPLAY_REDIS_AUTH_USERNAME", kind: valueString},
+		{path: pathRedisAuthPasswordFile, env: "DKIM2D_REPLAY_REDIS_AUTH_PASSWORD_FILE", kind: valueString},
+		{path: pathRedisDatabaseNumber, env: "DKIM2D_REPLAY_REDIS_DATABASE_NUMBER", kind: valueUint, defaultVal: "0", hasDefault: true},
+		{path: pathRedisKeyPrefix, env: "DKIM2D_REPLAY_REDIS_KEY_PREFIX", kind: valueString},
+		{path: pathRedisProtocol, env: "DKIM2D_REPLAY_REDIS_PROTOCOL", kind: valueUint, defaultVal: "3", hasDefault: true},
+		{path: pathRedisTLSEnabled, env: "DKIM2D_REPLAY_REDIS_TLS_ENABLED", kind: valueBool, defaultVal: canonicalTrue, hasDefault: true},
+		{path: pathRedisTLSCAFile, env: "DKIM2D_REPLAY_REDIS_TLS_CA_FILE", kind: valueString},
+		{path: pathRedisTLSCertificate, env: "DKIM2D_REPLAY_REDIS_TLS_CERT", kind: valueString},
+		{path: pathRedisTLSKey, env: "DKIM2D_REPLAY_REDIS_TLS_KEY", kind: valueString},
+		{path: pathRedisTLSServerName, env: "DKIM2D_REPLAY_REDIS_TLS_SERVER_NAME", kind: valueString},
+		{path: pathRedisTLSMinVersion, env: "DKIM2D_REPLAY_REDIS_TLS_MIN_TLS_VERSION", kind: valueString, defaultVal: valueTLS12, hasDefault: true},
+		{path: pathRedisTLSInsecureSkipVerify, env: "DKIM2D_REPLAY_REDIS_TLS_INSECURE_SKIP_VERIFY", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
+		{path: pathRedisPoolSize, env: "DKIM2D_REPLAY_REDIS_POOL_SIZE", kind: valueUint, defaultVal: "20", hasDefault: true},
+		{path: pathRedisMinIdleConnections, env: "DKIM2D_REPLAY_REDIS_MIN_IDLE_CONNECTIONS", kind: valueUint, defaultVal: "2", hasDefault: true},
+		{path: pathRedisPoolTimeout, env: "DKIM2D_REPLAY_REDIS_POOL_TIMEOUT", kind: valueDuration, defaultVal: "2s", hasDefault: true},
+		{path: pathRedisDialTimeout, env: "DKIM2D_REPLAY_REDIS_DIAL_TIMEOUT", kind: valueDuration, defaultVal: "2s", hasDefault: true},
+		{path: pathRedisReadTimeout, env: "DKIM2D_REPLAY_REDIS_READ_TIMEOUT", kind: valueDuration, defaultVal: "2s", hasDefault: true},
+		{path: pathRedisWriteTimeout, env: "DKIM2D_REPLAY_REDIS_WRITE_TIMEOUT", kind: valueDuration, defaultVal: "2s", hasDefault: true},
+		{path: pathRedisRetriesMaxAttempts, env: "DKIM2D_REPLAY_REDIS_RETRIES_MAX_ATTEMPTS", kind: valueUint, defaultVal: "3", hasDefault: true},
+		{path: pathRedisRetriesMinBackoff, env: "DKIM2D_REPLAY_REDIS_RETRIES_MIN_BACKOFF", kind: valueDuration, defaultVal: "50ms", hasDefault: true},
+		{path: pathRedisRetriesMaxBackoff, env: "DKIM2D_REPLAY_REDIS_RETRIES_MAX_BACKOFF", kind: valueDuration, defaultVal: "500ms", hasDefault: true},
+		{path: pathRedisHealthInterval, env: "DKIM2D_REPLAY_REDIS_HEALTH_INTERVAL", kind: valueDuration, defaultVal: "5s", hasDefault: true},
+		{path: pathRedisHealthTimeout, env: "DKIM2D_REPLAY_REDIS_HEALTH_TIMEOUT", kind: valueDuration, defaultVal: "2s", hasDefault: true},
+		{path: pathRedisHealthFailureThreshold, env: "DKIM2D_REPLAY_REDIS_HEALTH_FAILURE_THRESHOLD", kind: valueUint, defaultVal: "3", hasDefault: true},
+		{path: pathRedisRequireNoEviction, env: "DKIM2D_REPLAY_REDIS_REQUIRE_NOEVICTION", kind: valueBool, defaultVal: canonicalTrue, hasDefault: true},
 		{path: pathSigningBackend, env: "DKIM2D_SIGNING_BACKEND", kind: valueString, defaultVal: valueBackendDisabled, hasDefault: true},
 		{path: pathSigningDatasource, env: "DKIM2D_SIGNING_DATASOURCE_FILE", kind: valueString},
 		{path: pathSigningManifest, env: "DKIM2D_SIGNING_PRIVATE_MANIFEST_FILE", kind: valueString},
@@ -378,35 +418,6 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathSigningMySQLDeadline, env: "DKIM2D_SIGNING_MYSQL_LOAD_DEADLINE", kind: valueDuration, defaultVal: "5s", hasDefault: true},
 		{path: pathSigningMySQLMaxConns, env: "DKIM2D_SIGNING_MYSQL_MAX_CONNECTIONS", kind: valueUint, defaultVal: "2", hasDefault: true},
 		{path: pathSigningMySQLIdleConns, env: "DKIM2D_SIGNING_MYSQL_IDLE_CONNECTIONS", kind: valueUint, defaultVal: "1", hasDefault: true},
-		{path: pathValkeyAddress, env: "DKIM2D_REPLAY_VALKEY_ADDRESS", kind: valueString},
-		{path: pathValkeyServerName, env: "DKIM2D_REPLAY_VALKEY_SERVER_NAME", kind: valueString},
-		{path: pathValkeyCAFile, env: "DKIM2D_REPLAY_VALKEY_CA_FILE", kind: valueString},
-		{path: pathValkeyApplicationUser, env: "DKIM2D_REPLAY_VALKEY_APPLICATION_USERNAME", kind: valueString},
-		{path: pathValkeyApplicationPass, env: "DKIM2D_REPLAY_VALKEY_APPLICATION_PASSWORD_FILE", kind: valueString},
-		{path: pathValkeyAuditorUser, env: "DKIM2D_REPLAY_VALKEY_AUDITOR_USERNAME", kind: valueString},
-		{path: pathValkeyAuditorPass, env: "DKIM2D_REPLAY_VALKEY_AUDITOR_PASSWORD_FILE", kind: valueString},
-		{path: pathValkeyDialTimeout, env: "DKIM2D_REPLAY_VALKEY_DIAL_TIMEOUT", kind: valueDuration, defaultVal: "2s", hasDefault: true},
-		{path: pathValkeyTCPKeepalive, env: "DKIM2D_REPLAY_VALKEY_TCP_KEEPALIVE", kind: valueDuration, defaultVal: defaultReadTimeout, hasDefault: true},
-		{path: pathValkeyWriteTimeout, env: "DKIM2D_REPLAY_VALKEY_CONNECTION_WRITE_TIMEOUT", kind: valueDuration, defaultVal: "2s", hasDefault: true},
-		{path: pathAttestationPersistence, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_PERSISTENCE_MODE", kind: valueString},
-		{path: pathAttestationFsync, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_APPEND_FSYNC_POLICY", kind: valueString},
-		{path: pathAttestationSave, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SAVE_SCHEDULE", kind: valueString},
-		{path: pathAttestationMinReplicas, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_MIN_REPLICAS_TO_WRITE", kind: valueUint},
-		{path: pathAttestationMaxLag, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_MIN_REPLICAS_MAX_LAG_SECONDS", kind: valueUint},
-		{path: pathAttestationLossWindow, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_LOSS_WINDOW_ACCEPTANCE", kind: valueString},
-		{path: pathAttestationRotation, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_ROTATION_STATE", kind: valueString},
-		{path: pathAttestationNoGlobalExactlyOnce, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_NO_GLOBAL_EXACTLY_ONCE_CLAIM", kind: valueBool},
-		{path: pathAttestationDedicatedDeployment, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_DEDICATED_DEPLOYMENT", kind: valueBool},
-		{path: pathAttestationDedicatedDatabase, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_DEDICATED_DATABASE_ZERO", kind: valueBool},
-		{path: pathAttestationDirectIPAuthority, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_DIRECT_IP_AUTHORITY", kind: valueBool},
-		{path: pathAttestationNoSubstitution, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_NO_ENDPOINT_SUBSTITUTION", kind: valueBool},
-		{path: pathAttestationStandaloneAuthority, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_STANDALONE_AUTHORITY", kind: valueBool},
-		{path: pathAttestationSharedDraft, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_DRAFT", kind: valueBool},
-		{path: pathAttestationSharedAlgorithm, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_ALGORITHM", kind: valueBool},
-		{path: pathAttestationSharedNamespace, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_NAMESPACE", kind: valueBool},
-		{path: pathAttestationSharedEpoch, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_EPOCH", kind: valueBool},
-		{path: pathAttestationSharedSecretSet, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_SECRET_SET", kind: valueBool},
-		{path: pathAttestationSharedRetention, env: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_RETENTION", kind: valueBool},
 		{path: pathLoggingLevel, env: "DKIM2D_OBSERVABILITY_LOGGING_LEVEL", kind: valueString, defaultVal: canonicalInfo, hasDefault: true},
 		{path: pathDebugMessageShape, env: "DKIM2D_OBSERVABILITY_DEBUG_MESSAGE_SHAPE", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},
 		{path: pathDebugDNS, env: "DKIM2D_OBSERVABILITY_DEBUG_DNS", kind: valueBool, defaultVal: canonicalFalse, hasDefault: true},

@@ -12,15 +12,17 @@ import (
 const (
 	testCapabilityMarker = "CAPABILITY_PRIVATE_MARKER"
 	testHMACMarker       = "HMAC_PRIVATE_MARKER"
-	testAppPassMarker    = "APPLICATION_PRIVATE_MARKER"
-	testAuditPassMarker  = "AUDITOR_PRIVATE_MARKER"
+	testRedisPassMarker  = "REDIS_PASSWORD_PRIVATE_MARKER"
+	testSentinelMarker   = "SENTINEL_PASSWORD_PRIVATE_MARKER"
+	testClientCertMarker = "CLIENT_CERTIFICATE_PRIVATE_MARKER"
+	testClientKeyMarker  = "CLIENT_KEY_PRIVATE_MARKER"
 	testRootMarker       = "ROOT_PRIVATE_MARKER"
 )
 
 // TestProcessCapabilityComparisonIsOpaqueAndExact freezes the comparison-only
 // capability contract and rejects every non-exact candidate.
 func TestProcessCapabilityComparisonIsOpaqueAndExact(t *testing.T) {
-	runtime, _, _, capability, state := testCommittedProtectedRuntime(t)
+	runtime, _, capability, state := testCommittedProtectedRuntime(t)
 	exact := append([]byte(nil), state.capability[:]...)
 
 	if !capability.Equal(exact) {
@@ -53,7 +55,8 @@ func TestProcessCapabilityComparisonIsOpaqueAndExact(t *testing.T) {
 // TestProtectedOwnersRejectSerialization freezes JSON and text resistance for
 // every protected owner and capability handle.
 func TestProtectedOwnersRejectSerialization(t *testing.T) {
-	prebootstrap, preparation, startup, auditor, capability, _ := testPreparedProtectedRuntime(t)
+	prebootstrap, preparation, startup, capability, _ := testPreparedProtectedRuntime(t)
+	material := ReplayMaterial{lease: &replayMaterialLease{hmac: []byte(testHMACMarker), password: []byte(testRedisPassMarker)}}
 	replayPreparation := preparation.ReplayRuntime()
 	runtime, err := prebootstrap.CommitRuntime(preparation)
 	if err != nil {
@@ -64,7 +67,7 @@ func TestProtectedOwnersRejectSerialization(t *testing.T) {
 		*prebootstrap, prebootstrap,
 		*preparation, preparation,
 		startup, &startup,
-		auditor, &auditor,
+		material, &material,
 		replayPreparation, &replayPreparation,
 		*runtime, runtime,
 		capability, &capability,
@@ -87,7 +90,12 @@ func TestProtectedOwnersRejectSerialization(t *testing.T) {
 // TestProtectedFormattingStaysContentFreeInNestedSinks exercises formatting
 // paths that otherwise bypass ordinary String methods.
 func TestProtectedFormattingStaysContentFreeInNestedSinks(t *testing.T) {
-	owner, preparation, startup, auditor, capability, _ := testPreparedProtectedRuntime(t)
+	owner, preparation, startup, capability, _ := testPreparedProtectedRuntime(t)
+	material := ReplayMaterial{lease: &replayMaterialLease{
+		hmac: []byte(testHMACMarker), password: []byte(testRedisPassMarker),
+		sentinelPassword: []byte(testSentinelMarker), clientCertificatePEM: []byte(testClientCertMarker),
+		clientKeyPEM: []byte(testClientKeyMarker), rootsDER: [][]byte{[]byte(testRootMarker)},
+	}}
 	replayPreparation := preparation.ReplayRuntime()
 	runtime, err := owner.CommitRuntime(preparation)
 	if err != nil {
@@ -98,8 +106,8 @@ func TestProtectedFormattingStaysContentFreeInNestedSinks(t *testing.T) {
 		preparation,
 		startup,
 		&startup,
-		auditor,
-		&auditor,
+		material,
+		&material,
 		replayPreparation,
 		&replayPreparation,
 		*runtime,
@@ -108,33 +116,35 @@ func TestProtectedFormattingStaysContentFreeInNestedSinks(t *testing.T) {
 		&capability,
 		any(capability),
 		[]any{
-			owner, preparation, startup, auditor, replayPreparation,
+			owner, preparation, startup, material, replayPreparation,
 			runtime, capability, &capability,
 		},
 		map[string]any{
 			"owner": owner, "preparation": preparation, "startup": startup,
-			"auditor": auditor, "replay": replayPreparation,
+			"material": material, "replay": replayPreparation,
 			"runtime": runtime, "capability": capability,
 		},
 		struct {
 			Owner       *Prebootstrap
 			Preparation *RuntimePreparation
 			Startup     ReplayStartupMaterial
-			Auditor     ReplayAuditorMaterial
+			Material    ReplayMaterial
 			Replay      ReplayRuntimePreparation
 			Runtime     *RuntimeMaterial
 			Capability  ProcessCapability
 		}{
 			Owner: owner, Preparation: preparation, Startup: startup,
-			Auditor: auditor, Replay: replayPreparation,
+			Material: material, Replay: replayPreparation,
 			Runtime: runtime, Capability: capability,
 		},
 	}
 	markers := []string{
 		testCapabilityMarker,
 		testHMACMarker,
-		testAppPassMarker,
-		testAuditPassMarker,
+		testRedisPassMarker,
+		testSentinelMarker,
+		testClientCertMarker,
+		testClientKeyMarker,
 		testRootMarker,
 	}
 	for _, value := range values {
@@ -179,14 +189,14 @@ func containsAnyProtectedNeedle(rendered string, needles []string) bool {
 
 // TestReplayMaterialMapsToxicCallbackErrors freezes content-free outward failures.
 func TestReplayMaterialMapsToxicCallbackErrors(t *testing.T) {
-	owner, _, startup, _, _, _ := testPreparedProtectedRuntime(t)
-	err := startup.UseReplayMaterial(func(hmac, _, _ []byte, _ [][]byte) error {
-		return fmt.Errorf("toxic:%x", hmac)
+	owner, _, startup, _, _ := testPreparedProtectedRuntime(t)
+	err := startup.UseReplayMaterial(func(material ReplayMaterial) error {
+		return fmt.Errorf("toxic:%x:%s", material.HMAC(), material.Password())
 	})
 	if CodeOf(err) != CodeProtectedContent {
 		t.Fatalf("toxic callback failure returned code %s", CodeOf(err))
 	}
-	for _, marker := range []string{testHMACMarker, fmt.Sprintf("%x", []byte(testHMACMarker))} {
+	for _, marker := range []string{testHMACMarker, fmt.Sprintf("%x", []byte(testHMACMarker)), testRedisPassMarker} {
 		if strings.Contains(err.Error(), marker) {
 			t.Fatal("UseReplayMaterial() exposed callback error content")
 		}
@@ -197,19 +207,20 @@ func TestReplayMaterialMapsToxicCallbackErrors(t *testing.T) {
 // TestReplayMaterialContainsToxicPanics clears clones and returns only a stable code.
 func TestReplayMaterialContainsToxicPanics(t *testing.T) {
 	for _, panicWithError := range []bool{false, true} {
-		owner, preparation, startup, _, _, _ := testPreparedProtectedRuntime(t)
-		var borrowed []byte
-		err := startup.UseReplayMaterial(func(hmac, _, _ []byte, _ [][]byte) error {
-			borrowed = hmac
+		owner, preparation, startup, _, _ := testPreparedProtectedRuntime(t)
+		var borrowed ReplayMaterial
+		err := startup.UseReplayMaterial(func(material ReplayMaterial) error {
+			borrowed = material
 			if panicWithError {
-				panic(fmt.Errorf("toxic:%x", hmac))
+				panic(fmt.Errorf("toxic:%x", material.HMAC()))
 			}
-			panic("toxic:" + string(hmac))
+			panic("toxic:" + string(material.Password()))
 		})
-		if CodeOf(err) != CodeProtectedContent || !allZeroBytes(borrowed) {
+		if CodeOf(err) != CodeProtectedContent || !allZeroBytes(borrowed.HMAC()) || !allZeroBytes(borrowed.Password()) ||
+			!allZeroBytes(borrowed.ClientKeyPEM()) {
 			t.Fatalf("toxic panic returned code %s or retained bytes", CodeOf(err))
 		}
-		if err := startup.UseReplayMaterial(func(_, _, _ []byte, _ [][]byte) error { return nil }); err != nil {
+		if err := startup.UseReplayMaterial(func(ReplayMaterial) error { return nil }); err != nil {
 			t.Fatalf("owner unusable after contained panic: %s", CodeOf(err))
 		}
 		runtime, err := owner.CommitRuntime(preparation)
@@ -225,29 +236,33 @@ func TestReplayMaterialContainsToxicPanics(t *testing.T) {
 // TestReplayMaterialBorrowIsIsolated freezes callback-local cloning, deferred
 // clone clearing, and rejection of nested ownership operations.
 func TestReplayMaterialBorrowIsIsolated(t *testing.T) {
-	owner, preparation, startup, _, _, state := testPreparedProtectedRuntime(t)
+	owner, preparation, startup, _, state := testPreparedProtectedRuntime(t)
 	var (
-		borrowedHMAC      []byte
-		borrowedAppPass   []byte
-		borrowedAuditPass []byte
-		borrowedRoots     [][]byte
+		borrowed          ReplayMaterial
 		nestedBorrowCode  Code
 		activeReleaseCode Code
 	)
-	err := startup.UseReplayMaterial(func(hmac, applicationPassword, auditorPassword []byte, rootsDER [][]byte) error {
-		borrowedHMAC = hmac
-		borrowedAppPass = applicationPassword
-		borrowedAuditPass = auditorPassword
-		borrowedRoots = rootsDER
-		nestedBorrowCode = CodeOf(startup.UseReplayMaterial(
-			func(_, _, _ []byte, _ [][]byte) error { return nil },
-		))
+	err := startup.UseReplayMaterial(func(material ReplayMaterial) error {
+		borrowed = material
+		if string(material.Password()) != testRedisPassMarker ||
+			string(material.SentinelPassword()) != testSentinelMarker ||
+			string(material.ClientCertificatePEM()) != testClientCertMarker ||
+			string(material.ClientKeyPEM()) != testClientKeyMarker ||
+			len(material.RootsDER()) != 1 || string(material.RootsDER()[0]) != testRootMarker {
+			t.Fatal("UseReplayMaterial() lent different material")
+		}
+		nestedBorrowCode = CodeOf(startup.UseReplayMaterial(func(ReplayMaterial) error { return nil }))
 		activeReleaseCode = CodeOf(owner.Close())
-		clear(hmac)
-		clear(applicationPassword)
-		clear(auditorPassword)
-		for index := range rootsDER {
-			clear(rootsDER[index])
+		for _, value := range [][]byte{
+			material.HMAC(), material.Password(), material.SentinelPassword(),
+			material.ClientCertificatePEM(), material.ClientKeyPEM(),
+		} {
+			for index := range value {
+				value[index] = 'x'
+			}
+		}
+		for index := range material.RootsDER() {
+			clear(material.RootsDER()[index])
 		}
 		return nil
 	})
@@ -260,17 +275,16 @@ func TestReplayMaterialBorrowIsIsolated(t *testing.T) {
 	if activeReleaseCode != CodeProtectedTransferred {
 		t.Fatalf("Close() during active borrow returned code %s", activeReleaseCode)
 	}
-	if !allZeroBytes(borrowedHMAC) ||
-		!allZeroBytes(borrowedAppPass) ||
-		!allZeroBytes(borrowedAuditPass) ||
-		len(borrowedRoots) != 1 ||
-		borrowedRoots[0] != nil {
+	if !allZeroBytes(borrowed.HMAC()) ||
+		!allZeroBytes(borrowed.Password()) ||
+		!allZeroBytes(borrowed.SentinelPassword()) ||
+		!allZeroBytes(borrowed.ClientCertificatePEM()) ||
+		!allZeroBytes(borrowed.ClientKeyPEM()) ||
+		len(borrowed.RootsDER()) != 1 ||
+		borrowed.RootsDER()[0] != nil {
 		t.Fatal("UseReplayMaterial() retained callback-local protected bytes after return")
 	}
-	if !strings.Contains(string(state.hmac[:]), testHMACMarker) ||
-		!strings.Contains(string(state.applicationPassword), testAppPassMarker) ||
-		!strings.Contains(string(state.auditorPassword), testAuditPassMarker) ||
-		!strings.Contains(string(state.rootCertificatesDER[0]), testRootMarker) {
+	if !protectedReplayStateIntact(state) {
 		t.Fatal("UseReplayMaterial() allowed callback mutation of owned material")
 	}
 	runtime, err := owner.CommitRuntime(preparation)
@@ -280,24 +294,55 @@ func TestReplayMaterialBorrowIsIsolated(t *testing.T) {
 	if err := runtime.Close(); err != nil {
 		t.Fatalf("Close() after borrow return failed with code %s", CodeOf(err))
 	}
+	if state.redisPassword != nil || state.redisSentinelPassword != nil ||
+		state.redisClientCertificatePEM != nil || state.redisClientKeyPEM != nil {
+		t.Fatal("runtime Close() retained Redis protected material")
+	}
+}
+
+// TestReplayMaterialOmitsUnconfiguredOptionalRoles proves absent optional
+// Redis material is lent as nil rather than as an empty credential.
+func TestReplayMaterialOmitsUnconfiguredOptionalRoles(t *testing.T) {
+	owner, _, startup, _, state := testPreparedProtectedRuntime(t)
+	state.redisPassword = nil
+	state.redisSentinelPassword = nil
+	state.redisClientCertificatePEM = nil
+	state.redisClientKeyPEM = nil
+	state.rootCertificatesDER = nil
+	err := startup.UseReplayMaterial(func(material ReplayMaterial) error {
+		if len(material.HMAC()) != exactKeyBytes || material.Password() != nil || material.SentinelPassword() != nil ||
+			material.ClientCertificatePEM() != nil || material.ClientKeyPEM() != nil || len(material.RootsDER()) != 0 {
+			t.Fatal("UseReplayMaterial() invented absent optional material")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UseReplayMaterial() failed with code %s", CodeOf(err))
+	}
+	var zero ReplayStartupMaterial
+	if CodeOf(zero.UseReplayMaterial(func(ReplayMaterial) error { return nil })) != CodeProtectedClosed ||
+		CodeOf(startup.UseReplayMaterial(nil)) != CodeProtectedClosed {
+		t.Fatal("UseReplayMaterial() accepted a missing owner or callback")
+	}
+	_ = owner.Close()
 }
 
 // TestReplayMaterialBorrowRejectsConcurrentUse freezes immediate closed errors
 // for overlapping borrows without waiting on the active callback.
 func TestReplayMaterialBorrowRejectsConcurrentUse(t *testing.T) {
-	owner, _, startup, _, _, _ := testPreparedProtectedRuntime(t)
+	owner, _, startup, _, _ := testPreparedProtectedRuntime(t)
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	result := make(chan error, 1)
 	go func() {
-		result <- startup.UseReplayMaterial(func(_, _, _ []byte, _ [][]byte) error {
+		result <- startup.UseReplayMaterial(func(ReplayMaterial) error {
 			close(entered)
 			<-release
 			return nil
 		})
 	}()
 	<-entered
-	if err := startup.UseReplayMaterial(func(_, _, _ []byte, _ [][]byte) error { return nil }); CodeOf(err) != CodeProtectedClosed {
+	if err := startup.UseReplayMaterial(func(ReplayMaterial) error { return nil }); CodeOf(err) != CodeProtectedClosed {
 		t.Fatalf("concurrent UseReplayMaterial() returned code %s", CodeOf(err))
 	}
 	close(release)
@@ -307,119 +352,28 @@ func TestReplayMaterialBorrowRejectsConcurrentUse(t *testing.T) {
 	_ = owner.Close()
 }
 
-// TestReplayAuditorBorrowUsesLeastAuthority proves periodic audits receive only one fresh clone.
-func TestReplayAuditorBorrowUsesLeastAuthority(t *testing.T) {
-	runtime, auditor, _, _, state := testCommittedProtectedRuntime(t)
-	var borrowed []byte
-	err := auditor.UseReplayAuditorPassword(func(auditorPassword []byte) error {
-		borrowed = auditorPassword
-		if string(auditorPassword) != testAuditPassMarker {
-			t.Fatal("auditor-only borrow changed credential bytes")
-		}
-		clear(auditorPassword)
-		return nil
-	})
-	if err != nil || !allZeroBytes(borrowed) {
-		t.Fatalf("UseReplayAuditorPassword() failed with code %s or retained bytes", CodeOf(err))
-	}
-	if string(state.auditorPassword) != testAuditPassMarker ||
-		!strings.Contains(string(state.hmac[:]), testHMACMarker) ||
-		!strings.Contains(string(state.applicationPassword), testAppPassMarker) ||
-		!strings.Contains(string(state.rootCertificatesDER[0]), testRootMarker) {
-		t.Fatal("auditor-only borrow mutated owner state or broadened authority")
-	}
-	_ = runtime.Close()
-}
-
-// TestReplayAuditorBorrowContainsFailures proves errors and panics release the shared gate.
-func TestReplayAuditorBorrowContainsFailures(t *testing.T) {
-	for _, panicCallback := range []bool{false, true} {
-		runtime, auditor, _, _, _ := testCommittedProtectedRuntime(t)
-		var borrowed []byte
-		err := auditor.UseReplayAuditorPassword(func(auditorPassword []byte) error {
-			borrowed = auditorPassword
-			if panicCallback {
-				panic("toxic:" + string(auditorPassword))
-			}
-			return fmt.Errorf("toxic:%x", auditorPassword)
-		})
-		if CodeOf(err) != CodeProtectedContent || !allZeroBytes(borrowed) ||
-			strings.Contains(err.Error(), testAuditPassMarker) {
-			t.Fatal("auditor-only failure escaped content or retained bytes")
-		}
-		if retryErr := auditor.UseReplayAuditorPassword(func([]byte) error { return nil }); retryErr != nil {
-			t.Fatalf("auditor owner unusable after failure: %s", CodeOf(retryErr))
-		}
-		if closeErr := runtime.Close(); closeErr != nil {
-			t.Fatalf("auditor owner close after failure: %s", CodeOf(closeErr))
-		}
-	}
-}
-
-// TestReplayAuditorBorrowSharesTheExclusiveGate proves full and narrow borrows never overlap.
-func TestReplayAuditorBorrowSharesTheExclusiveGate(t *testing.T) {
-	runtime, auditor, startup, _, _ := testCommittedProtectedRuntime(t)
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	result := make(chan error, 1)
-	go func() {
-		result <- auditor.UseReplayAuditorPassword(func([]byte) error {
-			close(entered)
-			<-release
-			return nil
-		})
-	}()
-	<-entered
-	if err := startup.UseReplayMaterial(func(_, _, _ []byte, _ [][]byte) error { return nil }); CodeOf(err) != CodeProtectedClosed {
-		t.Fatalf("overlapping full borrow returned code %s", CodeOf(err))
-	}
-	if err := auditor.UseReplayAuditorPassword(func([]byte) error { return nil }); CodeOf(err) != CodeProtectedClosed {
-		t.Fatalf("overlapping auditor borrow returned code %s", CodeOf(err))
-	}
-	if err := runtime.Close(); CodeOf(err) != CodeProtectedTransferred {
-		t.Fatalf("close during auditor borrow returned code %s", CodeOf(err))
-	}
-	close(release)
-	if err := <-result; err != nil {
-		t.Fatalf("active auditor borrow failed with code %s", CodeOf(err))
-	}
-	if err := runtime.Close(); err != nil {
-		t.Fatalf("close after auditor borrow failed with code %s", CodeOf(err))
-	}
-	if err := auditor.UseReplayAuditorPassword(func([]byte) error { return nil }); CodeOf(err) != CodeProtectedClosed {
-		t.Fatalf("borrow after close returned code %s", CodeOf(err))
-	}
-}
-
-// TestReplayAuditorBorrowRejectsMissingAuthority proves the narrow seam is Valkey-only.
-func TestReplayAuditorBorrowRejectsMissingAuthority(t *testing.T) {
-	var nilAuditor ReplayAuditorMaterial
-	if err := nilAuditor.UseReplayAuditorPassword(func([]byte) error { return nil }); CodeOf(err) != CodeProtectedClosed {
-		t.Fatalf("nil runtime borrow returned code %s", CodeOf(err))
-	}
-	runtime, auditor, _, _, state := testCommittedProtectedRuntime(t)
-	if err := auditor.UseReplayAuditorPassword(nil); CodeOf(err) != CodeProtectedClosed {
-		t.Fatalf("nil callback borrow returned code %s", CodeOf(err))
-	}
-	state.auditorPassword = nil
-	if err := auditor.UseReplayAuditorPassword(func([]byte) error { return nil }); CodeOf(err) != CodeProtectedContent {
-		t.Fatalf("missing auditor credential returned code %s", CodeOf(err))
-	}
-	if state.borrowed {
-		t.Fatal("missing auditor credential left borrow gate occupied")
-	}
-	_ = runtime.Close()
+// protectedReplayStateIntact reports whether the owner still holds the
+// original replay fixture markers after a borrow.
+func protectedReplayStateIntact(state *protectedState) bool {
+	return strings.Contains(string(state.hmac[:]), testHMACMarker) &&
+		string(state.redisPassword) == testRedisPassMarker &&
+		string(state.redisSentinelPassword) == testSentinelMarker &&
+		string(state.redisClientCertificatePEM) == testClientCertMarker &&
+		string(state.redisClientKeyPEM) == testClientKeyMarker &&
+		strings.Contains(string(state.rootCertificatesDER[0]), testRootMarker)
 }
 
 // testProtectedRuntimeState constructs one runtime-owned protected fixture
 // without involving filesystem policy.
 func testProtectedRuntimeState() *protectedState {
 	state := &protectedState{
-		phase:               protectedOwnedByRuntime,
-		hasHMAC:             true,
-		applicationPassword: []byte(testAppPassMarker),
-		auditorPassword:     []byte(testAuditPassMarker),
-		rootCertificatesDER: [][]byte{[]byte(testRootMarker)},
+		phase:                     protectedOwnedByRuntime,
+		hasHMAC:                   true,
+		redisPassword:             []byte(testRedisPassMarker),
+		redisSentinelPassword:     []byte(testSentinelMarker),
+		redisClientCertificatePEM: []byte(testClientCertMarker),
+		redisClientKeyPEM:         []byte(testClientKeyMarker),
+		rootCertificatesDER:       [][]byte{[]byte(testRootMarker)},
 	}
 	copy(state.capability[:], []byte(testCapabilityMarker))
 	copy(state.hmac[:], []byte(testHMACMarker))
@@ -433,7 +387,6 @@ func testPreparedProtectedRuntime(
 	*Prebootstrap,
 	*RuntimePreparation,
 	ReplayStartupMaterial,
-	ReplayAuditorMaterial,
 	ProcessCapability,
 	*protectedState,
 ) {
@@ -445,8 +398,7 @@ func testPreparedProtectedRuntime(
 	if err != nil {
 		t.Fatalf("PrepareRuntime() failed with code %s", CodeOf(err))
 	}
-	return owner, preparation, preparation.StartupReplay(),
-		preparation.ReplayAuditor(), preparation.ProcessCapability(), state
+	return owner, preparation, preparation.StartupReplay(), preparation.ProcessCapability(), state
 }
 
 // testCommittedProtectedRuntime constructs one committed runtime and its prepared handles.
@@ -454,18 +406,17 @@ func testCommittedProtectedRuntime(
 	t *testing.T,
 ) (
 	*RuntimeMaterial,
-	ReplayAuditorMaterial,
 	ReplayStartupMaterial,
 	ProcessCapability,
 	*protectedState,
 ) {
 	t.Helper()
-	owner, preparation, startup, auditor, capability, state := testPreparedProtectedRuntime(t)
+	owner, preparation, startup, capability, state := testPreparedProtectedRuntime(t)
 	runtime, err := owner.CommitRuntime(preparation)
 	if err != nil {
 		t.Fatalf("CommitRuntime() failed with code %s", CodeOf(err))
 	}
-	return runtime, auditor, startup, capability, state
+	return runtime, startup, capability, state
 }
 
 // allZeroBytes reports whether a callback-local protected clone was cleared.

@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -27,7 +28,7 @@ func TestMergeValuesPreservesPrecedenceAndPresence(t *testing.T) {
 	clearStableEnvironment(t)
 	t.Setenv("DKIM2D_SERVER_LISTEN", "127.0.0.1:9100")
 	t.Setenv("DKIM2D_POLICY_MODE", "")
-	t.Setenv("DKIM2D_REPLAY_BACKEND", "valkey")
+	t.Setenv("DKIM2D_REPLAY_BACKEND", "redis")
 
 	yamlValues := mergeTestYAMLValues()
 	flags := NewFlagValues("127.0.0.1:9200", true, "", false, "disabled", true)
@@ -178,7 +179,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 124 || len(specs) != len(golden) {
+	if len(specs) != 127 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -256,7 +257,7 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "dns.cache.positive_ttl_cap", environment: "DKIM2D_DNS_CACHE_POSITIVE_TTL_CAP", defaultValue: "1h", hasDefault: true},
 		{path: "dns.cache.negative_ttl_cap", environment: "DKIM2D_DNS_CACHE_NEGATIVE_TTL_CAP", defaultValue: "5m", hasDefault: true},
 		{path: "dns.cache.stable_error_ttl_cap", environment: "DKIM2D_DNS_CACHE_STABLE_ERROR_TTL_CAP", defaultValue: "1m", hasDefault: true},
-		{path: "replay.backend", environment: "DKIM2D_REPLAY_BACKEND", defaultValue: "valkey", hasDefault: true},
+		{path: "replay.backend", environment: "DKIM2D_REPLAY_BACKEND", defaultValue: "redis", hasDefault: true},
 		{path: "replay.hmac_key_file", environment: "DKIM2D_REPLAY_HMAC_KEY_FILE"},
 		{path: "replay.epoch", environment: "DKIM2D_REPLAY_EPOCH"},
 		{path: "replay.retention", environment: "DKIM2D_REPLAY_RETENTION", defaultValue: "336h", hasDefault: true},
@@ -265,8 +266,40 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "replay.limits.prune_budget", environment: "DKIM2D_REPLAY_LIMITS_PRUNE_BUDGET", defaultValue: "4096", hasDefault: true},
 		{path: "replay.limits.max_in_flight", environment: "DKIM2D_REPLAY_LIMITS_MAX_IN_FLIGHT", defaultValue: "1024", hasDefault: true},
 		{path: "replay.limits.max_admission_waiters", environment: "DKIM2D_REPLAY_LIMITS_MAX_ADMISSION_WAITERS", defaultValue: "1024", hasDefault: true},
-		{path: "replay.revalidate_interval", environment: "DKIM2D_REPLAY_REVALIDATE_INTERVAL", defaultValue: "30" + "s", hasDefault: true},
 		{path: "replay.count_direct_deliveries", environment: "DKIM2D_REPLAY_COUNT_DIRECT_DELIVERIES", defaultValue: "fal" + "se", hasDefault: true},
+		{path: "replay.redis.mode", environment: "DKIM2D_REPLAY_" + "REDIS_MODE", defaultValue: "standalone", hasDefault: true},
+		{path: "replay.redis.standalone.address", environment: "DKIM2D_REPLAY_" + "REDIS_STANDALONE_ADDRESS"},
+		{path: "replay.redis.sentinel.master_name", environment: "DKIM2D_REPLAY_" + "REDIS_SENTINEL_MASTER_NAME"},
+		{path: "replay.redis.sentinel.addresses", environment: "DKIM2D_REPLAY_" + "REDIS_SENTINEL_ADDRESSES"},
+		{path: "replay.redis.sentinel.username", environment: "DKIM2D_REPLAY_" + "REDIS_SENTINEL_USERNAME"},
+		{path: "replay.redis.sentinel.password_file", environment: "DKIM2D_REPLAY_" + "REDIS_SENTINEL_PASSWORD_FILE"},
+		{path: "replay.redis.cluster.addresses", environment: "DKIM2D_REPLAY_" + "REDIS_CLUSTER_ADDRESSES"},
+		{path: "replay.redis.cluster.max_redirects", environment: "DKIM2D_REPLAY_" + "REDIS_CLUSTER_MAX_REDIRECTS", defaultValue: "8", hasDefault: true},
+		{path: "replay.redis.auth.username", environment: "DKIM2D_REPLAY_" + "REDIS_AUTH_USERNAME"},
+		{path: "replay.redis.auth.password_file", environment: "DKIM2D_REPLAY_" + "REDIS_AUTH_PASSWORD_FILE"},
+		{path: "replay.redis.database_number", environment: "DKIM2D_REPLAY_" + "REDIS_DATABASE_NUMBER", defaultValue: "0", hasDefault: true},
+		{path: "replay.redis.key_prefix", environment: "DKIM2D_REPLAY_" + "REDIS_KEY_PREFIX"},
+		{path: "replay.redis.protocol", environment: "DKIM2D_REPLAY_" + "REDIS_PROTOCOL", defaultValue: "3", hasDefault: true},
+		{path: "replay.redis.tls.enabled", environment: "DKIM2D_REPLAY_" + "REDIS_TLS_ENABLED", defaultValue: "tr" + "ue", hasDefault: true},
+		{path: "replay.redis.tls.ca_file", environment: "DKIM2D_REPLAY_" + "REDIS_TLS_CA_FILE"},
+		{path: "replay.redis.tls.cert", environment: "DKIM2D_REPLAY_" + "REDIS_TLS_CERT"},
+		{path: "replay.redis.tls.key", environment: "DKIM2D_REPLAY_" + "REDIS_TLS_KEY"},
+		{path: "replay.redis.tls.server_name", environment: "DKIM2D_REPLAY_" + "REDIS_TLS_SERVER_NAME"},
+		{path: "replay.redis.tls.min_tls_version", environment: "DKIM2D_REPLAY_" + "REDIS_TLS_MIN_TLS_VERSION", defaultValue: "TLS1.2", hasDefault: true},
+		{path: "replay.redis.tls.insecure_skip_verify", environment: "DKIM2D_REPLAY_" + "REDIS_TLS_INSECURE_SKIP_VERIFY", defaultValue: "fal" + "se", hasDefault: true},
+		{path: "replay.redis.pool_size", environment: "DKIM2D_REPLAY_" + "REDIS_POOL_SIZE", defaultValue: "20", hasDefault: true},
+		{path: "replay.redis.min_idle_connections", environment: "DKIM2D_REPLAY_" + "REDIS_MIN_IDLE_CONNECTIONS", defaultValue: "2", hasDefault: true},
+		{path: "replay.redis.pool_timeout", environment: "DKIM2D_REPLAY_" + "REDIS_POOL_TIMEOUT", defaultValue: "2s", hasDefault: true},
+		{path: "replay.redis.dial_timeout", environment: "DKIM2D_REPLAY_" + "REDIS_DIAL_TIMEOUT", defaultValue: "2s", hasDefault: true},
+		{path: "replay.redis.read_timeout", environment: "DKIM2D_REPLAY_" + "REDIS_READ_TIMEOUT", defaultValue: "2s", hasDefault: true},
+		{path: "replay.redis.write_timeout", environment: "DKIM2D_REPLAY_" + "REDIS_WRITE_TIMEOUT", defaultValue: "2s", hasDefault: true},
+		{path: "replay.redis.retries.max_attempts", environment: "DKIM2D_REPLAY_" + "REDIS_RETRIES_MAX_ATTEMPTS", defaultValue: "3", hasDefault: true},
+		{path: "replay.redis.retries.min_backoff", environment: "DKIM2D_REPLAY_" + "REDIS_RETRIES_MIN_BACKOFF", defaultValue: "50ms", hasDefault: true},
+		{path: "replay.redis.retries.max_backoff", environment: "DKIM2D_REPLAY_" + "REDIS_RETRIES_MAX_BACKOFF", defaultValue: "500ms", hasDefault: true},
+		{path: "replay.redis.health.interval", environment: "DKIM2D_REPLAY_" + "REDIS_HEALTH_INTERVAL", defaultValue: "5s", hasDefault: true},
+		{path: "replay.redis.health.timeout", environment: "DKIM2D_REPLAY_" + "REDIS_HEALTH_TIMEOUT", defaultValue: "2s", hasDefault: true},
+		{path: "replay.redis.health.failure_threshold", environment: "DKIM2D_REPLAY_" + "REDIS_HEALTH_FAILURE_THRESHOLD", defaultValue: "3", hasDefault: true},
+		{path: "replay.redis.require_noeviction", environment: "DKIM2D_REPLAY_" + "REDIS_REQUIRE_NOEVICTION", defaultValue: "tr" + "ue", hasDefault: true},
 		{path: "signing.backend", environment: "DKIM2D_SIGNING_BACKEND", defaultValue: "disabled", hasDefault: true},
 		{path: "signing.datasource_file", environment: "DKIM2D_SIGNING_DATASOURCE_FILE"},
 		{path: "signing.private_manifest_file", environment: "DKIM2D_SIGNING_PRIVATE_MANIFEST_FILE"},
@@ -308,35 +341,6 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "signing.mysql.load_deadline", environment: "DKIM2D_SIGNING_MYSQL_LOAD_DEADLINE", defaultValue: "5s", hasDefault: true},
 		{path: "signing.mysql.max_connections", environment: "DKIM2D_SIGNING_MYSQL_MAX_CONNECTIONS", defaultValue: "2", hasDefault: true},
 		{path: "signing.mysql.idle_connections", environment: "DKIM2D_SIGNING_MYSQL_IDLE_CONNECTIONS", defaultValue: "1", hasDefault: true},
-		{path: "replay.valkey.address", environment: "DKIM2D_REPLAY_" + "VALKEY_ADDRESS"},
-		{path: "replay.valkey.server_name", environment: "DKIM2D_REPLAY_" + "VALKEY_SERVER_NAME"},
-		{path: "replay.valkey.ca_file", environment: "DKIM2D_REPLAY_" + "VALKEY_CA_FILE"},
-		{path: "replay.valkey.application_username", environment: "DKIM2D_REPLAY_" + "VALKEY_APPLICATION_USERNAME"},
-		{path: "replay.valkey.application_password_file", environment: "DKIM2D_REPLAY_" + "VALKEY_APPLICATION_PASSWORD_FILE"},
-		{path: "replay.valkey.auditor_username", environment: "DKIM2D_REPLAY_VALKEY_AUDITOR_USERNAME"},
-		{path: "replay.valkey.auditor_password_file", environment: "DKIM2D_REPLAY_VALKEY_AUDITOR_PASSWORD_FILE"},
-		{path: "replay.valkey.dial_timeout", environment: "DKIM2D_REPLAY_VALKEY_DIAL_TIMEOUT", defaultValue: "2s", hasDefault: true},
-		{path: "replay.valkey.tcp_keepalive", environment: "DKIM2D_REPLAY_VALKEY_TCP_KEEPALIVE", defaultValue: "30" + "s", hasDefault: true},
-		{path: "replay.valkey.connection_write_timeout", environment: "DKIM2D_REPLAY_VALKEY_CONNECTION_WRITE_TIMEOUT", defaultValue: "2s", hasDefault: true},
-		{path: "replay.valkey.attestation.persistence_mode", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_PERSISTENCE_MODE"},
-		{path: "replay.valkey.attestation.append_fsync_policy", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_APPEND_FSYNC_POLICY"},
-		{path: "replay.valkey.attestation.save_schedule", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SAVE_SCHEDULE"},
-		{path: "replay.valkey.attestation.min_replicas_to_write", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_MIN_REPLICAS_TO_WRITE"},
-		{path: "replay.valkey.attestation.min_replicas_max_lag_seconds", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_MIN_REPLICAS_MAX_LAG_SECONDS"},
-		{path: "replay.valkey.attestation.loss_window_acceptance", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_LOSS_WINDOW_ACCEPTANCE"},
-		{path: "replay.valkey.attestation.rotation_state", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_ROTATION_STATE"},
-		{path: "replay.valkey.attestation.no_global_exactly_once_claim", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_NO_GLOBAL_EXACTLY_ONCE_CLAIM"},
-		{path: "replay.valkey.attestation.dedicated_deployment", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_DEDICATED_DEPLOYMENT"},
-		{path: "replay.valkey.attestation.dedicated_database_zero", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_DEDICATED_DATABASE_ZERO"},
-		{path: "replay.valkey.attestation.direct_ip_authority", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_DIRECT_IP_AUTHORITY"},
-		{path: "replay.valkey.attestation.no_endpoint_substitution", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_NO_ENDPOINT_SUBSTITUTION"},
-		{path: "replay.valkey.attestation.standalone_authority", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_STANDALONE_AUTHORITY"},
-		{path: "replay.valkey.attestation.shared_draft", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_DRAFT"},
-		{path: "replay.valkey.attestation.shared_algorithm", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_ALGORITHM"},
-		{path: "replay.valkey.attestation.shared_namespace", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_NAMESPACE"},
-		{path: "replay.valkey.attestation.shared_epoch", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_EPOCH"},
-		{path: "replay.valkey.attestation.shared_secret_set", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_SECRET_SET"},
-		{path: "replay.valkey.attestation.shared_retention", environment: "DKIM2D_REPLAY_VALKEY_ATTESTATION_SHARED_RETENTION"},
 		{path: "observability.logging.level", environment: "DKIM2D_OBSERVABILITY_LOGGING_LEVEL", defaultValue: "info", hasDefault: true},
 		{path: "observability.debug.message_shape", environment: "DKIM2D_OBSERVABILITY_DEBUG_MESSAGE_SHAPE", defaultValue: "false", hasDefault: true},
 		{path: "observability.debug.dns", environment: "DKIM2D_OBSERVABILITY_DEBUG_DNS", defaultValue: "false", hasDefault: true},
@@ -385,7 +389,15 @@ func clearStableEnvironment(t *testing.T) {
 		}
 	}
 	for _, field := range removedFields() {
-		names = append(names, field.env)
+		if !field.subtree {
+			names = append(names, field.env)
+			continue
+		}
+		for _, entry := range os.Environ() {
+			if name, _, _ := strings.Cut(entry, "="); strings.HasPrefix(name, field.env) {
+				names = append(names, name)
+			}
+		}
 	}
 	for _, name := range names {
 		value, present := os.LookupEnv(name)

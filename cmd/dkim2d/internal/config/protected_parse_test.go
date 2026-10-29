@@ -70,12 +70,17 @@ func TestValidateProtectedSeparationRejectsCrossRoleEquality(t *testing.T) {
 	}
 
 	tests := []func(*protectedState){
-		func(state *protectedState) { state.auditorPassword = append([]byte(nil), state.applicationPassword...) },
+		func(state *protectedState) { state.redisSentinelPassword = append([]byte(nil), state.redisPassword...) },
+		func(state *protectedState) { state.datasourcePassword = append([]byte(nil), state.redisPassword...) },
+		func(state *protectedState) {
+			state.datasourcePassword = append([]byte(nil), state.redisSentinelPassword...)
+		},
 		func(state *protectedState) { state.hmac = state.capability },
-		func(state *protectedState) { state.applicationPassword = append([]byte(nil), state.capability[:]...) },
-		func(state *protectedState) { state.auditorPassword = append([]byte(nil), state.capability[:]...) },
-		func(state *protectedState) { state.applicationPassword = append([]byte(nil), state.hmac[:]...) },
-		func(state *protectedState) { state.auditorPassword = append([]byte(nil), state.hmac[:]...) },
+		func(state *protectedState) { state.redisPassword = append([]byte(nil), state.capability[:]...) },
+		func(state *protectedState) { state.redisSentinelPassword = append([]byte(nil), state.capability[:]...) },
+		func(state *protectedState) { state.redisPassword = append([]byte(nil), state.hmac[:]...) },
+		func(state *protectedState) { state.redisSentinelPassword = append([]byte(nil), state.hmac[:]...) },
+		func(state *protectedState) { state.datasourcePassword = append([]byte(nil), state.hmac[:]...) },
 	}
 	for _, mutate := range tests {
 		state := testSeparatedProtectedState()
@@ -92,8 +97,9 @@ func TestValidateProtectedSeparationIgnoresAbsentReplayRoles(t *testing.T) {
 	state := testSeparatedProtectedState()
 	state.hasHMAC = false
 	state.hmac = state.capability
-	state.applicationPassword = nil
-	state.auditorPassword = nil
+	state.redisPassword = nil
+	state.redisSentinelPassword = nil
+	state.datasourcePassword = nil
 	if err := validateProtectedSeparation(state); err != nil {
 		t.Fatalf("validateProtectedSeparation() rejected absent replay roles with code %s", CodeOf(err))
 	}
@@ -333,9 +339,10 @@ func FuzzProtectedContentParsers(f *testing.F) {
 // each valid and byte-distinct.
 func testSeparatedProtectedState() *protectedState {
 	state := &protectedState{
-		hasHMAC:             true,
-		applicationPassword: bytes.Repeat([]byte{0x33}, exactKeyBytes),
-		auditorPassword:     bytes.Repeat([]byte{0x44}, exactKeyBytes),
+		hasHMAC:               true,
+		redisPassword:         bytes.Repeat([]byte{0x33}, exactKeyBytes),
+		redisSentinelPassword: bytes.Repeat([]byte{0x44}, exactKeyBytes),
+		datasourcePassword:    bytes.Repeat([]byte{0x55}, exactKeyBytes),
 	}
 	copy(state.capability[:], bytes.Repeat([]byte{0x11}, exactKeyBytes))
 	copy(state.hmac[:], bytes.Repeat([]byte{0x22}, exactKeyBytes))

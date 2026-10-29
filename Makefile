@@ -61,7 +61,8 @@ help:
 		'  make check-generated         verify generated OpenAPI and adapter artifacts' \
 		'  make check-conformance       verify conformance contracts' \
 		'  make conformance             run portable protocol conformance' \
-		'  make integration-valkey      run Valkey integration' \
+		'  make test-redis              run real-server Redis replay harness' \
+		'  make integration-redis       run Redis replay integration' \
 		'  make integration-datasources run LDAP and SQL service integration' \
 		'  make integration-postfix     run real Postfix/Milter qualification' \
 		'  make integration-exim        run Linux Exim adapter integration' \
@@ -363,9 +364,9 @@ build-check:
 		(cd $$module && go build ./...); \
 	done
 
-.PHONY: test-valkey
-test-valkey:
-	@scripts/test-valkey.sh
+.PHONY: test-redis
+test-redis:
+	@scripts/test-redis.sh
 
 .PHONY: govulncheck
 govulncheck:
@@ -484,6 +485,7 @@ check-boundaries:
 		echo 'datasource providers must not import rotationadmin or domainadmin' >&2; exit 1; \
 	fi; \
 	go -C cmd/dkim2d list -tags=datasourceintegration -test -deps ./... >/dev/null; \
+	go -C cmd/dkim2d vet -tags=redisintegration ./internal/replay/redisstore; \
 	scripts/check-securefile-parity.sh
 
 .PHONY: vendor
@@ -594,8 +596,8 @@ security: check-security fuzz-security race-security vulnerability-security conf
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
 		go -C tools run ./cmd/security -root .. report
 
-.PHONY: integration-valkey
-integration-valkey: test-valkey
+.PHONY: integration-redis
+integration-redis: test-redis
 
 .PHONY: integration-datasources
 integration-datasources: test-datasource-services

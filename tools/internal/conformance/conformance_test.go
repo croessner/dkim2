@@ -86,7 +86,7 @@ func TestDraft08MigrationCaseAuthorities(t *testing.T) {
 		"policy/draft08-invalid-recipe-json":             {draftNormativeClass, []string{draft + "Section 14.2"}},
 		"recipe/draft08-lowercase-recipe":                {draftNormativeClass, []string{draft + "Section 5.1"}},
 		"recipe/draft08-nonlowercase-recipe":             {draftNormativeClass, []string{draft + "Section 5.1"}},
-		"replay/identity-draft08-epoch":                  {localSecurityClass, []string{"docs/replay-store-valkey.md Replay Identity Contract"}},
+		"replay/identity-draft08-epoch":                  {localSecurityClass, []string{"docs/replay-store-redis.md Replay Identity Contract"}},
 		"signing/draft08-duplicate-selector":             {draftNormativeClass, []string{draft + "Sections 10.9 and 14.2"}},
 		"signing/draft08-same-algorithm-pair":            {draftNormativeClass, []string{draft + "Sections 10.9 and 14.2"}},
 		"signing/draft08-third-same-algorithm":           {draftNormativeClass, []string{draft + "Sections 10.9 and 14.2"}},

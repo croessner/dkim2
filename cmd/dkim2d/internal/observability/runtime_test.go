@@ -145,3 +145,35 @@ func TestRuntimeReadinessCannotRepublishAfterTerminalWithdrawal(t *testing.T) {
 		t.Fatal("terminal readiness metric changed")
 	}
 }
+
+// TestRuntimeReplayConfigWarningsAreClosed proves each closed replay
+// configuration warning serializes as one exact bounded WARN record and an
+// unknown warning class is rejected by the bounded handler.
+func TestRuntimeReplayConfigWarningsAreClosed(t *testing.T) {
+	snapshot, err := config.Load([]byte(testObservabilityConfig), config.FlagValues{})
+	if err != nil {
+		t.Fatal("test config rejected")
+	}
+	var logs bytes.Buffer
+	runtime, err := NewRuntime(context.Background(), snapshot.Observability(), &logs, config.TracingStartupMaterial{})
+	if err != nil {
+		t.Fatal("runtime construction failed")
+	}
+	t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
+	logs.Reset()
+	for _, warning := range []ReplayConfigWarning{
+		ReplayConfigWarningInsecureSkipVerify, ReplayConfigWarningNoEvictionUnchecked,
+	} {
+		runtime.WarnReplayConfig(warning)
+		want := `"level":"WARN","msg":"replay.config.warning","event_id":"replay.config.warning",` +
+			`"operation":"config","result":"success","config_warning":"` + string(warning) + `"}`
+		if !strings.Contains(logs.String(), want) {
+			t.Fatalf("warning %q record missing", warning)
+		}
+		logs.Reset()
+	}
+	runtime.WarnReplayConfig(ReplayConfigWarning("replay.example:6379"))
+	if logs.Len() != 0 {
+		t.Fatal("unknown warning class was serialized")
+	}
+}

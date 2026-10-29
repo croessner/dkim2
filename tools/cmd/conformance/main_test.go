@@ -446,29 +446,29 @@ func TestCLIRejectsEximEvidenceBeforeRepositoryAccess(t *testing.T) {
 	}
 }
 
-// TestValkeyRunnerOwnsExactBinariesAndCleanup proves the opt-in full-profile harness.
-func TestValkeyRunnerOwnsExactBinariesAndCleanup(t *testing.T) {
-	if os.Getenv("DKIM2_RUN_VALKEY_HARNESS") != "1" {
-		t.Skip("set DKIM2_RUN_VALKEY_HARNESS=1 for the hermetic Valkey integration")
+// TestRedisRunnerOwnsExactBinariesAndCleanup proves the opt-in full-profile harness.
+func TestRedisRunnerOwnsExactBinariesAndCleanup(t *testing.T) {
+	if os.Getenv("DKIM2_RUN_REDIS_HARNESS") != "1" {
+		t.Skip("set DKIM2_RUN_REDIS_HARNESS=1 for the hermetic Redis-protocol integration")
 	}
 	root := filepath.Clean(filepath.Join("..", "..", ".."))
 	for _, definition := range portableDefinitions {
-		if definition.name != valkeyRunnerName {
+		if definition.name != redisRunnerName {
 			continue
 		}
-		digest, passed, identities, err := executeValkeyHarness(root, definition)
+		digest, passed, identities, err := executeRedisHarness(root, definition)
 		if err != nil {
-			t.Fatalf("executeValkeyHarness() error = %v", err)
+			t.Fatalf("executeRedisHarness() error = %v", err)
 		}
 		if len(digest) != 64 || len(passed) != 1 || len(identities) != 2 {
 			t.Fatalf(
-				"executeValkeyHarness() digest=%q passed=%d identities=%d",
+				"executeRedisHarness() digest=%q passed=%d identities=%d",
 				digest, len(passed), len(identities),
 			)
 		}
 		return
 	}
-	t.Fatal("valkey runner definition is missing")
+	t.Fatal("redis runner definition is missing")
 }
 
 // runGitCommand executes one test-local Git command.

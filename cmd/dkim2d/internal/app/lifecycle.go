@@ -23,8 +23,8 @@ const (
 	LifecycleRollbackTimeout = 10 * time.Second
 	// LifecycleServeJoinTimeout bounds listener closure and serve-loop proof together.
 	LifecycleServeJoinTimeout = 5 * time.Second
-	// LifecycleRevalidatorJoinTimeout bounds periodic authority-loop shutdown.
-	LifecycleRevalidatorJoinTimeout = 30 * time.Second
+	// LifecycleHealthProbeJoinTimeout bounds periodic replay health-probe shutdown.
+	LifecycleHealthProbeJoinTimeout = 30 * time.Second
 	// LifecycleFinalCleanupTimeout bounds replay and protected-material release together.
 	LifecycleFinalCleanupTimeout = 5 * time.Second
 	// LifecycleStopMargin is the fixed non-server portion of the outer stop contract.
@@ -65,8 +65,8 @@ type lifecycleReplay interface {
 	Close(context.Context) error
 }
 
-// lifecycleRevalidator is the optional periodic authority owner.
-type lifecycleRevalidator interface {
+// lifecycleHealthProbe is the optional periodic replay backend health-probe owner.
+type lifecycleHealthProbe interface {
 	RunObserved(context.Context, ServeReturnObserver) error
 	Started() <-chan struct{}
 	Activate() error
@@ -90,6 +90,7 @@ type lifecycleDependencies struct {
 		context.Context,
 		replayRollbackFactory,
 		*config.RuntimePreparation,
+		*observability.Runtime,
 	) (lifecycleReplay, error)
 	newApplication func(
 		*config.RuntimePreparation,
@@ -97,10 +98,10 @@ type lifecycleDependencies struct {
 		lifecycleReplay,
 	) (*InboundProcessor, error)
 	newReadiness   func(AuthorityReadiness) (*Readiness, error)
-	newRevalidator func(
+	newHealthProbe func(
 		*config.RuntimePreparation,
 		lifecycleReplay,
-	) (lifecycleRevalidator, error)
+	) (lifecycleHealthProbe, error)
 	newHTTPInput func(
 		context.Context,
 		*config.RuntimePreparation,
@@ -173,9 +174,9 @@ type lifecycleState struct {
 	telemetry           *observability.Runtime
 	replay              lifecycleReplay
 	signing             *networkSigningRuntime
-	revalidator         lifecycleRevalidator
-	revalidatorStop     context.CancelFunc
-	revalidatorDone     <-chan struct{}
+	healthProbe         lifecycleHealthProbe
+	healthProbeStop     context.CancelFunc
+	healthProbeDone     <-chan struct{}
 	dnsStop             context.CancelFunc
 	requestStop         context.CancelFunc
 	http                HTTPRuntime
@@ -194,15 +195,15 @@ type lifecycleStartup struct {
 	replay          lifecycleReplay
 	signing         *networkSigningRuntime
 	authority       AuthorityReadiness
-	revalidator     lifecycleRevalidator
-	revalidatorStop context.CancelFunc
-	revalidatorDone chan struct{}
+	healthProbe     lifecycleHealthProbe
+	healthProbeStop context.CancelFunc
+	healthProbeDone chan struct{}
 	dnsStop         context.CancelFunc
 	requestStop     context.CancelFunc
 	http            HTTPRuntime
 	serveDone       chan struct{}
 	serveLive       atomic.Bool
-	revalidatorLive atomic.Bool
+	healthProbeLive atomic.Bool
 	material        lifecycleMaterial
 	operation       OperationService
 	propagation     PropagationService
@@ -267,7 +268,7 @@ func (d lifecycleDependencies) valid() bool {
 		d.initialShutdownTimeout != nil &&
 		d.prepareRuntime != nil && d.newObservability != nil && d.newDNSVerifier != nil &&
 		d.newReplayRuntime != nil && d.newApplication != nil &&
-		d.newReadiness != nil && d.newRevalidator != nil &&
+		d.newReadiness != nil && d.newHealthProbe != nil &&
 		d.newHTTPInput != nil && d.commitRuntime != nil &&
 		d.shutdownTimeout != nil && d.beforeStartCancelInstall != nil &&
 		d.beforePublication != nil
@@ -312,8 +313,9 @@ func productionLifecycleDependencies() lifecycleDependencies {
 			ctx context.Context,
 			rollback replayRollbackFactory,
 			preparation *config.RuntimePreparation,
+			telemetry *observability.Runtime,
 		) (lifecycleReplay, error) {
-			return NewReplayRuntime(ctx, rollback, preparation)
+			return NewReplayRuntime(ctx, rollback, preparation, telemetry)
 		},
 		newApplication: func(
 			preparation *config.RuntimePreparation,
@@ -340,18 +342,11 @@ func productionLifecycleDependencies() lifecycleDependencies {
 		newReadiness: func(authority AuthorityReadiness) (*Readiness, error) {
 			return NewReadiness(authority)
 		},
-		newRevalidator: func(
+		newHealthProbe: func(
 			preparation *config.RuntimePreparation,
 			replay lifecycleReplay,
-		) (lifecycleRevalidator, error) {
-			if preparation.Snapshot().Replay().Backend() != config.ReplayValkey {
-				return nil, nil
-			}
-			runtime, ok := replay.(*ReplayRuntime)
-			if !ok || runtime == nil {
-				return nil, &LifecycleError{}
-			}
-			return NewReplayRevalidator(runtime)
+		) (lifecycleHealthProbe, error) {
+			return replayHealthProbeFor(preparation.Snapshot().Replay().Backend(), replay)
 		},
 		newHTTPInput: newHTTPAssemblyInput,
 		commitRuntime: func(
@@ -492,6 +487,7 @@ func (l *Lifecycle) acquireProtocol(
 		acquisition,
 		startup.rollback.context,
 		preparation,
+		startup.telemetry,
 	)
 	if !nilInterface(replay) {
 		startup.replay = replay
@@ -506,7 +502,7 @@ func (l *Lifecycle) acquireProtocol(
 	return preparation, verifier, nil
 }
 
-// assembleApplication constructs app services and optional replay revalidation.
+// assembleApplication constructs app services and the optional replay health probe.
 func (l *Lifecycle) assembleApplication(
 	acquisition context.Context,
 	startup *lifecycleStartup,
@@ -576,9 +572,9 @@ func (l *Lifecycle) assembleApplication(
 		lifecycleContextFailed(acquisition) {
 		return nil, &LifecycleError{}
 	}
-	revalidator, err := l.state.deps.newRevalidator(preparation, startup.replay)
-	if !nilInterface(revalidator) {
-		startup.revalidator = revalidator
+	healthProbe, err := l.state.deps.newHealthProbe(preparation, startup.replay)
+	if !nilInterface(healthProbe) {
+		startup.healthProbe = healthProbe
 	}
 	if err != nil || lifecycleContextFailed(acquisition) {
 		return nil, &LifecycleError{}
@@ -696,7 +692,7 @@ func (l *Lifecycle) bindTransport(
 	return runtime, nil
 }
 
-// startProducers proves HTTP and optional revalidator goroutine ownership.
+// startProducers proves HTTP and optional health-probe goroutine ownership.
 func (l *Lifecycle) startProducers(
 	acquisition context.Context,
 	startup *lifecycleStartup,
@@ -706,7 +702,7 @@ func (l *Lifecycle) startProducers(
 		lifecycleContextFailed(acquisition) {
 		return &LifecycleError{}
 	}
-	if !startup.startRevalidator(acquisition, l) || !invokeServing(runtime) ||
+	if !startup.startHealthProbe(acquisition, l) || !invokeServing(runtime) ||
 		lifecycleContextFailed(acquisition) {
 		return &LifecycleError{}
 	}
@@ -801,8 +797,8 @@ func (l *Lifecycle) activateStartup(
 	acquisition context.Context,
 	startup *lifecycleStartup,
 ) bool {
-	if !nilInterface(startup.revalidator) &&
-		invokeRevalidatorActivate(startup.revalidator) != nil {
+	if !nilInterface(startup.healthProbe) &&
+		invokeHealthProbeActivate(startup.healthProbe) != nil {
 		l.transitionStartupFatal()
 		return false
 	}
@@ -811,9 +807,9 @@ func (l *Lifecycle) activateStartup(
 		return false
 	}
 	if !startup.serveLive.Load() || !invokeServing(startup.http) ||
-		(!nilInterface(startup.revalidator) &&
-			(!startup.revalidatorLive.Load() ||
-				!invokeRevalidatorRunning(startup.revalidator))) ||
+		(!nilInterface(startup.healthProbe) &&
+			(!startup.healthProbeLive.Load() ||
+				!invokeHealthProbeRunning(startup.healthProbe))) ||
 		l.state.fatalPending.Load() {
 		l.transitionStartupFatal()
 		return false
@@ -851,15 +847,15 @@ func (l *Lifecycle) publishStartup(
 	shutdownLimit time.Duration,
 ) bool {
 	servingForPublication := startup.serveLive.Load()
-	revalidatorRunningForPublication := nilInterface(startup.revalidator) ||
-		startup.revalidatorLive.Load()
+	healthProbeRunningForPublication := nilInterface(startup.healthProbe) ||
+		startup.healthProbeLive.Load()
 	authorityForPublication := sampleStartupAuthority(startup.authority)
 	l.state.deps.beforePublication()
 	acquisitionLiveForPublication := !lifecycleContextFailed(acquisition)
 	l.state.mu.Lock()
 	defer l.state.mu.Unlock()
 	if l.state.phase != lifecycleActivating || !servingForPublication ||
-		!revalidatorRunningForPublication || !authorityForPublication ||
+		!healthProbeRunningForPublication || !authorityForPublication ||
 		!acquisitionLiveForPublication ||
 		l.state.fatalPending.Load() {
 		l.transitionFatalLocked()
@@ -876,9 +872,9 @@ func (l *Lifecycle) publishStartup(
 	l.state.telemetry = startup.telemetry
 	l.state.replay = startup.replay
 	l.state.signing = startup.signing
-	l.state.revalidator = startup.revalidator
-	l.state.revalidatorStop = startup.revalidatorStop
-	l.state.revalidatorDone = startup.revalidatorDone
+	l.state.healthProbe = startup.healthProbe
+	l.state.healthProbeStop = startup.healthProbeStop
+	l.state.healthProbeDone = startup.healthProbeDone
 	l.state.dnsStop = startup.dnsStop
 	l.state.requestStop = startup.requestStop
 	l.state.http = startup.http
@@ -932,29 +928,29 @@ func (s *lifecycleStartup) startServe(
 	return waitLifecycleStarted(acquisition, started, done)
 }
 
-// startRevalidator starts one gated app-owned revalidation goroutine when configured.
-func (s *lifecycleStartup) startRevalidator(
+// startHealthProbe starts one gated app-owned health-probe goroutine when configured.
+func (s *lifecycleStartup) startHealthProbe(
 	acquisition context.Context,
 	lifecycle *Lifecycle,
 ) bool {
-	if nilInterface(s.revalidator) {
+	if nilInterface(s.healthProbe) {
 		return true
 	}
 	parent, cancel := context.WithCancel(s.deps.newDetachedParent())
-	started, valid := invokeRevalidatorStarted(s.revalidator)
+	started, valid := invokeHealthProbeStarted(s.healthProbe)
 	if !valid || started == nil {
 		cancel()
 		return false
 	}
 	done := make(chan struct{})
-	s.revalidatorStop = cancel
-	s.revalidatorDone = done
-	s.revalidatorLive.Store(true)
+	s.healthProbeStop = cancel
+	s.healthProbeDone = done
+	s.healthProbeLive.Store(true)
 	go func() {
 		defer close(done)
-		defer s.revalidatorLive.Store(false)
+		defer s.healthProbeLive.Store(false)
 		defer containServeReturnFallback(lifecycle)
-		_ = invokeRevalidator(parent, s.revalidator, lifecycle)
+		_ = invokeHealthProbe(parent, s.healthProbe, lifecycle)
 	}()
 	return waitLifecycleStarted(acquisition, started, done)
 }
@@ -1260,16 +1256,16 @@ func (l *Lifecycle) stopOwned(outer context.Context) error {
 		l.state.requestStop()
 	}
 
-	if l.state.revalidatorStop != nil {
-		l.state.revalidatorStop()
+	if l.state.healthProbeStop != nil {
+		l.state.healthProbeStop()
 	}
-	revalidationCtx, revalidationCancel := l.state.deps.withTimeout(
+	healthProbeCtx, healthProbeCancel := l.state.deps.withTimeout(
 		outer,
-		LifecycleRevalidatorJoinTimeout,
+		LifecycleHealthProbeJoinTimeout,
 	)
-	revalidationJoined := waitLifecycleDone(revalidationCtx, l.state.revalidatorDone)
-	revalidationCancel()
-	if !revalidationJoined {
+	healthProbeJoined := waitLifecycleDone(healthProbeCtx, l.state.healthProbeDone)
+	healthProbeCancel()
+	if !healthProbeJoined {
 		return &LifecycleError{}
 	}
 	if l.state.dnsStop != nil {
@@ -1319,9 +1315,9 @@ func (l *Lifecycle) clearRuntimeLocked() {
 	l.state.telemetry = nil
 	l.state.replay = nil
 	l.state.signing = nil
-	l.state.revalidator = nil
-	l.state.revalidatorStop = nil
-	l.state.revalidatorDone = nil
+	l.state.healthProbe = nil
+	l.state.healthProbeStop = nil
+	l.state.healthProbeDone = nil
 	l.state.dnsStop = nil
 	l.state.requestStop = nil
 	l.state.http = nil
@@ -1340,11 +1336,11 @@ func (s *lifecycleStartup) rollbackOwners() error {
 	if !nilInterface(s.http) {
 		admissionClosed = invokeRejectNewRequestsBounded(ctx, s.http)
 	}
-	if s.revalidatorStop != nil {
-		s.revalidatorStop()
+	if s.healthProbeStop != nil {
+		s.healthProbeStop()
 	}
-	revalidatorJoined := waitLifecycleDone(ctx, s.revalidatorDone)
-	if !admissionClosed || !revalidatorJoined {
+	healthProbeJoined := waitLifecycleDone(ctx, s.healthProbeDone)
+	if !admissionClosed || !healthProbeJoined {
 		return &LifecycleError{}
 	}
 	if !nilInterface(s.http) {
@@ -1504,10 +1500,28 @@ func invokeServe(runtime HTTPRuntime) (resultErr error) {
 	return runtime.Serve()
 }
 
-// invokeRevalidator contains an unexpected periodic-loop panic as a fatal return.
-func invokeRevalidator(
+// replayHealthProbeFor selects the periodic health probe for exactly the
+// networked redis backend; memory and disabled backends have no probe. A
+// redis backend whose replay owner is not the production runtime fails closed.
+func replayHealthProbeFor(backend config.ReplayBackend, replay lifecycleReplay) (lifecycleHealthProbe, error) {
+	if backend != config.ReplayRedis {
+		return nil, nil
+	}
+	runtime, ok := replay.(*ReplayRuntime)
+	if !ok || runtime == nil {
+		return nil, &LifecycleError{}
+	}
+	probe, err := NewReplayHealthProbe(runtime)
+	if err != nil || probe == nil {
+		return nil, &LifecycleError{}
+	}
+	return probe, nil
+}
+
+// invokeHealthProbe contains an unexpected periodic-loop panic as a fatal return.
+func invokeHealthProbe(
 	ctx context.Context,
-	revalidator lifecycleRevalidator,
+	healthProbe lifecycleHealthProbe,
 	observer ServeReturnObserver,
 ) (resultErr error) {
 	defer func() {
@@ -1515,12 +1529,12 @@ func invokeRevalidator(
 			resultErr = &LifecycleError{}
 		}
 	}()
-	return revalidator.RunObserved(ctx, observer)
+	return healthProbe.RunObserved(ctx, observer)
 }
 
-// invokeRevalidatorStarted contains hostile revalidator entry-proof access.
-func invokeRevalidatorStarted(
-	revalidator lifecycleRevalidator,
+// invokeHealthProbeStarted contains hostile health-probe entry-proof access.
+func invokeHealthProbeStarted(
+	healthProbe lifecycleHealthProbe,
 ) (started <-chan struct{}, valid bool) {
 	defer func() {
 		if recover() != nil {
@@ -1528,27 +1542,27 @@ func invokeRevalidatorStarted(
 			valid = false
 		}
 	}()
-	return revalidator.Started(), true
+	return healthProbe.Started(), true
 }
 
-// invokeRevalidatorActivate contains the exact-once post-commit gate release.
-func invokeRevalidatorActivate(revalidator lifecycleRevalidator) (resultErr error) {
+// invokeHealthProbeActivate contains the exact-once post-commit gate release.
+func invokeHealthProbeActivate(healthProbe lifecycleHealthProbe) (resultErr error) {
 	defer func() {
 		if recover() != nil {
 			resultErr = &LifecycleError{}
 		}
 	}()
-	return revalidator.Activate()
+	return healthProbe.Activate()
 }
 
-// invokeRevalidatorRunning contains the producer-owned live-loop proof.
-func invokeRevalidatorRunning(revalidator lifecycleRevalidator) (running bool) {
+// invokeHealthProbeRunning contains the producer-owned live-loop proof.
+func invokeHealthProbeRunning(healthProbe lifecycleHealthProbe) (running bool) {
 	defer func() {
 		if recover() != nil {
 			running = false
 		}
 	}()
-	return revalidator.Running()
+	return healthProbe.Running()
 }
 
 // invokeRejectNewRequests contains handler-gate closure panics.

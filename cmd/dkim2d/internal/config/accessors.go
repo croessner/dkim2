@@ -5,8 +5,9 @@ import (
 	"io"
 	"time"
 
+	"slices"
+
 	"github.com/croessner/dkim2"
-	"github.com/croessner/dkim2/cmd/dkim2d/internal/replay/valkey"
 )
 
 const typedConfigRedactedText = "dkim2d_typed_config"
@@ -60,9 +61,9 @@ type PostgreSQLSigningConfig = SQLSigningConfig
 // MySQLSigningConfig is the MySQL and MariaDB-specific SQL configuration view.
 type MySQLSigningConfig = SQLSigningConfig
 
-// ValkeyConfig is one immutable structurally opaque Valkey configuration view.
-type ValkeyConfig struct {
-	state *valkeyState
+// RedisConfig is one immutable structurally opaque Redis-provider configuration view.
+type RedisConfig struct {
+	state *redisState
 }
 
 // ObservabilityConfig is one immutable structurally opaque telemetry configuration view.
@@ -800,14 +801,6 @@ func (c ReplayConfig) CountDirectDeliveries() bool {
 	return c.state != nil && c.state.countDirect
 }
 
-// RevalidateInterval returns the Valkey authority revalidation interval.
-func (c ReplayConfig) RevalidateInterval() time.Duration {
-	if c.state == nil {
-		return 0
-	}
-	return c.state.revalidateInterval
-}
-
 // MaxEntries returns the replay entry bound.
 func (c ReplayConfig) MaxEntries() uint32 {
 	if c.state == nil {
@@ -848,100 +841,267 @@ func (c ReplayConfig) MaxAdmissionWaiters() uint32 {
 	return c.state.maxAdmissionWaiters
 }
 
-// Valkey returns the immutable Valkey configuration and whether it is selected.
-func (c ReplayConfig) Valkey() (ValkeyConfig, bool) {
-	if c.state == nil || !c.state.hasValkeyConfig {
-		return ValkeyConfig{}, false
+// Redis returns the immutable Redis configuration and whether it is selected.
+func (c ReplayConfig) Redis() (RedisConfig, bool) {
+	if c.state == nil || !c.state.hasRedisConfig {
+		return RedisConfig{}, false
 	}
-	return ValkeyConfig{state: &c.state.valkey}, true
+	return RedisConfig{state: &c.state.redis}, true
 }
 
-// OperatorAttestation returns the validated M12 deployment attestation.
-func (c ReplayConfig) OperatorAttestation() (valkey.OperatorAttestation, bool) {
-	if c.state == nil || !c.state.hasValkeyConfig {
-		return valkey.OperatorAttestation{}, false
+// Mode returns the selected Redis topology.
+func (c RedisConfig) Mode() RedisMode {
+	if c.state == nil {
+		return 0
 	}
-	return c.state.operatorAttestation, true
+	return c.state.mode
 }
 
-// Address returns the canonical direct Valkey authority.
-func (c ValkeyConfig) Address() string {
+// StandaloneAddress returns the standalone host:port, empty in other modes.
+func (c RedisConfig) StandaloneAddress() string {
 	if c.state == nil {
 		return ""
 	}
-	return c.state.address
+	return c.state.standaloneAddress
 }
 
-// ServerName returns the exact TLS peer identity.
-func (c ValkeyConfig) ServerName() string {
+// SentinelMasterName returns the monitored master name, empty outside Sentinel mode.
+func (c RedisConfig) SentinelMasterName() string {
 	if c.state == nil {
 		return ""
 	}
-	return c.state.serverName
+	return c.state.sentinelMasterName
 }
 
-// CAFile returns the protected trust-root path.
-func (c ValkeyConfig) CAFile() string {
+// SentinelAddresses returns a fresh copy of the parsed Sentinel host:port list.
+func (c RedisConfig) SentinelAddresses() []string {
+	if c.state == nil {
+		return nil
+	}
+	return slices.Clone(c.state.sentinelAddresses)
+}
+
+// SentinelUsername returns the optional Sentinel ACL user name.
+func (c RedisConfig) SentinelUsername() string {
 	if c.state == nil {
 		return ""
 	}
-	return c.state.caFile
+	return c.state.sentinelUsername
 }
 
-// ApplicationUsername returns the application ACL identity.
-func (c ValkeyConfig) ApplicationUsername() string {
+// SentinelPasswordFile returns the optional protected Sentinel password path.
+func (c RedisConfig) SentinelPasswordFile() string {
 	if c.state == nil {
 		return ""
 	}
-	return c.state.applicationUsername
+	return c.state.sentinelPasswordFile
 }
 
-// ApplicationPasswordFile returns the protected application-password path.
-func (c ValkeyConfig) ApplicationPasswordFile() string {
+// ClusterAddresses returns a fresh copy of the parsed cluster seed host:port list.
+func (c RedisConfig) ClusterAddresses() []string {
+	if c.state == nil {
+		return nil
+	}
+	return slices.Clone(c.state.clusterAddresses)
+}
+
+// ClusterMaxRedirects returns the bounded cluster redirect budget.
+func (c RedisConfig) ClusterMaxRedirects() int {
+	if c.state == nil {
+		return 0
+	}
+	return int(c.state.clusterMaxRedirects)
+}
+
+// Username returns the optional data-path ACL user name.
+func (c RedisConfig) Username() string {
 	if c.state == nil {
 		return ""
 	}
-	return c.state.applicationPasswordFile
+	return c.state.username
 }
 
-// AuditorUsername returns the auditor ACL identity.
-func (c ValkeyConfig) AuditorUsername() string {
+// PasswordFile returns the optional protected data-path password path.
+func (c RedisConfig) PasswordFile() string {
 	if c.state == nil {
 		return ""
 	}
-	return c.state.auditorUsername
+	return c.state.passwordFile
 }
 
-// AuditorPasswordFile returns the protected auditor-password path.
-func (c ValkeyConfig) AuditorPasswordFile() string {
+// DatabaseNumber returns the selected logical database; always 0 in cluster mode.
+func (c RedisConfig) DatabaseNumber() int {
+	if c.state == nil {
+		return 0
+	}
+	return int(c.state.databaseNumber)
+}
+
+// KeyPrefix returns the validated prefix prepended to every replay key.
+func (c RedisConfig) KeyPrefix() string {
 	if c.state == nil {
 		return ""
 	}
-	return c.state.auditorPasswordFile
+	return c.state.keyPrefix
 }
 
-// DialTimeout returns the bounded Valkey dial timeout.
-func (c ValkeyConfig) DialTimeout() time.Duration {
+// Protocol returns the RESP protocol version, 2 or 3.
+func (c RedisConfig) Protocol() int {
+	if c.state == nil {
+		return 0
+	}
+	return int(c.state.protocol)
+}
+
+// TLSEnabled reports whether connections use TLS.
+func (c RedisConfig) TLSEnabled() bool {
+	return c.state != nil && c.state.tlsEnabled
+}
+
+// TLSCAFile returns the optional protected trust-root path; empty selects system roots.
+func (c RedisConfig) TLSCAFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.tlsCAFile
+}
+
+// TLSCertificateFile returns the optional protected client-certificate path.
+func (c RedisConfig) TLSCertificateFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.tlsCertificateFile
+}
+
+// TLSKeyFile returns the optional protected client-key path.
+func (c RedisConfig) TLSKeyFile() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.tlsKeyFile
+}
+
+// TLSServerName returns the optional verification identity applied to every node.
+func (c RedisConfig) TLSServerName() string {
+	if c.state == nil {
+		return ""
+	}
+	return c.state.tlsServerName
+}
+
+// TLSMinVersion returns the crypto/tls minimum version constant, zero without TLS.
+func (c RedisConfig) TLSMinVersion() uint16 {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.tlsMinVersion
+}
+
+// TLSInsecureSkipVerify reports whether peer verification is disabled.
+func (c RedisConfig) TLSInsecureSkipVerify() bool {
+	return c.state != nil && c.state.tlsInsecureSkipVerify
+}
+
+// PoolSize returns the bounded connection-pool size.
+func (c RedisConfig) PoolSize() int {
+	if c.state == nil {
+		return 0
+	}
+	return int(c.state.poolSize)
+}
+
+// MinIdleConnections returns the idle-connection floor, at most PoolSize.
+func (c RedisConfig) MinIdleConnections() int {
+	if c.state == nil {
+		return 0
+	}
+	return int(c.state.minIdleConnections)
+}
+
+// PoolTimeout returns the bounded wait for a pooled connection.
+func (c RedisConfig) PoolTimeout() time.Duration {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.poolTimeout
+}
+
+// DialTimeout returns the bounded connection-establishment timeout.
+func (c RedisConfig) DialTimeout() time.Duration {
 	if c.state == nil {
 		return 0
 	}
 	return c.state.dialTimeout
 }
 
-// TCPKeepalive returns the bounded Valkey TCP keepalive.
-func (c ValkeyConfig) TCPKeepalive() time.Duration {
+// ReadTimeout returns the bounded reply read timeout.
+func (c RedisConfig) ReadTimeout() time.Duration {
 	if c.state == nil {
 		return 0
 	}
-	return c.state.tcpKeepalive
+	return c.state.readTimeout
 }
 
-// ConnectionWriteTimeout returns the bounded Valkey write timeout.
-func (c ValkeyConfig) ConnectionWriteTimeout() time.Duration {
+// WriteTimeout returns the bounded command write timeout.
+func (c RedisConfig) WriteTimeout() time.Duration {
 	if c.state == nil {
 		return 0
 	}
-	return c.state.connectionWriteTimeout
+	return c.state.writeTimeout
+}
+
+// RetryMaxAttempts returns the total command attempts including the first.
+func (c RedisConfig) RetryMaxAttempts() int {
+	if c.state == nil {
+		return 0
+	}
+	return int(c.state.retryMaxAttempts)
+}
+
+// RetryMinBackoff returns the minimum retry backoff.
+func (c RedisConfig) RetryMinBackoff() time.Duration {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.retryMinBackoff
+}
+
+// RetryMaxBackoff returns the maximum retry backoff.
+func (c RedisConfig) RetryMaxBackoff() time.Duration {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.retryMaxBackoff
+}
+
+// HealthInterval returns the start-to-start health-probe interval.
+func (c RedisConfig) HealthInterval() time.Duration {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.healthInterval
+}
+
+// HealthTimeout returns the per-probe timeout, shorter than HealthInterval.
+func (c RedisConfig) HealthTimeout() time.Duration {
+	if c.state == nil {
+		return 0
+	}
+	return c.state.healthTimeout
+}
+
+// HealthFailureThreshold returns the consecutive probe failures that mark the store unhealthy.
+func (c RedisConfig) HealthFailureThreshold() int {
+	if c.state == nil {
+		return 0
+	}
+	return int(c.state.healthFailures)
+}
+
+// RequireNoEviction reports whether startup requires the noeviction policy on every master.
+func (c RedisConfig) RequireNoEviction() bool {
+	return c.state != nil && c.state.requireNoEviction
 }
 
 // String returns a content-free typed configuration representation.
@@ -990,19 +1150,19 @@ func (ReplayConfig) MarshalJSON() ([]byte, error) { return nil, newError(CodeSer
 func (ReplayConfig) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
 
 // String returns a content-free typed configuration representation.
-func (ValkeyConfig) String() string { return typedConfigRedactedText }
+func (RedisConfig) String() string { return typedConfigRedactedText }
 
 // GoString returns a content-free typed configuration representation.
-func (ValkeyConfig) GoString() string { return typedConfigRedactedText }
+func (RedisConfig) GoString() string { return typedConfigRedactedText }
 
-// Format prevents formatting verbs from exposing Valkey configuration.
-func (ValkeyConfig) Format(state fmt.State, _ rune) { writeRedacted(state) }
+// Format prevents formatting verbs from exposing Redis configuration.
+func (RedisConfig) Format(state fmt.State, _ rune) { writeRedacted(state) }
 
-// MarshalJSON rejects serialization of Valkey configuration.
-func (ValkeyConfig) MarshalJSON() ([]byte, error) { return nil, newError(CodeSerialization) }
+// MarshalJSON rejects serialization of Redis configuration.
+func (RedisConfig) MarshalJSON() ([]byte, error) { return nil, newError(CodeSerialization) }
 
-// MarshalText rejects serialization of Valkey configuration.
-func (ValkeyConfig) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
+// MarshalText rejects serialization of Redis configuration.
+func (RedisConfig) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
 
 // String returns a content-free typed configuration representation.
 func (ObservabilityConfig) String() string { return typedConfigRedactedText }

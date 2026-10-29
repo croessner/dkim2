@@ -9,11 +9,11 @@ import (
 // option defaults off, accepts YAML and environment values, rejects malformed
 // booleans, and is forbidden with the disabled replay backend.
 func TestReplayCountDirectDeliveriesConfiguration(t *testing.T) {
-	snapshot, err := Load([]byte(valkeyYAML()), FlagValues{})
+	snapshot, err := Load([]byte(redisYAML()), FlagValues{})
 	if err != nil || snapshot.Replay().CountDirectDeliveries() {
 		t.Fatalf("direct-delivery counting must default off: error=%v", err)
 	}
-	document := strings.Replace(valkeyYAML(), "  epoch: 1\n", "  epoch: 1\n  count_direct_deliveries: true\n", 1)
+	document := strings.Replace(redisYAML(), "  epoch: 1\n", "  epoch: 1\n  count_direct_deliveries: true\n", 1)
 	snapshot, err = Load([]byte(document), FlagValues{})
 	if err != nil || !snapshot.Replay().CountDirectDeliveries() {
 		t.Fatalf("explicit direct-delivery counting was not enabled: error=%v", err)

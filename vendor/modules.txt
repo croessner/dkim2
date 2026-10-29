@@ -144,6 +144,23 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/parsers
+# github.com/redis/go-redis/v9 v9.22.0
+## explicit; go 1.24
+github.com/redis/go-redis/v9
+github.com/redis/go-redis/v9/auth
+github.com/redis/go-redis/v9/internal
+github.com/redis/go-redis/v9/internal/auth/streaming
+github.com/redis/go-redis/v9/internal/hashtag
+github.com/redis/go-redis/v9/internal/hscan
+github.com/redis/go-redis/v9/internal/interfaces
+github.com/redis/go-redis/v9/internal/maintnotifications/logs
+github.com/redis/go-redis/v9/internal/otel
+github.com/redis/go-redis/v9/internal/pool
+github.com/redis/go-redis/v9/internal/proto
+github.com/redis/go-redis/v9/internal/routing
+github.com/redis/go-redis/v9/internal/util
+github.com/redis/go-redis/v9/maintnotifications
+github.com/redis/go-redis/v9/push
 # github.com/rogpeppe/go-internal v1.16.0
 ## explicit; go 1.25
 # github.com/sagikazarmark/locafero v0.12.0
@@ -193,11 +210,6 @@ github.com/spf13/viper/internal/features
 # github.com/subosito/gotenv v1.6.0
 ## explicit; go 1.18
 github.com/subosito/gotenv
-# github.com/valkey-io/valkey-go v1.0.79
-## explicit; go 1.25.0
-github.com/valkey-io/valkey-go
-github.com/valkey-io/valkey-go/internal/cmds
-github.com/valkey-io/valkey-go/internal/util
 # github.com/vmware-labs/yaml-jsonpath v0.3.2
 ## explicit; go 1.13
 github.com/vmware-labs/yaml-jsonpath/pkg/yamlpath
@@ -269,6 +281,9 @@ go.opentelemetry.io/proto/otlp/collector/trace/v1
 go.opentelemetry.io/proto/otlp/common/v1
 go.opentelemetry.io/proto/otlp/resource/v1
 go.opentelemetry.io/proto/otlp/trace/v1
+# go.uber.org/atomic v1.11.0
+## explicit; go 1.18
+go.uber.org/atomic
 # go.uber.org/dig v1.19.0
 ## explicit; go 1.20
 go.uber.org/dig

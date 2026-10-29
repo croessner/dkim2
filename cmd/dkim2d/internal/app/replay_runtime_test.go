@@ -14,7 +14,8 @@ import (
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
-	"github.com/croessner/dkim2/cmd/dkim2d/internal/replay/valkey"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/replay/redisstore"
 )
 
 const runtimeTestGeneration = "0123456789abcdef0123456789abcdef"
@@ -51,114 +52,77 @@ func closeReplayRuntimeBounded(runtime *ReplayRuntime) error {
 
 // runtimeMaterialFake lends fresh, callback-bounded protected clones.
 type runtimeMaterialFake struct {
-	snapshot config.Snapshot
-	hmac     []byte
-	app      []byte
-	auditor  []byte
-	roots    [][]byte
+	snapshot         config.Snapshot
+	hmac             []byte
+	password         []byte
+	sentinelPassword []byte
+	certificatePEM   []byte
+	keyPEM           []byte
+	roots            [][]byte
 
-	mu                 sync.Mutex
-	materialCalls      int
-	auditorCalls       int
-	materialErr        error
-	auditorErr         error
-	afterMaterial      func()
-	afterAuditor       func()
-	auditorBorrowSizes []int
+	mu            sync.Mutex
+	materialCalls int
+	materialErr   error
+	afterMaterial func()
 }
 
 // Snapshot returns the immutable effective configuration.
 func (f *runtimeMaterialFake) Snapshot() config.Snapshot { return f.snapshot }
 
-// UseReplayMaterial lends independent complete startup material.
+// UseReplayMaterial lends independent complete startup material and zeroes
+// every lent clone after the callback, mirroring the protected config borrow.
 func (f *runtimeMaterialFake) UseReplayMaterial(
-	use func([]byte, []byte, []byte, [][]byte) error,
+	use func([]byte, redisstore.Secrets) error,
 ) error {
 	f.mu.Lock()
 	f.materialCalls++
 	borrowErr := f.materialErr
 	hmac := append([]byte(nil), f.hmac...)
-	app := append([]byte(nil), f.app...)
-	auditor := append([]byte(nil), f.auditor...)
-	roots := runtimeCloneDER(f.roots)
+	secrets := redisstore.Secrets{
+		Password:             append([]byte(nil), f.password...),
+		SentinelPassword:     append([]byte(nil), f.sentinelPassword...),
+		ClientCertificatePEM: append([]byte(nil), f.certificatePEM...),
+		ClientKeyPEM:         append([]byte(nil), f.keyPEM...),
+		RootsDER:             runtimeCloneDER(f.roots),
+	}
 	after := f.afterMaterial
 	f.mu.Unlock()
 	if borrowErr != nil {
 		return borrowErr
 	}
-	err := use(hmac, app, auditor, roots)
+	err := use(hmac, secrets)
 	clear(hmac)
-	clear(app)
-	clear(auditor)
-	runtimeClearDER(roots)
+	clear(secrets.Password)
+	clear(secrets.SentinelPassword)
+	clear(secrets.ClientCertificatePEM)
+	clear(secrets.ClientKeyPEM)
+	runtimeClearDER(secrets.RootsDER)
 	if after != nil {
 		after()
 	}
 	return err
 }
 
-// UseReplayAuditorPassword lends one fresh least-authority clone.
-func (f *runtimeMaterialFake) UseReplayAuditorPassword(use func([]byte) error) error {
-	f.mu.Lock()
-	f.auditorCalls++
-	borrowErr := f.auditorErr
-	auditor := append([]byte(nil), f.auditor...)
-	f.auditorBorrowSizes = append(f.auditorBorrowSizes, len(auditor))
-	after := f.afterAuditor
-	f.mu.Unlock()
-	if borrowErr != nil {
-		return borrowErr
-	}
-	err := use(auditor)
-	clear(auditor)
-	if after != nil {
-		after()
-	}
-	return err
-}
-
-// ReplayAuditorSource returns a least-authority view of the test material.
-func (f *runtimeMaterialFake) ReplayAuditorSource() replayAuditorSource {
-	return runtimeAuditorMaterialFake{owner: f}
-}
-
-// runtimeAuditorMaterialFake exposes only the periodic auditor test seam.
-type runtimeAuditorMaterialFake struct {
-	owner *runtimeMaterialFake
-}
-
-// UseReplayAuditorPassword delegates one least-authority test borrow.
-func (f runtimeAuditorMaterialFake) UseReplayAuditorPassword(use func([]byte) error) error {
-	if f.owner == nil {
-		return errors.New("missing auditor owner")
-	}
-	return f.owner.UseReplayAuditorPassword(use)
-}
-
-// Calls returns synchronized borrow counts.
-func (f *runtimeMaterialFake) Calls() (int, int) {
+// Calls returns the synchronized startup borrow count.
+func (f *runtimeMaterialFake) Calls() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.materialCalls, f.auditorCalls
+	return f.materialCalls
 }
 
 // runtimeAuthorityFake is one deterministic production-authority double.
 type runtimeAuthorityFake struct {
-	mu                  sync.Mutex
-	state               dkim2.ReplayStoreState
-	ready               bool
-	closeCalls          int
-	readyCalls          int
-	revalidateCalls     int
-	revalidateResponses []error
-	auditors            []valkey.AuditorConfig
-	auditorPointers     []uintptr
-	openAuditorInputs   []bool
-	auditorUsers        []string
-	auditorPasswords    [][]byte
-	closeErr            error
-	closeHook           func()
-	closeContextHook    func(context.Context)
+	mu               sync.Mutex
+	state            dkim2.ReplayStoreState
+	ready            bool
+	closeCalls       int
+	readyCalls       int
+	probeCalls       int
+	probeResponses   []error
+	probeHook        func()
+	closeErr         error
+	closeHook        func()
+	closeContextHook func(context.Context)
 }
 
 // CheckAndRemember returns a deterministic first-seen result.
@@ -204,37 +168,37 @@ func TestReplayRuntimePostCallContextPrecedenceUsesExactCallerTerminalState(t *t
 	}
 	for index, response := range responses {
 		t.Run(fmt.Sprintf("cancel-%d", index), func(t *testing.T) {
-			material := runtimeMaterial(t, runtimeValkeyYAML())
+			material := runtimeMaterial(t, runtimeRedisYAML())
 			authority := &runtimeAuthorityFake{
-				state:               dkim2.ReplayStoreReady,
-				ready:               true,
-				revalidateResponses: []error{response},
+				state:          dkim2.ReplayStoreReady,
+				ready:          true,
+				probeResponses: []error{response},
 			}
 			runtime := runtimeWithAuthority(t, material, authority)
 			ctx, cancel := context.WithCancel(context.Background())
-			material.afterAuditor = cancel
-			if err := runtime.Revalidate(ctx); !errors.Is(err, context.Canceled) {
+			authority.probeHook = cancel
+			if err := runtime.ProbeHealth(ctx); !errors.Is(err, context.Canceled) {
 				t.Fatalf("post-call cancellation returned %v", err)
 			}
 			_ = closeReplayRuntimeBounded(runtime)
 		})
 	}
 	t.Run("deadline-after-unknown-result", func(t *testing.T) {
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		authority := &runtimeAuthorityFake{
-			state:               dkim2.ReplayStoreReady,
-			ready:               true,
-			revalidateResponses: []error{errors.New("protected provider result marker")},
+			state:          dkim2.ReplayStoreReady,
+			ready:          true,
+			probeResponses: []error{errors.New("protected provider result marker")},
 		}
 		runtime := runtimeWithAuthority(t, material, authority)
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
-		material.afterAuditor = func() { <-ctx.Done() }
-		if err := runtime.Revalidate(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		authority.probeHook = func() { <-ctx.Done() }
+		if err := runtime.ProbeHealth(ctx); !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("post-call deadline returned %v", err)
 		}
-		if authority.revalidateCalls != 1 {
-			t.Fatal("deadline case did not exercise post-auditor precedence")
+		if authority.Probes() != 1 {
+			t.Fatal("deadline case did not exercise post-probe precedence")
 		}
 		_ = closeReplayRuntimeBounded(runtime)
 	})
@@ -243,7 +207,7 @@ func TestReplayRuntimePostCallContextPrecedenceUsesExactCallerTerminalState(t *t
 // TestReplayRuntimeCloseCollapsesErrorsAndPreservesContextPrecedence proves release semantics.
 func TestReplayRuntimeCloseCollapsesErrorsAndPreservesContextPrecedence(t *testing.T) {
 	t.Run("store-error-still-closes-deriver", func(t *testing.T) {
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		authority := &runtimeAuthorityFake{
 			state:    dkim2.ReplayStoreReady,
 			ready:    true,
@@ -259,7 +223,7 @@ func TestReplayRuntimeCloseCollapsesErrorsAndPreservesContextPrecedence(t *testi
 		}
 	})
 	t.Run("cancellation-during-store-close", func(t *testing.T) {
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
 		runtime := runtimeWithAuthority(t, material, authority)
 		deriver := runtime.state.deriver
@@ -289,7 +253,7 @@ func TestReplayRuntimeCloseContextMatrix(t *testing.T) {
 // testReplayRuntimeCloseOwnershipMatrix proves ownership is either untouched or released exactly once.
 func testReplayRuntimeCloseOwnershipMatrix(t *testing.T) {
 	t.Run("terminal-before-ownership", func(t *testing.T) {
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
 		runtime := runtimeWithAuthority(t, material, authority)
 		parent, parentCancel := context.WithTimeout(context.Background(), time.Second)
@@ -307,7 +271,7 @@ func testReplayRuntimeCloseOwnershipMatrix(t *testing.T) {
 		}
 	})
 	t.Run("malformed-bound-before-ownership", func(t *testing.T) {
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
 		runtime := runtimeWithAuthority(t, material, authority)
 		var typedNil *hostileReplayContext
@@ -328,7 +292,7 @@ func testReplayRuntimeCloseOwnershipMatrix(t *testing.T) {
 		}
 	})
 	t.Run("pre-child-start-failure-reopens-and-wakes-waiter", func(t *testing.T) {
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
 		runtime := runtimeWithAuthority(t, material, authority)
 		realStarter := runtime.state.startCleanup
@@ -369,7 +333,7 @@ func testReplayRuntimeCloseOwnershipMatrix(t *testing.T) {
 		}
 	})
 	t.Run("post-freeze-cancellation-cannot-skip-owners", func(t *testing.T) {
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
 		runtime := runtimeWithAuthority(t, material, authority)
 		deriver := runtime.state.deriver
@@ -481,7 +445,7 @@ func testReplayRuntimeCloseCompletionMatrix(t *testing.T) {
 		}
 	})
 	t.Run("terminal-state-repeats-without-new-ownership", func(t *testing.T) {
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
 		runtime := runtimeWithAuthority(t, material, authority)
 		if err := closeReplayRuntimeBounded(runtime); err != nil {
@@ -501,7 +465,7 @@ func testReplayRuntimeCloseCompletionMatrix(t *testing.T) {
 		}
 	})
 	t.Run("already-complete-still-preserves-late-cancellation", func(t *testing.T) {
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
 		runtime := runtimeWithAuthority(t, material, authority)
 		if err := closeReplayRuntimeBounded(runtime); err != nil {
@@ -517,7 +481,7 @@ func testReplayRuntimeCloseCompletionMatrix(t *testing.T) {
 	})
 	t.Run("child-cleanup-contexts-drop-caller-values", func(t *testing.T) {
 		type markerKey struct{}
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		var storeClean, deriverClean atomic.Bool
 		authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
 		authority.closeContextHook = func(ctx context.Context) {
@@ -541,22 +505,28 @@ func testReplayRuntimeCloseCompletionMatrix(t *testing.T) {
 	})
 }
 
-// Revalidate captures only bounded evidence from the ephemeral auditor input.
-func (s *runtimeAuthorityFake) Revalidate(_ context.Context, auditor valkey.AuditorConfig) error {
+// Probe records one health probe and returns the scripted response.
+func (s *runtimeAuthorityFake) Probe(context.Context) error {
+	s.mu.Lock()
+	s.probeCalls++
+	index := s.probeCalls - 1
+	hook := s.probeHook
+	var response error
+	if index < len(s.probeResponses) {
+		response = s.probeResponses[index]
+	}
+	s.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
+	return response
+}
+
+// Probes returns the synchronized probe count.
+func (s *runtimeAuthorityFake) Probes() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.revalidateCalls++
-	s.auditors = append(s.auditors, auditor)
-	s.auditorPointers = append(s.auditorPointers, runtimeOpaquePointer(auditor))
-	open, username, password := runtimeAuditorSnapshot(auditor)
-	s.openAuditorInputs = append(s.openAuditorInputs, open)
-	s.auditorUsers = append(s.auditorUsers, username)
-	s.auditorPasswords = append(s.auditorPasswords, password)
-	index := s.revalidateCalls - 1
-	if index < len(s.revalidateResponses) {
-		return s.revalidateResponses[index]
-	}
-	return nil
+	return s.probeCalls
 }
 
 // AuthorityReady records delegation and returns the configured fact.
@@ -572,21 +542,6 @@ type runtimeFixedClock struct{ now time.Time }
 
 // Now returns the injected instant.
 func (c *runtimeFixedClock) Now() time.Time { return c.now }
-
-// runtimeClientEvidence is bounded test-only normalized client input evidence.
-type runtimeClientEvidence struct {
-	open       bool
-	endpoint   string
-	serverName string
-	username   string
-	password   []byte
-	roots      [][]byte
-	epoch      uint32
-	limits     dkim2.ReplayLimits
-	dial       time.Duration
-	keepalive  time.Duration
-	write      time.Duration
-}
 
 // TestReplayRuntimeDisabledConstructsOnlyDisabledStore proves backend isolation.
 func TestReplayRuntimeDisabledConstructsOnlyDisabledStore(t *testing.T) {
@@ -607,9 +562,8 @@ func TestReplayRuntimeDisabledConstructsOnlyDisabledStore(t *testing.T) {
 		},
 		newProduction: func(
 			context.Context,
-			valkey.ClientConfig,
-			valkey.OperatorAttestation,
-			valkey.AuditorConfig,
+			redisstore.Config,
+			redisstore.Secrets,
 		) (replayAuthorityStore, error) {
 			productionCalls.Add(1)
 			return nil, errors.New("must not run")
@@ -624,10 +578,10 @@ func TestReplayRuntimeDisabledConstructsOnlyDisabledStore(t *testing.T) {
 		memoryCalls.Load() != 0 || productionCalls.Load() != 0 {
 		t.Fatal("disabled backend crossed a forbidden construction boundary")
 	}
-	if materialCalls, auditorCalls := material.Calls(); materialCalls != 0 || auditorCalls != 0 {
+	if material.Calls() != 0 {
 		t.Fatal("disabled backend borrowed protected material")
 	}
-	if !runtime.AuthorityReady() || runtime.RevalidationInterval() != 0 {
+	if !runtime.AuthorityReady() || runtime.HealthInterval() != 0 {
 		t.Fatal("disabled backend readiness or interval is wrong")
 	}
 	if err := closeReplayRuntimeBounded(runtime); err != nil || runtime.AuthorityReady() {
@@ -683,7 +637,7 @@ func TestReplayRuntimeMemoryProjectsExactParametersAndOwnedClones(t *testing.T) 
 		deriverCalls.Load() != 1 || memoryCalls.Load() != 1 {
 		t.Fatal("memory construction changed exact retention or factory count")
 	}
-	if materialCalls, auditorCalls := material.Calls(); materialCalls != 1 || auditorCalls != 0 {
+	if material.Calls() != 1 || runtime.HealthInterval() != 0 {
 		t.Fatal("memory backend used the wrong protected-material boundary")
 	}
 	if !runtime.AuthorityReady() {
@@ -787,190 +741,183 @@ func TestInboundProcessCountsDirectDeliveriesEndToEnd(t *testing.T) {
 	}
 }
 
-// TestReplayRuntimeValkeyUsesOneStartupBorrowAndFreshAuditBorrows proves authority separation.
-func TestReplayRuntimeValkeyUsesOneStartupBorrowAndFreshAuditBorrows(t *testing.T) {
-	material := runtimeMaterial(t, runtimeValkeyYAML())
-	authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
-	expectedAttestation, expectedAttestationPresent := material.snapshot.Replay().OperatorAttestation()
-	if !expectedAttestationPresent {
-		t.Fatal("fixture omitted operator attestation")
-	}
-	var factoryCalls atomic.Int32
-	var retainedClient valkey.ClientConfig
-	var retainedAuditor valkey.AuditorConfig
-	var clientOpen, auditorOpen, attestationExact bool
-	var clientEvidence runtimeClientEvidence
-	factories := replayRuntimeFactories{
-		newDeriver:  dkim2.NewReplayDeriver,
-		newDisabled: newDisabledReplayStore,
-		newProduction: func(
-			_ context.Context,
-			client valkey.ClientConfig,
-			attestation valkey.OperatorAttestation,
-			auditor valkey.AuditorConfig,
-		) (replayAuthorityStore, error) {
-			factoryCalls.Add(1)
-			retainedClient = client
-			retainedAuditor = auditor
-			clientOpen = runtimeOpaqueOpen(client)
-			clientEvidence = runtimeReadClientEvidence(client)
-			auditorOpen, _, _ = runtimeAuditorSnapshot(auditor)
-			attestationExact = reflect.DeepEqual(attestation, expectedAttestation)
-			return authority, nil
-		},
-	}
-	runtime, err := newReplayRuntime(context.Background(), material, factories)
-	if err != nil || runtime == nil {
-		t.Fatalf("newReplayRuntime() = (%v, %v)", runtime, err)
-	}
-	assertRuntimeValkeyStartup(
-		t, material, authority, runtime, factoryCalls.Load(), clientOpen, auditorOpen,
-		attestationExact, clientEvidence, retainedClient, retainedAuditor,
-	)
-	assertRuntimeFreshAuditorBorrows(t, material, authority, runtime)
-	if err := closeReplayRuntimeBounded(runtime); err != nil || authority.closeCalls != 1 {
-		t.Fatal("Valkey runtime did not close its authority")
+// TestReplayRuntimeRedisUsesOneStartupBorrowAndExactProviderConfig proves
+// that one borrow builds deriver and store, that every typed replay.redis
+// accessor reaches the provider configuration unchanged, and that the lent
+// secrets are callback-local views zeroed after the factory returns.
+func TestReplayRuntimeRedisUsesOneStartupBorrowAndExactProviderConfig(t *testing.T) {
+	for name, document := range map[string]string{
+		"standalone": runtimeRedisYAML(),
+		"sentinel":   runtimeRedisSentinelYAML(),
+		"cluster":    runtimeRedisClusterYAML(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			material := runtimeMaterial(t, document)
+			authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
+			var factoryCalls atomic.Int32
+			var captured redisstore.Config
+			var lent redisstore.Secrets
+			var lentCopy [][]byte
+			factories := replayRuntimeFactories{
+				newDeriver:  dkim2.NewReplayDeriver,
+				newDisabled: newDisabledReplayStore,
+				newProduction: func(
+					_ context.Context,
+					storeConfig redisstore.Config,
+					secrets redisstore.Secrets,
+				) (replayAuthorityStore, error) {
+					factoryCalls.Add(1)
+					captured = storeConfig
+					lent = secrets
+					lentCopy = [][]byte{
+						append([]byte(nil), secrets.Password...),
+						append([]byte(nil), secrets.SentinelPassword...),
+						append([]byte(nil), secrets.ClientCertificatePEM...),
+						append([]byte(nil), secrets.ClientKeyPEM...),
+					}
+					return authority, nil
+				},
+			}
+			runtime, err := newReplayRuntime(context.Background(), material, factories)
+			if err != nil || runtime == nil {
+				t.Fatalf("newReplayRuntime() = (%v, %v)", runtime, err)
+			}
+			replayConfig := material.snapshot.Replay()
+			redisConfig, present := replayConfig.Redis()
+			if !present {
+				t.Fatal("fixture omitted Redis config")
+			}
+			if factoryCalls.Load() != 1 || material.Calls() != 1 {
+				t.Fatal("Redis startup did not use exactly one borrow and one factory call")
+			}
+			expected := redisStoreConfig(redisConfig, replayLimits(replayConfig))
+			if !reflect.DeepEqual(captured, expected) || captured.Validate() != nil {
+				t.Fatal("Redis provider received a changed or invalid configuration")
+			}
+			assertRuntimeRedisProjection(t, captured, redisConfig, replayLimits(replayConfig))
+			if string(lentCopy[0]) != "application-secret" || string(lentCopy[1]) != "sentinel-secret" ||
+				string(lentCopy[2]) != "certificate-pem" || string(lentCopy[3]) != "key-pem" ||
+				!reflect.DeepEqual(lent.RootsDER, [][]byte{nil}) {
+				t.Fatal("Redis provider received changed secrets or retained roots past the borrow")
+			}
+			for _, value := range [][]byte{lent.Password, lent.SentinelPassword, lent.ClientCertificatePEM, lent.ClientKeyPEM} {
+				if strings.Trim(string(value), "\x00") != "" {
+					t.Fatal("lent Redis secret outlived the startup borrow")
+				}
+			}
+			if !runtime.AuthorityReady() || authority.readyCalls != 1 ||
+				runtime.HealthInterval() != redisConfig.HealthInterval() {
+				t.Fatal("Redis readiness delegation or health interval is wrong")
+			}
+			if err := closeReplayRuntimeBounded(runtime); err != nil || authority.closeCalls != 1 {
+				t.Fatal("Redis runtime did not close its authority")
+			}
+		})
 	}
 }
 
-// assertRuntimeValkeyStartup verifies exact normalized inputs and post-call release.
-func assertRuntimeValkeyStartup(
+// assertRuntimeRedisProjection pins the field-by-field accessor mapping so a
+// silently dropped field cannot hide behind a shared projection helper.
+func assertRuntimeRedisProjection(
 	t *testing.T,
-	material *runtimeMaterialFake,
-	authority *runtimeAuthorityFake,
-	runtime *ReplayRuntime,
-	factoryCalls int32,
-	clientOpen bool,
-	auditorOpen bool,
-	attestationExact bool,
-	clientEvidence runtimeClientEvidence,
-	retainedClient valkey.ClientConfig,
-	retainedAuditor valkey.AuditorConfig,
+	captured redisstore.Config,
+	redis config.RedisConfig,
+	limits dkim2.ReplayLimits,
 ) {
 	t.Helper()
-	replayConfig := material.snapshot.Replay()
-	valkeyConfig, valkeyPresent := replayConfig.Valkey()
-	if !valkeyPresent {
-		t.Fatal("fixture omitted Valkey config")
+	modes := map[config.RedisMode]redisstore.Mode{
+		config.RedisStandalone: redisstore.ModeStandalone,
+		config.RedisSentinel:   redisstore.ModeSentinel,
+		config.RedisCluster:    redisstore.ModeCluster,
 	}
-	if factoryCalls != 1 || !clientOpen || !auditorOpen || !attestationExact {
-		t.Fatal("Valkey production factory did not receive exactly one live input pair")
-	}
-	if !clientEvidence.open ||
-		clientEvidence.endpoint != valkeyConfig.Address() ||
-		clientEvidence.serverName != valkeyConfig.ServerName() ||
-		clientEvidence.username != valkeyConfig.ApplicationUsername() ||
-		string(clientEvidence.password) != "application-secret" ||
-		clientEvidence.epoch != replayConfig.Epoch() ||
-		clientEvidence.limits != replayLimits(replayConfig) ||
-		clientEvidence.dial != valkeyConfig.DialTimeout() ||
-		clientEvidence.keepalive != valkeyConfig.TCPKeepalive() ||
-		clientEvidence.write != valkeyConfig.ConnectionWriteTimeout() ||
-		!reflect.DeepEqual(clientEvidence.roots, material.roots) {
-		t.Fatal("Valkey production factory received changed client authority inputs")
-	}
-	if runtimeOpaqueOpen(retainedClient) || runtimeOpaqueOpen(retainedAuditor) {
-		t.Fatal("caller-owned startup config copies remained live after factory return")
-	}
-	if materialCalls, auditorCalls := material.Calls(); materialCalls != 1 || auditorCalls != 0 {
-		t.Fatal("Valkey startup borrowed material more than once")
-	}
-	if !runtime.AuthorityReady() || authority.readyCalls != 1 ||
-		runtime.RevalidationInterval() != replayConfig.RevalidateInterval() {
-		t.Fatal("Valkey readiness delegation or interval is wrong")
-	}
-}
-
-// assertRuntimeFreshAuditorBorrows proves one distinct least-authority owner per audit.
-func assertRuntimeFreshAuditorBorrows(
-	t *testing.T,
-	material *runtimeMaterialFake,
-	authority *runtimeAuthorityFake,
-	runtime *ReplayRuntime,
-) {
-	t.Helper()
-	for range 2 {
-		if err := runtime.Revalidate(context.Background()); err != nil {
-			t.Fatalf("Revalidate() failed: %v", err)
-		}
-	}
-	if materialCalls, auditorCalls := material.Calls(); materialCalls != 1 || auditorCalls != 2 {
-		t.Fatal("periodic revalidation did not use only fresh auditor borrows")
-	}
-	authority.mu.Lock()
-	defer authority.mu.Unlock()
-	if authority.revalidateCalls != 2 ||
-		authority.auditorPointers[0] == authority.auditorPointers[1] {
-		t.Fatal("Revalidate() reused an auditor owner")
-	}
-	for index := range authority.auditors {
-		if !authority.openAuditorInputs[index] ||
-			authority.auditorUsers[index] != "auditor" ||
-			string(authority.auditorPasswords[index]) != "auditor-secret" ||
-			runtimeOpaqueOpen(authority.auditors[index]) {
-			t.Fatal("Revalidate() violated ephemeral auditor ownership")
-		}
+	if captured.Mode != modes[redis.Mode()] ||
+		captured.StandaloneAddress != redis.StandaloneAddress() ||
+		captured.SentinelMasterName != redis.SentinelMasterName() ||
+		!reflect.DeepEqual(captured.SentinelAddresses, redis.SentinelAddresses()) ||
+		captured.SentinelUsername != redis.SentinelUsername() ||
+		!reflect.DeepEqual(captured.ClusterAddresses, redis.ClusterAddresses()) ||
+		captured.ClusterMaxRedirects != redis.ClusterMaxRedirects() ||
+		captured.Username != redis.Username() ||
+		captured.DatabaseNumber != redis.DatabaseNumber() ||
+		captured.KeyPrefix != redis.KeyPrefix() ||
+		captured.Protocol != redis.Protocol() ||
+		captured.TLS.Enabled != redis.TLSEnabled() ||
+		captured.TLS.ServerName != redis.TLSServerName() ||
+		uint16(captured.TLS.MinVersion) != redis.TLSMinVersion() ||
+		captured.TLS.InsecureSkipVerify != redis.TLSInsecureSkipVerify() ||
+		captured.PoolSize != redis.PoolSize() ||
+		captured.MinIdleConnections != redis.MinIdleConnections() ||
+		captured.PoolTimeout != redis.PoolTimeout() ||
+		captured.DialTimeout != redis.DialTimeout() ||
+		captured.ReadTimeout != redis.ReadTimeout() ||
+		captured.WriteTimeout != redis.WriteTimeout() ||
+		captured.MaxAttempts != redis.RetryMaxAttempts() ||
+		captured.MinRetryBackoff != redis.RetryMinBackoff() ||
+		captured.MaxRetryBackoff != redis.RetryMaxBackoff() ||
+		captured.Health.Interval != redis.HealthInterval() ||
+		captured.Health.Timeout != redis.HealthTimeout() ||
+		captured.Health.FailureThreshold != redis.HealthFailureThreshold() ||
+		captured.RequireNoEviction != redis.RequireNoEviction() ||
+		captured.Limits != limits {
+		t.Fatal("Redis provider configuration diverged from the typed accessors")
 	}
 }
 
-// TestReplayRuntimeReadinessNeverUsesRevalidationAsAHealthTimestamp proves delegation.
-func TestReplayRuntimeReadinessNeverUsesRevalidationAsAHealthTimestamp(t *testing.T) {
-	material := runtimeMaterial(t, runtimeValkeyYAML())
+// TestReplayRuntimeRedisAddressListsAreCopied proves the provider never
+// aliases config-owned address slices.
+func TestReplayRuntimeRedisAddressListsAreCopied(t *testing.T) {
+	material := runtimeMaterial(t, runtimeRedisSentinelYAML())
+	redisConfig, _ := material.snapshot.Replay().Redis()
+	projected := redisStoreConfig(redisConfig, dkim2.ReplayLimits{})
+	projected.SentinelAddresses[0] = "mutated.internal:1"
+	if again := redisConfig.SentinelAddresses(); again[0] == "mutated.internal:1" {
+		t.Fatal("projected Sentinel addresses alias typed configuration")
+	}
+}
+
+// TestReplayRuntimeReadinessDelegatesWithoutProbeTimestamps proves that a
+// successful probe never substitutes a timestamp for the store's own fact.
+func TestReplayRuntimeReadinessDelegatesWithoutProbeTimestamps(t *testing.T) {
+	material := runtimeMaterial(t, runtimeRedisYAML())
 	authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: false}
-	runtime, err := newReplayRuntime(context.Background(), material, replayRuntimeFactories{
-		newDeriver: dkim2.NewReplayDeriver,
-		newProduction: func(
-			context.Context,
-			valkey.ClientConfig,
-			valkey.OperatorAttestation,
-			valkey.AuditorConfig,
-		) (replayAuthorityStore, error) {
-			return authority, nil
-		},
-	})
-	if err != nil {
-		t.Fatalf("newReplayRuntime() failed: %v", err)
-	}
+	runtime := runtimeWithAuthority(t, material, authority)
 	t.Cleanup(func() {
 		if closeErr := closeReplayRuntimeBounded(runtime); closeErr != nil {
 			t.Errorf("ReplayRuntime.Close() failed: %v", closeErr)
 		}
 	})
 	if runtime.AuthorityReady() {
-		t.Fatal("unready authority reported ready before audit")
+		t.Fatal("unready authority reported ready before probe")
 	}
-	if err := runtime.Revalidate(context.Background()); err != nil {
-		t.Fatalf("successful Revalidate() failed: %v", err)
+	if err := runtime.ProbeHealth(context.Background()); err != nil {
+		t.Fatalf("successful ProbeHealth() failed: %v", err)
 	}
-	if runtime.AuthorityReady() || authority.readyCalls != 2 {
-		t.Fatal("successful audit replaced delegated readiness with a timestamp")
+	if runtime.AuthorityReady() || authority.readyCalls != 2 || authority.Probes() != 1 {
+		t.Fatal("successful probe replaced delegated readiness with a timestamp")
 	}
 }
 
-// TestReplayRuntimeUsesTheValidatedDefaultRevalidationInterval proves default projection.
-func TestReplayRuntimeUsesTheValidatedDefaultRevalidationInterval(t *testing.T) {
-	document := strings.Replace(runtimeValkeyYAML(), "  revalidate_interval: 10s\n", "", 1)
-	material := runtimeMaterial(t, document)
+// TestReplayRuntimeUsesTheValidatedDefaultHealthInterval proves default projection.
+func TestReplayRuntimeUsesTheValidatedDefaultHealthInterval(t *testing.T) {
+	material := runtimeMaterial(t, runtimeRedisYAML())
 	authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
-	runtime, err := newReplayRuntime(context.Background(), material, replayRuntimeFactories{
-		newDeriver: dkim2.NewReplayDeriver,
-		newProduction: func(
-			context.Context,
-			valkey.ClientConfig,
-			valkey.OperatorAttestation,
-			valkey.AuditorConfig,
-		) (replayAuthorityStore, error) {
-			return authority, nil
-		},
-	})
-	if err != nil {
-		t.Fatalf("newReplayRuntime() failed: %v", err)
-	}
-	if runtime.RevalidationInterval() != 30*time.Second {
-		t.Fatalf("default interval = %s", runtime.RevalidationInterval())
+	runtime := runtimeWithAuthority(t, material, authority)
+	if runtime.HealthInterval() != 5*time.Second {
+		t.Fatalf("default interval = %s", runtime.HealthInterval())
 	}
 	if err := closeReplayRuntimeBounded(runtime); err != nil {
 		t.Fatalf("Close() failed: %v", err)
+	}
+}
+
+// TestReplayRuntimeRedisFactoryErrorKeepsNoStore proves that the production
+// constructor never returns a typed-nil authority for a failed store.
+func TestReplayRuntimeRedisFactoryErrorKeepsNoStore(t *testing.T) {
+	storeConfig := redisstore.DefaultConfig("127.0.0.1:1")
+	storeConfig.Mode = 0
+	store, err := newRedisReplayStore(context.Background(), storeConfig, redisstore.Secrets{})
+	if store != nil || dkim2.ReplayErrorCodeOf(err) != dkim2.ReplayErrorMisconfigured {
+		t.Fatalf("invalid provider config returned (%v, %v)", store, err)
 	}
 }
 
@@ -1015,7 +962,7 @@ func TestReplayRuntimeRollsBackEveryConstructionFailure(t *testing.T) {
 		{
 			name: "production-acquired-authority-plus-error",
 			run: func(t *testing.T) {
-				material := runtimeMaterial(t, runtimeValkeyYAML())
+				material := runtimeMaterial(t, runtimeRedisYAML())
 				var deriver *dkim2.ReplayDeriver
 				authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
 				var constructorErr error
@@ -1026,9 +973,8 @@ func TestReplayRuntimeRollsBackEveryConstructionFailure(t *testing.T) {
 					},
 					newProduction: func(
 						context.Context,
-						valkey.ClientConfig,
-						valkey.OperatorAttestation,
-						valkey.AuditorConfig,
+						redisstore.Config,
+						redisstore.Secrets,
 					) (replayAuthorityStore, error) {
 						return authority, errors.New("private provider marker")
 					},
@@ -1144,7 +1090,7 @@ func TestReplayRuntimeRejectsBorrowAndNilFactoryResultsWithoutFallback(t *testin
 		}
 	})
 	t.Run("nil-authority-without-error", func(t *testing.T) {
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		var deriver *dkim2.ReplayDeriver
 		var constructorErr error
 		runtime, err := newReplayRuntime(context.Background(), material, replayRuntimeFactories{
@@ -1154,9 +1100,8 @@ func TestReplayRuntimeRejectsBorrowAndNilFactoryResultsWithoutFallback(t *testin
 			},
 			newProduction: func(
 				context.Context,
-				valkey.ClientConfig,
-				valkey.OperatorAttestation,
-				valkey.AuditorConfig,
+				redisstore.Config,
+				redisstore.Secrets,
 			) (replayAuthorityStore, error) {
 				return nil, nil
 			},
@@ -1170,14 +1115,10 @@ func TestReplayRuntimeRejectsBorrowAndNilFactoryResultsWithoutFallback(t *testin
 	})
 }
 
-// TestReplayRuntimeUsesExactAllowedRevalidationErrorTaxonomy proves every code.
-func TestReplayRuntimeUsesExactAllowedRevalidationErrorTaxonomy(t *testing.T) {
-	allowed := map[dkim2.ReplayErrorCode]bool{
-		dkim2.ReplayErrorLimitExceeded:     true,
-		dkim2.ReplayErrorUnavailable:       true,
-		dkim2.ReplayErrorInconsistent:      true,
-		dkim2.ReplayErrorInternalInvariant: true,
-	}
+// TestReplayRuntimeProbeHealthPassesEveryTypedCode proves that every closed
+// replay code from the store reaches the loop unchanged, so the loop keeps
+// running and the store's own recovery fact drives readiness.
+func TestReplayRuntimeProbeHealthPassesEveryTypedCode(t *testing.T) {
 	codes := []dkim2.ReplayErrorCode{
 		dkim2.ReplayErrorInvalidRequest,
 		dkim2.ReplayErrorMisconfigured,
@@ -1192,33 +1133,15 @@ func TestReplayRuntimeUsesExactAllowedRevalidationErrorTaxonomy(t *testing.T) {
 	}
 	for _, code := range codes {
 		t.Run(string(code), func(t *testing.T) {
-			material := runtimeMaterial(t, runtimeValkeyYAML())
+			material := runtimeMaterial(t, runtimeRedisYAML())
 			authority := &runtimeAuthorityFake{
-				state:               dkim2.ReplayStoreReady,
-				ready:               true,
-				revalidateResponses: []error{dkim2.NewReplayError(code)},
+				state:          dkim2.ReplayStoreReady,
+				ready:          true,
+				probeResponses: []error{dkim2.NewReplayError(code)},
 			}
-			runtime, err := newReplayRuntime(context.Background(), material, replayRuntimeFactories{
-				newDeriver: dkim2.NewReplayDeriver,
-				newProduction: func(
-					context.Context,
-					valkey.ClientConfig,
-					valkey.OperatorAttestation,
-					valkey.AuditorConfig,
-				) (replayAuthorityStore, error) {
-					return authority, nil
-				},
-			})
-			if err != nil {
-				t.Fatalf("newReplayRuntime() failed: %v", err)
-			}
-			err = runtime.Revalidate(context.Background())
-			if allowed[code] {
-				if dkim2.ReplayErrorCodeOf(err) != code {
-					t.Fatalf("allowed %q returned %v", code, err)
-				}
-			} else if !IsReplayRuntimeError(err) {
-				t.Fatalf("forbidden %q returned %v", code, err)
+			runtime := runtimeWithAuthority(t, material, authority)
+			if err := runtime.ProbeHealth(context.Background()); dkim2.ReplayErrorCodeOf(err) != code {
+				t.Fatalf("typed %q returned %v", code, err)
 			}
 			if closeErr := closeReplayRuntimeBounded(runtime); closeErr != nil {
 				t.Fatalf("Close() failed: %v", closeErr)
@@ -1227,25 +1150,45 @@ func TestReplayRuntimeUsesExactAllowedRevalidationErrorTaxonomy(t *testing.T) {
 	}
 }
 
+// TestReplayRuntimeProbeHealthRejectsNonRedisBackends proves that the probe
+// seam exists only for the networked authority.
+func TestReplayRuntimeProbeHealthRejectsNonRedisBackends(t *testing.T) {
+	material := runtimeMaterial(t, runtimeDisabledYAML())
+	runtime, err := newReplayRuntime(context.Background(), material, replayRuntimeFactories{
+		newDisabled: newDisabledReplayStore,
+	})
+	if err != nil {
+		t.Fatalf("newReplayRuntime() failed: %v", err)
+	}
+	if err := runtime.ProbeHealth(context.Background()); !IsReplayRuntimeError(err) {
+		t.Fatalf("disabled ProbeHealth() returned %v", err)
+	}
+	var missing *ReplayRuntime
+	if err := missing.ProbeHealth(context.Background()); !IsReplayRuntimeError(err) || missing.HealthInterval() != 0 {
+		t.Fatal("nil runtime probe seam did not fail closed")
+	}
+	if err := closeReplayRuntimeBounded(runtime); err != nil {
+		t.Fatalf("Close() failed: %v", err)
+	}
+}
+
 // TestReplayRuntimeErrorsContextAndPrivacyRemainBounded proves public surfaces.
 func TestReplayRuntimeErrorsContextAndPrivacyRemainBounded(t *testing.T) {
-	material := runtimeMaterial(t, runtimeValkeyYAML())
+	material := runtimeMaterial(t, runtimeRedisYAML())
 	authority := &runtimeAuthorityFake{
 		state: dkim2.ReplayStoreReady,
 		ready: true,
-		revalidateResponses: []error{
+		probeResponses: []error{
 			dkim2.NewReplayError(dkim2.ReplayErrorUnavailable),
 			errors.New("protected authority marker"),
-			dkim2.NewReplayError(dkim2.ReplayErrorCancelled),
 		},
 	}
 	runtime, err := newReplayRuntime(context.Background(), material, replayRuntimeFactories{
 		newDeriver: dkim2.NewReplayDeriver,
 		newProduction: func(
 			context.Context,
-			valkey.ClientConfig,
-			valkey.OperatorAttestation,
-			valkey.AuditorConfig,
+			redisstore.Config,
+			redisstore.Secrets,
 		) (replayAuthorityStore, error) {
 			return authority, nil
 		},
@@ -1258,26 +1201,20 @@ func TestReplayRuntimeErrorsContextAndPrivacyRemainBounded(t *testing.T) {
 			t.Errorf("ReplayRuntime.Close() failed: %v", closeErr)
 		}
 	})
-	if err := runtime.Revalidate(context.Background()); dkim2.ReplayErrorCodeOf(err) != dkim2.ReplayErrorUnavailable {
+	if err := runtime.ProbeHealth(context.Background()); dkim2.ReplayErrorCodeOf(err) != dkim2.ReplayErrorUnavailable {
 		t.Fatal("ordinary typed replay error did not survive")
 	}
-	if err := runtime.Revalidate(context.Background()); !IsReplayRuntimeError(err) {
+	if err := runtime.ProbeHealth(context.Background()); !IsReplayRuntimeError(err) ||
+		strings.Contains(fmt.Sprint(err), "marker") {
 		t.Fatal("unknown provider error did not collapse")
-	}
-	if err := runtime.Revalidate(context.Background()); !IsReplayRuntimeError(err) {
-		t.Fatal("provider context taxonomy escaped without caller context proof")
 	}
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := runtime.Revalidate(cancelled); !errors.Is(err, context.Canceled) {
+	if err := runtime.ProbeHealth(cancelled); !errors.Is(err, context.Canceled) {
 		t.Fatal("terminal caller context lost precedence")
 	}
-	material.auditorErr = errors.New("protected borrow marker")
-	if err := runtime.Revalidate(context.Background()); !IsReplayRuntimeError(err) {
-		t.Fatal("borrow error did not collapse")
-	}
 	const marker = "runtime-protected-marker"
-	material.auditor = []byte(marker)
+	material.password = []byte(marker)
 	var interfaceValue any = runtime
 	nested := struct{ Runtime any }{Runtime: runtime}
 	values := []any{
@@ -1336,17 +1273,16 @@ func TestReplayRuntimeRejectsHostileContextContracts(t *testing.T) {
 	}
 }
 
-// TestReplayRuntimeSupportsConcurrentReadinessRevalidationAndClose proves race safety.
-func TestReplayRuntimeSupportsConcurrentReadinessRevalidationAndClose(t *testing.T) {
-	material := runtimeMaterial(t, runtimeValkeyYAML())
+// TestReplayRuntimeSupportsConcurrentReadinessProbeAndClose proves race safety.
+func TestReplayRuntimeSupportsConcurrentReadinessProbeAndClose(t *testing.T) {
+	material := runtimeMaterial(t, runtimeRedisYAML())
 	authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
 	runtime, err := newReplayRuntime(context.Background(), material, replayRuntimeFactories{
 		newDeriver: dkim2.NewReplayDeriver,
 		newProduction: func(
 			context.Context,
-			valkey.ClientConfig,
-			valkey.OperatorAttestation,
-			valkey.AuditorConfig,
+			redisstore.Config,
+			redisstore.Secrets,
 		) (replayAuthorityStore, error) {
 			return authority, nil
 		},
@@ -1360,7 +1296,7 @@ func TestReplayRuntimeSupportsConcurrentReadinessRevalidationAndClose(t *testing
 		group.Go(func() {
 			<-start
 			_ = runtime.AuthorityReady()
-			_ = runtime.Revalidate(context.Background())
+			_ = runtime.ProbeHealth(context.Background())
 		})
 	}
 	group.Go(func() {
@@ -1376,7 +1312,7 @@ func TestReplayRuntimeSupportsConcurrentReadinessRevalidationAndClose(t *testing
 
 // TestReplayRuntimeConcurrentCloseInvokesEachOwnerOnce proves waiter serialization.
 func TestReplayRuntimeConcurrentCloseInvokesEachOwnerOnce(t *testing.T) {
-	material := runtimeMaterial(t, runtimeValkeyYAML())
+	material := runtimeMaterial(t, runtimeRedisYAML())
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	var enterOnce sync.Once
@@ -1416,7 +1352,7 @@ func TestReplayRuntimeConcurrentCloseInvokesEachOwnerOnce(t *testing.T) {
 
 // TestReplayRuntimeBlockedStoreKeepsRunningUntilOwnedJoin proves bounded no-teardown state.
 func TestReplayRuntimeBlockedStoreKeepsRunningUntilOwnedJoin(t *testing.T) {
-	material := runtimeMaterial(t, runtimeValkeyYAML())
+	material := runtimeMaterial(t, runtimeRedisYAML())
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	authority := &runtimeAuthorityFake{
@@ -1464,7 +1400,7 @@ func TestReplayRuntimeBlockedStoreKeepsRunningUntilOwnedJoin(t *testing.T) {
 // TestReplayRuntimeContainsChildClosePanicsAndReleasesWaiters proves terminal containment.
 func TestReplayRuntimeContainsChildClosePanicsAndReleasesWaiters(t *testing.T) {
 	t.Run("store panic still closes deriver", func(t *testing.T) {
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		authority := &runtimeAuthorityFake{
 			state: dkim2.ReplayStoreReady,
 			ready: true,
@@ -1487,7 +1423,7 @@ func TestReplayRuntimeContainsChildClosePanicsAndReleasesWaiters(t *testing.T) {
 		}
 	})
 	t.Run("deriver panic releases concurrent waiters", func(t *testing.T) {
-		material := runtimeMaterial(t, runtimeValkeyYAML())
+		material := runtimeMaterial(t, runtimeRedisYAML())
 		authority := &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}
 		runtime := runtimeWithAuthority(t, material, authority)
 		var deriverCalls atomic.Int32
@@ -1812,15 +1748,17 @@ func runtimeMaterial(t *testing.T, document string) *runtimeMaterialFake {
 		t.Fatalf("config.Load() failed: %v", err)
 	}
 	return &runtimeMaterialFake{
-		snapshot: snapshot,
-		hmac:     []byte("0123456789abcdef0123456789abcdef"),
-		app:      []byte("application-secret"),
-		auditor:  []byte("auditor-secret"),
-		roots:    [][]byte{{1, 2, 3, 4}},
+		snapshot:         snapshot,
+		hmac:             []byte("0123456789abcdef0123456789abcdef"),
+		password:         []byte("application-secret"),
+		sentinelPassword: []byte("sentinel-secret"),
+		certificatePEM:   []byte("certificate-pem"),
+		keyPEM:           []byte("key-pem"),
+		roots:            [][]byte{{1, 2, 3, 4}},
 	}
 }
 
-// runtimeWithAuthority constructs one Valkey runtime around a supplied fake authority.
+// runtimeWithAuthority constructs one Redis runtime around a supplied fake authority.
 func runtimeWithAuthority(
 	t *testing.T,
 	material *runtimeMaterialFake,
@@ -1831,9 +1769,8 @@ func runtimeWithAuthority(
 		newDeriver: dkim2.NewReplayDeriver,
 		newProduction: func(
 			context.Context,
-			valkey.ClientConfig,
-			valkey.OperatorAttestation,
-			valkey.AuditorConfig,
+			redisstore.Config,
+			redisstore.Secrets,
 		) (replayAuthorityStore, error) {
 			return authority, nil
 		},
@@ -1879,8 +1816,9 @@ replay:
 `
 }
 
-// runtimeValkeyYAML returns a complete direct-authority snapshot.
-func runtimeValkeyYAML() string {
+// runtimeRedisDocument wraps one replay.redis block in a complete snapshot
+// that relies on the default redis backend.
+func runtimeRedisDocument(block string) string {
 	return `config:
   version: dkim2d-config-v1
 protected:
@@ -1891,36 +1829,58 @@ replay:
   hmac_key_file: /secure/` + runtimeTestGeneration + `/hmac
   epoch: 11
   retention: 2h
-  revalidate_interval: 10s
-  valkey:
-    address: 127.0.0.1:6379
-    server_name: replay.example
-    ca_file: /secure/` + runtimeTestGeneration + `/ca
-    application_username: application
-    application_password_file: /secure/` + runtimeTestGeneration + `/application-password
-    auditor_username: auditor
-    auditor_password_file: /secure/` + runtimeTestGeneration + `/auditor-password
-    attestation:
-      persistence_mode: rdb
-      append_fsync_policy: inactive
-      save_schedule: "60 1"
-      min_replicas_to_write: 0
-      min_replicas_max_lag_seconds: 30
-      loss_window_acceptance: asynchronous_acknowledged
-      rotation_state: unchanged
-      no_global_exactly_once_claim: true
-      dedicated_deployment: true
-      dedicated_database_zero: true
-      direct_ip_authority: true
-      no_endpoint_substitution: true
-      standalone_authority: true
-      shared_draft: true
-      shared_algorithm: true
-      shared_namespace: true
-      shared_epoch: true
-      shared_secret_set: true
-      shared_retention: true
-`
+  limits:
+    max_in_flight: 2
+    max_admission_waiters: 4
+  redis:
+` + block
+}
+
+// runtimeRedisYAML returns a complete standalone TLS snapshot with ACL credentials.
+func runtimeRedisYAML() string {
+	return runtimeRedisDocument(`    standalone:
+      address: 127.0.0.1:6379
+    auth:
+      username: application
+      password_file: /secure/` + runtimeTestGeneration + `/redis-password
+    key_prefix: "tenant:"
+    tls:
+      ca_file: /secure/` + runtimeTestGeneration + `/ca
+      server_name: replay.example
+`)
+}
+
+// runtimeRedisSentinelYAML returns a plaintext Sentinel snapshot with tuned pool and health values.
+func runtimeRedisSentinelYAML() string {
+	return runtimeRedisDocument(`    mode: sentinel
+    sentinel:
+      master_name: mymaster
+      addresses: "10.0.0.1:26379,10.0.0.2:26379"
+    database_number: 3
+    protocol: 2
+    pool_size: 9
+    min_idle_connections: 1
+    retries:
+      max_attempts: 1
+    health:
+      interval: 7s
+      timeout: 1s
+      failure_threshold: 2
+    require_noeviction: false
+    tls:
+      enabled: false
+`)
+}
+
+// runtimeRedisClusterYAML returns a TLS 1.3 cluster snapshot using system roots.
+func runtimeRedisClusterYAML() string {
+	return runtimeRedisDocument(`    mode: cluster
+    cluster:
+      addresses: "10.0.0.1:7000,10.0.0.2:7000,10.0.0.3:7000"
+      max_redirects: 4
+    tls:
+      min_tls_version: TLS1.3
+`)
 }
 
 // runtimeCloneDER creates one independent nested clone.
@@ -1938,98 +1898,6 @@ func runtimeClearDER(input [][]byte) {
 		clear(input[index])
 		input[index] = nil
 	}
-}
-
-// runtimeOpaquePointer returns the protected config owner identity.
-func runtimeOpaquePointer(input any) uintptr {
-	value := reflect.ValueOf(input)
-	if value.Kind() != reflect.Struct || value.NumField() != 1 {
-		return 0
-	}
-	field := value.Field(0)
-	if field.Kind() != reflect.Pointer || field.IsNil() {
-		return 0
-	}
-	return field.Pointer()
-}
-
-// runtimeOpaqueOpen reports whether one opaque Valkey config remains live.
-func runtimeOpaqueOpen(input any) bool {
-	value := reflect.ValueOf(input)
-	if value.Kind() != reflect.Struct || value.NumField() != 1 {
-		return false
-	}
-	values := value.Field(0)
-	if values.Kind() != reflect.Pointer || values.IsNil() {
-		return false
-	}
-	closed := values.Elem().FieldByName("closed")
-	return closed.IsValid() && !closed.Bool()
-}
-
-// runtimeAuditorSnapshot reads bounded test evidence while the config is live.
-func runtimeAuditorSnapshot(input valkey.AuditorConfig) (bool, string, []byte) {
-	value := reflect.ValueOf(input).Field(0)
-	if value.IsNil() {
-		return false, "", nil
-	}
-	values := value.Elem()
-	if values.FieldByName("closed").Bool() {
-		return false, "", nil
-	}
-	username := values.FieldByName("Username").String()
-	passwordField := values.FieldByName("Password")
-	password := make([]byte, passwordField.Len())
-	for index := range password {
-		password[index] = byte(passwordField.Index(index).Uint())
-	}
-	return true, username, password
-}
-
-// runtimeReadClientEvidence reads normalized fields while the owned config is live.
-func runtimeReadClientEvidence(input valkey.ClientConfig) runtimeClientEvidence {
-	value := reflect.ValueOf(input).Field(0)
-	if value.IsNil() {
-		return runtimeClientEvidence{}
-	}
-	values := value.Elem()
-	if values.FieldByName("closed").Bool() {
-		return runtimeClientEvidence{}
-	}
-	evidence := runtimeClientEvidence{
-		open:       true,
-		endpoint:   values.FieldByName("Endpoint").String(),
-		serverName: values.FieldByName("TLSServerName").String(),
-		username:   values.FieldByName("Username").String(),
-		password:   runtimeReflectBytes(values.FieldByName("Password")),
-		epoch:      uint32(values.FieldByName("Epoch").Uint()),
-		dial:       time.Duration(values.FieldByName("DialTimeout").Int()),
-		keepalive:  time.Duration(values.FieldByName("TCPKeepAlive").Int()),
-		write:      time.Duration(values.FieldByName("ConnWriteTimeout").Int()),
-	}
-	roots := values.FieldByName("RootCertificatesDER")
-	evidence.roots = make([][]byte, roots.Len())
-	for index := range evidence.roots {
-		evidence.roots[index] = runtimeReflectBytes(roots.Index(index))
-	}
-	limits := values.FieldByName("Limits")
-	evidence.limits = dkim2.ReplayLimits{
-		MaxEntries:          int(limits.FieldByName("MaxEntries").Int()),
-		MaxWaiters:          int(limits.FieldByName("MaxWaiters").Int()),
-		PruneBudget:         int(limits.FieldByName("PruneBudget").Int()),
-		MaxInFlight:         int(limits.FieldByName("MaxInFlight").Int()),
-		MaxAdmissionWaiters: int(limits.FieldByName("MaxAdmissionWaiters").Int()),
-	}
-	return evidence
-}
-
-// runtimeReflectBytes copies one reflected byte slice without exposing ownership.
-func runtimeReflectBytes(value reflect.Value) []byte {
-	output := make([]byte, value.Len())
-	for index := range output {
-		output[index] = byte(value.Index(index).Uint())
-	}
-	return output
 }
 
 // runtimeMemoryClearCount returns exact test-only release evidence.
@@ -2050,4 +1918,141 @@ func runtimeMemoryClearCount(store *dkim2.ReplayMemoryStore) int {
 		return 0
 	}
 	return int(count.Int())
+}
+
+// TestReplayRuntimeRedisConfigBoundariesAreAdmittedByTheProvider proves the
+// loader and the provider share one grammar: every boundary value that the
+// typed configuration accepts also passes provider validation, so a
+// configuration that loads never fails provider admission at startup.
+func TestReplayRuntimeRedisConfigBoundariesAreAdmittedByTheProvider(t *testing.T) {
+	username := strings.Repeat("u", 124) + "@!~%"
+	master := strings.Repeat("M", 127) + "_"
+	prefix := strings.Repeat("K", 60) + "_.:-"
+	sentinels := make([]string, 32)
+	for index := range sentinels {
+		sentinels[index] = fmt.Sprintf("swarm_sentinel-%d.internal:26379", index)
+	}
+	documents := map[string]string{
+		"standalone-underscore-host": runtimeRedisDocument(`    standalone:
+      address: mailstack_valkey:6379
+    auth:
+      username: "` + username + `"
+      password_file: /secure/` + runtimeTestGeneration + `/redis-password
+    key_prefix: "` + prefix + `"
+    tls:
+      enabled: false
+`),
+		"sentinel-maximum-list": runtimeRedisDocument(`    mode: sentinel
+    sentinel:
+      master_name: "` + master + `"
+      addresses: "` + strings.Join(sentinels, ",") + `"
+      username: "` + username + `"
+      password_file: /secure/` + runtimeTestGeneration + `/sentinel-password
+    tls:
+      server_name: localhost
+`),
+	}
+	for name, document := range documents {
+		t.Run(name, func(t *testing.T) {
+			material := runtimeMaterial(t, document)
+			redisConfig, present := material.snapshot.Replay().Redis()
+			if !present {
+				t.Fatal("boundary document omitted Redis config")
+			}
+			if err := redisStoreConfig(redisConfig, replayLimits(material.snapshot.Replay())).Validate(); err != nil {
+				t.Fatalf("provider refused a loadable boundary configuration: %v", err)
+			}
+		})
+	}
+}
+
+// TestReplayRuntimeRedisEmitsBoundedConfigWarnings proves that disabled TLS
+// verification and a disabled noeviction check each emit exactly one
+// bounded startup warning through the central logger, that a secure
+// configuration emits none, and that no record carries the configured
+// address, username, verification name, key prefix, or secret material.
+func TestReplayRuntimeRedisEmitsBoundedConfigWarnings(t *testing.T) {
+	const address = "replay-warning.example:6390"
+	weakened := runtimeRedisDocument(`    standalone:
+      address: ` + address + `
+    auth:
+      username: warning-user
+      password_file: /secure/` + runtimeTestGeneration + `/redis-password
+    key_prefix: "warning-tenant:"
+    require_noeviction: false
+    tls:
+      server_name: warning-verify.example
+      insecure_skip_verify: true
+`)
+	secure := strings.Replace(runtimeRedisYAML(), "127.0.0.1:6379", address, 1)
+	for _, test := range []struct {
+		name     string
+		document string
+		want     []string
+	}{
+		{name: "weakened", document: weakened, want: []string{"tls_insecure_skip_verify", "noeviction_unchecked"}},
+		{name: "secure", document: secure},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			material := runtimeMaterial(t, test.document)
+			var logs strings.Builder
+			telemetry, err := observability.NewRuntime(
+				context.Background(), material.snapshot.Observability(), &logs, config.TracingStartupMaterial{},
+			)
+			if err != nil {
+				t.Fatalf("observability.NewRuntime() error = %v", err)
+			}
+			t.Cleanup(func() { _ = telemetry.Shutdown(context.Background()) })
+			factories := productionReplayRuntimeFactories(telemetry)
+			factories.newProduction = func(
+				context.Context,
+				redisstore.Config,
+				redisstore.Secrets,
+			) (replayAuthorityStore, error) {
+				return &runtimeAuthorityFake{state: dkim2.ReplayStoreReady, ready: true}, nil
+			}
+			runtime, err := newReplayRuntime(context.Background(), material, factories)
+			if err != nil || runtime == nil {
+				t.Fatalf("newReplayRuntime() = (%v, %v)", runtime, err)
+			}
+			t.Cleanup(func() { _ = closeReplayRuntimeBounded(runtime) })
+			var got []string
+			for line := range strings.Lines(logs.String()) {
+				var record map[string]any
+				if err := json.Unmarshal([]byte(line), &record); err != nil {
+					t.Fatal("central logger wrote a non-JSON record")
+				}
+				if record["event_id"] != "replay.config.warning" {
+					continue
+				}
+				if record["level"] != "WARN" || record["operation"] != "config" || len(record) != 7 {
+					t.Fatalf("warning record has unexpected shape: %v", record)
+				}
+				warning, _ := record["config_warning"].(string)
+				got = append(got, warning)
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("warnings = %q, want %q", got, test.want)
+			}
+			for _, forbidden := range []string{
+				"replay-warning.example", "6390", "warning-user", "warning-verify.example",
+				"warning-tenant", "application-secret", "redis-password",
+			} {
+				if strings.Contains(logs.String(), forbidden) {
+					t.Fatalf("startup logs exposed %q", forbidden)
+				}
+			}
+		})
+	}
+}
+
+// TestNewReplayRuntimeRequiresTelemetry proves production composition fails
+// closed without the central observability runtime.
+func TestNewReplayRuntimeRequiresTelemetry(t *testing.T) {
+	runtime, err := NewReplayRuntime(context.Background(), func() context.Context {
+		return context.Background()
+	}, &config.RuntimePreparation{}, nil)
+	if runtime != nil || !errors.Is(err, &ReplayRuntimeError{}) {
+		t.Fatalf("NewReplayRuntime(nil telemetry) = (%v, %v)", runtime, err)
+	}
 }

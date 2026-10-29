@@ -66,20 +66,20 @@ server:
   listen: "127.0.0.1:8080"
   max_in_flight: 2
 replay:
-  valkey:
-    attestation:
-      dedicated_deployment: true
+  redis:
+    tls:
+      enabled: true
 `))
 	if err != nil {
 		t.Fatalf("preflightYAML() error = %v", err)
 	}
 
 	want := map[string]rawValue{
-		pathConfigVersion:                  {text: configVersion, kind: scalarString, source: SourceYAML},
-		pathProtectedGeneration:            {text: "0123456789abcdef0123456789abcdef", kind: scalarString, source: SourceYAML},
-		pathServerListen:                   {text: defaultListenAddress, kind: scalarString, source: SourceYAML},
-		pathServerMaxInFlight:              {text: "2", kind: scalarUint, source: SourceYAML},
-		pathAttestationDedicatedDeployment: {text: canonicalTrue, kind: scalarBool, source: SourceYAML},
+		pathConfigVersion:       {text: configVersion, kind: scalarString, source: SourceYAML},
+		pathProtectedGeneration: {text: "0123456789abcdef0123456789abcdef", kind: scalarString, source: SourceYAML},
+		pathServerListen:        {text: defaultListenAddress, kind: scalarString, source: SourceYAML},
+		pathServerMaxInFlight:   {text: "2", kind: scalarUint, source: SourceYAML},
+		pathRedisTLSEnabled:     {text: canonicalTrue, kind: scalarBool, source: SourceYAML},
 	}
 	if len(values) != len(want) {
 		t.Fatalf("preflightYAML() returned %d values, want %d", len(values), len(want))

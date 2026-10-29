@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = ('lib', 'cmd/dkim2d', 'cmd/dkim2-milter', 'cmd/dkim2-exim', 'cmd/dkim2ctl', 'cmd/dkim2-dsn-propagator', 'tools')
-SCRIPTS = ('contrib/qualification/postfix-milter/run.sh', 'cmd/dkim2-exim/exim/tests/test-real-matrix-verifier.sh', 'scripts/test-datasource-services.sh', 'scripts/test-valkey.sh', 'scripts/test-datasource-ldap-acl.sh', 'tools/check-operator-docs.sh', 'contrib/rspamd/tests/run-policy-e2e.sh', 'contrib/rspamd/tests/policy-e2e/verify-two-hop-projection.sh')
+SCRIPTS = ('contrib/qualification/postfix-milter/run.sh', 'cmd/dkim2-exim/exim/tests/test-real-matrix-verifier.sh', 'scripts/test-datasource-services.sh', 'scripts/test-redis.sh', 'scripts/test-datasource-ldap-acl.sh', 'tools/check-operator-docs.sh', 'contrib/rspamd/tests/run-policy-e2e.sh', 'contrib/rspamd/tests/policy-e2e/verify-two-hop-projection.sh')
 
 class ToolchainContractTest(unittest.TestCase):
     """Check standalone modules, native Make execution, CI, and direct entry points."""

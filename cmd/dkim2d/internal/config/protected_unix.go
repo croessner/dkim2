@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/replay/redisgrammar"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/signingstore"
 	"golang.org/x/sys/unix"
 )
@@ -35,8 +36,8 @@ const (
 	protectedDSNSignCapability
 	protectedDSNPropagateCapability
 	protectedHMAC
-	protectedApplicationPassword
-	protectedAuditorPassword
+	protectedRedisPassword
+	protectedRedisSentinelPassword
 	protectedCA
 	protectedTracingCA
 	protectedDatasourcePassword
@@ -44,6 +45,8 @@ const (
 	protectedServerCertificate
 	protectedServerPrivateKey
 	protectedServerCA
+	protectedRedisClientCertificate
+	protectedRedisClientKey
 )
 
 type ownedDescriptor struct {
@@ -327,13 +330,8 @@ func selectedProtectedPaths(snapshot Snapshot) []selectedProtectedPath {
 			path: replay.HMACKeyFile(),
 			role: protectedHMAC,
 		})
-		valkey, enabled := replay.Valkey()
-		if enabled {
-			paths = append(paths,
-				selectedProtectedPath{path: valkey.ApplicationPasswordFile(), role: protectedApplicationPassword},
-				selectedProtectedPath{path: valkey.AuditorPasswordFile(), role: protectedAuditorPassword},
-				selectedProtectedPath{path: valkey.CAFile(), role: protectedCA},
-			)
+		if redis, enabled := replay.Redis(); enabled {
+			paths = append(paths, selectedRedisProtectedPaths(redis)...)
 		}
 	}
 	tracing := snapshot.Observability().Tracing()
@@ -341,6 +339,25 @@ func selectedProtectedPaths(snapshot Snapshot) []selectedProtectedPath {
 		paths = append(paths, selectedProtectedPath{path: tracing.CAFile(), role: protectedTracingCA})
 	}
 	return paths
+}
+
+// selectedRedisProtectedPaths returns the Redis children in a fixed order;
+// each optional role is selected only when its path is configured.
+func selectedRedisProtectedPaths(redis RedisConfig) []selectedProtectedPath {
+	candidates := []selectedProtectedPath{
+		{path: redis.PasswordFile(), role: protectedRedisPassword},
+		{path: redis.SentinelPasswordFile(), role: protectedRedisSentinelPassword},
+		{path: redis.TLSCAFile(), role: protectedCA},
+		{path: redis.TLSCertificateFile(), role: protectedRedisClientCertificate},
+		{path: redis.TLSKeyFile(), role: protectedRedisClientKey},
+	}
+	selected := make([]selectedProtectedPath, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.path != "" {
+			selected = append(selected, candidate)
+		}
+	}
+	return selected
 }
 
 // readGenerationChildren reads and immediately rechecks every already-open child.
@@ -466,16 +483,20 @@ func buildProtectedState(
 			}
 			copy(state.hmac[:], file.data)
 			state.hasHMAC = true
-		case protectedApplicationPassword:
+		case protectedRedisPassword:
 			if err := validatePassword(file.data); err != nil {
 				return nil, err
 			}
-			state.applicationPassword = append([]byte(nil), file.data...)
-		case protectedAuditorPassword:
+			state.redisPassword = append([]byte(nil), file.data...)
+		case protectedRedisSentinelPassword:
 			if err := validatePassword(file.data); err != nil {
 				return nil, err
 			}
-			state.auditorPassword = append([]byte(nil), file.data...)
+			state.redisSentinelPassword = append([]byte(nil), file.data...)
+		case protectedRedisClientCertificate:
+			state.redisClientCertificatePEM = append([]byte(nil), file.data...)
+		case protectedRedisClientKey:
+			state.redisClientKeyPEM = append([]byte(nil), file.data...)
 		case protectedCA:
 			roots, err := parseCertificateRoots(file.data)
 			if err != nil {
@@ -556,10 +577,52 @@ func buildProtectedState(
 			}
 		}
 	}
+	if err := validateRedisProtectedMaterial(snapshot, state, time.Now()); err != nil {
+		return nil, err
+	}
 	if err := validateProtectedSeparation(state); err != nil {
 		return nil, err
 	}
 	return state, nil
+}
+
+// validateRedisProtectedMaterial proves that the loaded Redis children match
+// the configured inventory exactly and that a configured client identity is
+// one parseable, currently valid certificate and matching private key.
+func validateRedisProtectedMaterial(snapshot Snapshot, state *protectedState, now time.Time) error {
+	redis, enabled := snapshot.Replay().Redis()
+	if !enabled {
+		if len(state.redisPassword) != 0 || len(state.redisSentinelPassword) != 0 ||
+			len(state.redisClientCertificatePEM) != 0 || len(state.redisClientKeyPEM) != 0 {
+			return newError(CodeProtectedContent)
+		}
+		return nil
+	}
+	if (len(state.redisPassword) != 0) != (redis.PasswordFile() != "") ||
+		(len(state.redisSentinelPassword) != 0) != (redis.SentinelPasswordFile() != "") ||
+		(len(state.rootCertificatesDER) != 0) != (redis.TLSCAFile() != "") ||
+		(len(state.redisClientCertificatePEM) != 0) != (redis.TLSCertificateFile() != "") ||
+		(len(state.redisClientKeyPEM) != 0) != (redis.TLSKeyFile() != "") {
+		return newError(CodeProtectedContent)
+	}
+	if len(state.redisClientCertificatePEM) == 0 {
+		return nil
+	}
+	return validateRedisClientIdentity(state.redisClientCertificatePEM, state.redisClientKeyPEM, now)
+}
+
+// validateRedisClientIdentity requires one matching certificate and key whose
+// leaf is a currently valid end-entity certificate.
+func validateRedisClientIdentity(certificatePEM, keyPEM []byte, now time.Time) error {
+	pair, err := tls.X509KeyPair(certificatePEM, keyPEM)
+	if err != nil || len(pair.Certificate) == 0 || now.IsZero() {
+		return newError(CodeProtectedContent)
+	}
+	leaf, err := x509.ParseCertificate(pair.Certificate[0])
+	if err != nil || leaf.IsCA || now.Before(leaf.NotBefore) || !now.Before(leaf.NotAfter) {
+		return newError(CodeProtectedContent)
+	}
+	return nil
 }
 
 // validatedServerTLSConfig validates the server identity and fixes a TLS 1.3-only policy.
@@ -687,8 +750,9 @@ func validateProtectedFileMetadata(
 	case protectedYAML, protectedCapability, protectedSignCapability,
 		protectedReviseCapability, protectedBatchReviseCapability, protectedDSNSignCapability,
 		protectedDSNPropagateCapability, protectedHMAC,
-		protectedApplicationPassword, protectedAuditorPassword,
-		protectedDatasourcePassword, protectedServerCertificate, protectedServerPrivateKey:
+		protectedRedisPassword, protectedRedisSentinelPassword,
+		protectedDatasourcePassword, protectedServerCertificate, protectedServerPrivateKey,
+		protectedRedisClientCertificate, protectedRedisClientKey:
 		modeAccepted = metadata.modeBits == 0o400 || metadata.modeBits == 0o600
 	case protectedCA, protectedDatasourceCA, protectedServerCA:
 		switch metadata.modeBits {
@@ -726,7 +790,7 @@ func protectedSizeAccepted(role protectedFileRole, size int64) bool {
 		protectedDSNSignCapability, protectedDSNPropagateCapability,
 		protectedHMAC:
 		return size == exactKeyBytes
-	case protectedApplicationPassword, protectedAuditorPassword:
+	case protectedRedisPassword, protectedRedisSentinelPassword:
 		return size >= 1 && size <= maxPasswordBytes
 	case protectedDatasourcePassword:
 		return size >= 1 && size <= maxPasswordBytes
@@ -734,6 +798,8 @@ func protectedSizeAccepted(role protectedFileRole, size int64) bool {
 		return size >= 1 && size <= maxCAPEMBytes
 	case protectedServerCertificate, protectedServerPrivateKey:
 		return size >= 1 && size <= maxCAPEMBytes
+	case protectedRedisClientCertificate, protectedRedisClientKey:
+		return size >= 1 && size <= redisgrammar.MaxClientPEMBytes
 	case protectedTracingCA:
 		return size >= 1 && size <= maxTracingCAPEMBytes
 	default:
@@ -750,7 +816,7 @@ func protectedReadCap(role protectedFileRole) int {
 		protectedDSNSignCapability, protectedDSNPropagateCapability,
 		protectedHMAC:
 		return exactKeyBytes
-	case protectedApplicationPassword, protectedAuditorPassword:
+	case protectedRedisPassword, protectedRedisSentinelPassword:
 		return maxPasswordBytes
 	case protectedDatasourcePassword:
 		return maxPasswordBytes
@@ -758,6 +824,8 @@ func protectedReadCap(role protectedFileRole) int {
 		return maxCAPEMBytes
 	case protectedServerCertificate, protectedServerPrivateKey:
 		return maxCAPEMBytes
+	case protectedRedisClientCertificate, protectedRedisClientKey:
+		return redisgrammar.MaxClientPEMBytes
 	case protectedTracingCA:
 		return maxTracingCAPEMBytes
 	default:

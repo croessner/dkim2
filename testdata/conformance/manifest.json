@@ -260,6 +260,18 @@
       "module": "lib"
     },
     {
+      "id": "redis-harness-script",
+      "path": "scripts/test-redis.sh",
+      "sha256": "52758a9ad12c3393cb7e6d6f34f17835788b83411a4482ef99fb608a00090bc8",
+      "module": "scripts"
+    },
+    {
+      "id": "redis-replay-source",
+      "path": "cmd/dkim2d/internal/replay/redisstore/real_redis_integration_test.go",
+      "sha256": "ffc5b1be383e9e0f3cd9aa89aef08dae541c488ff8478458606187609d6925e9",
+      "module": "cmd/dkim2d"
+    },
+    {
       "id": "replay-deriver-source",
       "path": "lib/internal/replay/deriver_test.go",
       "sha256": "b0f3377e92acb7fbf95da300da8d20a1d87103be10a6d21218417102dd7f656c",
@@ -360,18 +372,6 @@
       "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/signing-test-rsa.pem",
       "sha256": "64f74e6f8f7e6f8c1721aaff1ac05c429caa2831d65796e98052f5ff84e3c3d3",
       "module": "lib"
-    },
-    {
-      "id": "valkey-harness-script",
-      "path": "scripts/test-valkey.sh",
-      "sha256": "d35a201c1ac2d4938601c502d1e9a1cf1f1b6f7e706442a120cf668226277592",
-      "module": "scripts"
-    },
-    {
-      "id": "valkey-replay-source",
-      "path": "cmd/dkim2d/internal/replay/valkey/real_valkey_integration_test.go",
-      "sha256": "54ca228f0804fc1aae19e75248a70ab01be1b2740d33e1ef25e83440e5406212",
-      "module": "cmd/dkim2d"
     },
     {
       "id": "verification-composite-unsupported-source",
@@ -1333,7 +1333,7 @@
       "case_id": "aggregate-states",
       "class": "local_security_policy",
       "authority": [
-        "docs/specs/implementation/replay-store-valkey.md Result Aggregation"
+        "docs/specs/implementation/replay-store-redis.md Result Aggregation"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -1349,7 +1349,7 @@
       "case_id": "concurrent-duplicate",
       "class": "local_security_policy",
       "authority": [
-        "docs/specs/implementation/replay-store-valkey.md Memory Store"
+        "docs/specs/implementation/replay-store-redis.md Memory Store"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -1365,7 +1365,7 @@
       "case_id": "disabled",
       "class": "local_security_policy",
       "authority": [
-        "docs/specs/implementation/replay-store-valkey.md Disabled Policy"
+        "docs/specs/implementation/replay-store-redis.md Disabled Policy"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -1381,7 +1381,7 @@
       "case_id": "identity-draft08-epoch",
       "class": "local_security_policy",
       "authority": [
-        "docs/replay-store-valkey.md Replay Identity Contract"
+        "docs/replay-store-redis.md Replay Identity Contract"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -1397,7 +1397,7 @@
       "case_id": "identity-separation",
       "class": "local_security_policy",
       "authority": [
-        "docs/specs/implementation/replay-store-valkey.md Identity Derivation"
+        "docs/specs/implementation/replay-store-redis.md Identity Derivation"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",
@@ -1413,7 +1413,7 @@
       "case_id": "memory-expiry",
       "class": "local_security_policy",
       "authority": [
-        "docs/specs/implementation/replay-store-valkey.md Retention"
+        "docs/specs/implementation/replay-store-redis.md Retention"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -1429,7 +1429,7 @@
       "case_id": "privacy",
       "class": "local_security_policy",
       "authority": [
-        "docs/specs/implementation/replay-store-valkey.md Privacy"
+        "docs/specs/implementation/replay-store-redis.md Privacy"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -1445,7 +1445,7 @@
       "case_id": "provider-failures",
       "class": "local_security_policy",
       "authority": [
-        "docs/specs/implementation/replay-store-valkey.md Store Failure Matrix"
+        "docs/specs/implementation/replay-store-redis.md Store Failure Matrix"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -1458,10 +1458,27 @@
     },
     {
       "suite": "replay",
+      "case_id": "redis-set-nx-get-px",
+      "class": "local_security_policy",
+      "authority": [
+        "docs/specs/implementation/replay-store-redis.md Redis Store"
+      ],
+      "provenance": "independent_oracle",
+      "runner": "portable_vector",
+      "required_platform": "linux",
+      "expected_outcome": "pass",
+      "artifacts": [
+        "redis-harness-script",
+        "redis-replay-source"
+      ],
+      "producer": "redis-tests"
+    },
+    {
+      "suite": "replay",
       "case_id": "retention-edge",
       "class": "local_security_policy",
       "authority": [
-        "docs/specs/implementation/replay-store-valkey.md Retention"
+        "docs/specs/implementation/replay-store-redis.md Retention"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -1471,23 +1488,6 @@
         "replay-retention-source"
       ],
       "producer": "replay-memory-tests"
-    },
-    {
-      "suite": "replay",
-      "case_id": "valkey-set-nx-px",
-      "class": "local_security_policy",
-      "authority": [
-        "docs/specs/implementation/replay-store-valkey.md Valkey Store"
-      ],
-      "provenance": "independent_oracle",
-      "runner": "portable_vector",
-      "required_platform": "linux",
-      "expected_outcome": "pass",
-      "artifacts": [
-        "valkey-harness-script",
-        "valkey-replay-source"
-      ],
-      "producer": "valkey-tests"
     },
     {
       "suite": "signing",

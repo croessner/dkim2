@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -57,9 +58,9 @@ func TestLoadProtectedDisabledOwnsAndTransfersOneImmutableGeneration(t *testing.
 	}
 }
 
-// TestLoadProtectedBackendChildMatrices loads the exact disabled, memory, and Valkey inventories.
+// TestLoadProtectedBackendChildMatrices loads the exact disabled, memory, and Redis inventories.
 func TestLoadProtectedBackendChildMatrices(t *testing.T) {
-	for _, backend := range []ReplayBackend{ReplayDisabled, ReplayMemory, ReplayValkey} {
+	for _, backend := range []ReplayBackend{ReplayDisabled, ReplayMemory, ReplayRedis} {
 		t.Run(strconv.Itoa(int(backend)), func(t *testing.T) {
 			fixture := newProtectedBackendFixture(t, backend)
 			owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
@@ -72,22 +73,25 @@ func TestLoadProtectedBackendChildMatrices(t *testing.T) {
 			}
 			startup := preparation.StartupReplay()
 			if backend == ReplayDisabled {
-				if err := startup.UseReplayMaterial(func(_, _, _ []byte, _ [][]byte) error { return nil }); CodeOf(err) != CodeProtectedContent {
+				if err := startup.UseReplayMaterial(func(ReplayMaterial) error { return nil }); CodeOf(err) != CodeProtectedContent {
 					t.Fatalf("disabled replay borrow returned code %s", CodeOf(err))
 				}
 			} else {
-				err := startup.UseReplayMaterial(func(hmac, applicationPassword, auditorPassword []byte, roots [][]byte) error {
-					if !bytes.Equal(hmac, bytes.Repeat([]byte{0xb6}, exactKeyBytes)) {
+				err := startup.UseReplayMaterial(func(material ReplayMaterial) error {
+					if !bytes.Equal(material.HMAC(), bytes.Repeat([]byte{0xb6}, exactKeyBytes)) {
 						t.Fatal("HMAC bytes changed")
 					}
-					if backend == ReplayValkey {
-						if !bytes.Equal(applicationPassword, []byte("application-password")) ||
-							!bytes.Equal(auditorPassword, []byte("auditor-password")) ||
-							len(roots) != 1 {
-							t.Fatal("Valkey protected child inventory changed")
+					if backend == ReplayRedis {
+						if !bytes.Equal(material.Password(), []byte("redis-password")) ||
+							!bytes.Equal(material.SentinelPassword(), []byte("sentinel-password")) ||
+							len(material.RootsDER()) != 1 ||
+							!bytes.Equal(material.ClientCertificatePEM(), fixture.clientCertificatePEM) ||
+							!bytes.Equal(material.ClientKeyPEM(), fixture.clientKeyPEM) {
+							t.Fatal("Redis protected child inventory changed")
 						}
-					} else if len(applicationPassword) != 0 || len(auditorPassword) != 0 || len(roots) != 0 {
-						t.Fatal("memory backend loaded Valkey-only children")
+					} else if material.Password() != nil || material.SentinelPassword() != nil ||
+						material.ClientCertificatePEM() != nil || material.ClientKeyPEM() != nil || len(material.RootsDER()) != 0 {
+						t.Fatal("memory backend loaded Redis-only children")
 					}
 					return nil
 				})
@@ -164,18 +168,50 @@ func TestLoadProtectedRejectsCrossRoleEqualityAndChildIdentityCollisions(t *test
 			},
 		},
 		{
-			name: "application equals auditor",
+			name: "Redis password equals Sentinel password",
 			mutate: func(t *testing.T, fixture protectedBackendFixture) {
 				t.Helper()
-				writeProtectedFileWithoutModeChange(filepath.Join(fixture.generationPath, "auditor-password"), []byte("application-password"))
+				writeProtectedFileWithoutModeChange(filepath.Join(fixture.generationPath, "sentinel-password"), []byte("redis-password"))
 			},
 		},
 		{
-			name: "HMAC equals application",
+			name: "HMAC equals Redis password",
 			mutate: func(t *testing.T, fixture protectedBackendFixture) {
 				t.Helper()
 				value := bytes.Repeat([]byte{0xb6}, exactKeyBytes)
-				writeProtectedFileWithoutModeChange(filepath.Join(fixture.generationPath, "application-password"), value)
+				writeProtectedFileWithoutModeChange(filepath.Join(fixture.generationPath, "redis-password"), value)
+			},
+		},
+		{
+			name: "capability equals Sentinel password",
+			mutate: func(t *testing.T, fixture protectedBackendFixture) {
+				t.Helper()
+				value := bytes.Repeat([]byte{0xa5}, exactKeyBytes)
+				writeProtectedFileWithoutModeChange(filepath.Join(fixture.generationPath, "sentinel-password"), value)
+			},
+		},
+		{
+			name: "client key does not match certificate",
+			mutate: func(t *testing.T, fixture protectedBackendFixture) {
+				t.Helper()
+				_, otherKey, _ := serverTLSFixture(t, "other.example", time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+				writeProtectedFileWithoutModeChange(filepath.Join(fixture.generationPath, "client-key"), otherKey)
+			},
+		},
+		{
+			name: "expired client certificate",
+			mutate: func(t *testing.T, fixture protectedBackendFixture) {
+				t.Helper()
+				certificate, key, _ := serverTLSFixture(t, "client.example", time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour))
+				writeProtectedFileWithoutModeChange(filepath.Join(fixture.generationPath, "client-cert"), certificate)
+				writeProtectedFileWithoutModeChange(filepath.Join(fixture.generationPath, "client-key"), key)
+			},
+		},
+		{
+			name: "malformed Redis password",
+			mutate: func(t *testing.T, fixture protectedBackendFixture) {
+				t.Helper()
+				writeProtectedFileWithoutModeChange(filepath.Join(fixture.generationPath, "redis-password"), []byte("line\nbreak"))
 			},
 		},
 		{
@@ -196,7 +232,7 @@ func TestLoadProtectedRejectsCrossRoleEqualityAndChildIdentityCollisions(t *test
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := newProtectedBackendFixture(t, ReplayValkey)
+			fixture := newProtectedBackendFixture(t, ReplayRedis)
 			test.mutate(t, fixture)
 			owner, err := LoadProtected(fixture.yamlPath, FlagValues{})
 			if owner != nil || err == nil {
@@ -211,7 +247,7 @@ func TestLoadProtectedRejectsCrossRoleEqualityAndChildIdentityCollisions(t *test
 
 // TestLoadProtectedAllowsLinkedPublicCA proves the deliberate non-secret CA link policy.
 func TestLoadProtectedAllowsLinkedPublicCA(t *testing.T) {
-	fixture := newProtectedBackendFixture(t, ReplayValkey)
+	fixture := newProtectedBackendFixture(t, ReplayRedis)
 	makeGenerationWritable(t, fixture.generationPath)
 	if err := os.Link(
 		filepath.Join(fixture.generationPath, "ca"),
@@ -229,7 +265,7 @@ func TestLoadProtectedAllowsLinkedPublicCA(t *testing.T) {
 
 // TestProtectedLoadPhaseOrderPreopensEveryChildBeforeReads freezes the bundle algorithm.
 func TestProtectedLoadPhaseOrderPreopensEveryChildBeforeReads(t *testing.T) {
-	fixture := newProtectedBackendFixture(t, ReplayValkey)
+	fixture := newProtectedBackendFixture(t, ReplayRedis)
 	var events []struct {
 		event protectedLoadEvent
 		role  protectedFileRole
@@ -263,7 +299,7 @@ func TestProtectedLoadPhaseOrderPreopensEveryChildBeforeReads(t *testing.T) {
 			finalRoles = append(finalRoles, event.role)
 		}
 	}
-	if opened != 5 || finals != 5 || firstRead < 0 {
+	if opened != 7 || finals != 7 || firstRead < 0 {
 		t.Fatalf("phase counts opened=%d finals=%d firstRead=%d", opened, finals, firstRead)
 	}
 	openedBeforeRead := 0
@@ -272,15 +308,17 @@ func TestProtectedLoadPhaseOrderPreopensEveryChildBeforeReads(t *testing.T) {
 			openedBeforeRead++
 		}
 	}
-	if openedBeforeRead != 5 {
-		t.Fatalf("opened before first read = %d, want 5", openedBeforeRead)
+	if openedBeforeRead != 7 {
+		t.Fatalf("opened before first read = %d, want 7", openedBeforeRead)
 	}
 	expectedRoles := []protectedFileRole{
 		protectedCapability,
 		protectedHMAC,
-		protectedApplicationPassword,
-		protectedAuditorPassword,
+		protectedRedisPassword,
+		protectedRedisSentinelPassword,
 		protectedCA,
+		protectedRedisClientCertificate,
+		protectedRedisClientKey,
 	}
 	expectedEvents := []struct {
 		event protectedLoadEvent
@@ -683,8 +721,10 @@ func TestProtectedRoleSizeMatrix(t *testing.T) {
 		{role: protectedYAML, min: 1, max: maxYAMLDocumentBytes},
 		{role: protectedCapability, min: exactKeyBytes, max: exactKeyBytes},
 		{role: protectedHMAC, min: exactKeyBytes, max: exactKeyBytes},
-		{role: protectedApplicationPassword, min: 1, max: maxPasswordBytes},
-		{role: protectedAuditorPassword, min: 1, max: maxPasswordBytes},
+		{role: protectedRedisPassword, min: 1, max: maxPasswordBytes},
+		{role: protectedRedisSentinelPassword, min: 1, max: maxPasswordBytes},
+		{role: protectedRedisClientCertificate, min: 1, max: maxCAPEMBytes},
+		{role: protectedRedisClientKey, min: 1, max: maxCAPEMBytes},
 		{role: protectedCA, min: 1, max: maxCAPEMBytes},
 		{role: protectedTracingCA, min: 1, max: maxTracingCAPEMBytes},
 	}
@@ -717,40 +757,54 @@ func TestLoadProtectedRejectsPerRoleAdjacentSizeFixtures(t *testing.T) {
 			size: exactKeyBytes + 1,
 		},
 		{
-			name: "application empty", backend: ReplayValkey,
+			name: "Redis password empty", backend: ReplayRedis,
 			path: func(fixture protectedBackendFixture) string {
-				return filepath.Join(fixture.generationPath, "application-password")
+				return filepath.Join(fixture.generationPath, "redis-password")
 			},
 			size: 0,
 		},
 		{
-			name: "application plus one", backend: ReplayValkey,
+			name: "Redis password plus one", backend: ReplayRedis,
 			path: func(fixture protectedBackendFixture) string {
-				return filepath.Join(fixture.generationPath, "application-password")
+				return filepath.Join(fixture.generationPath, "redis-password")
 			},
 			size: maxPasswordBytes + 1,
 		},
 		{
-			name: "auditor empty", backend: ReplayValkey,
+			name: "Sentinel password empty", backend: ReplayRedis,
 			path: func(fixture protectedBackendFixture) string {
-				return filepath.Join(fixture.generationPath, "auditor-password")
+				return filepath.Join(fixture.generationPath, "sentinel-password")
 			},
 			size: 0,
 		},
 		{
-			name: "auditor plus one", backend: ReplayValkey,
+			name: "Sentinel password plus one", backend: ReplayRedis,
 			path: func(fixture protectedBackendFixture) string {
-				return filepath.Join(fixture.generationPath, "auditor-password")
+				return filepath.Join(fixture.generationPath, "sentinel-password")
 			},
 			size: maxPasswordBytes + 1,
 		},
 		{
-			name: "CA empty", backend: ReplayValkey,
+			name: "client certificate empty", backend: ReplayRedis,
+			path: func(fixture protectedBackendFixture) string {
+				return filepath.Join(fixture.generationPath, "client-cert")
+			},
+			size: 0,
+		},
+		{
+			name: "client key plus one", backend: ReplayRedis,
+			path: func(fixture protectedBackendFixture) string {
+				return filepath.Join(fixture.generationPath, "client-key")
+			},
+			size: maxCAPEMBytes + 1,
+		},
+		{
+			name: "CA empty", backend: ReplayRedis,
 			path: func(fixture protectedBackendFixture) string { return filepath.Join(fixture.generationPath, "ca") },
 			size: 0,
 		},
 		{
-			name: "CA plus one", backend: ReplayValkey,
+			name: "CA plus one", backend: ReplayRedis,
 			path: func(fixture protectedBackendFixture) string { return filepath.Join(fixture.generationPath, "ca") },
 			size: maxCAPEMBytes + 1,
 		},
@@ -1240,10 +1294,12 @@ type protectedLoaderFixture struct {
 }
 
 type protectedBackendFixture struct {
-	yamlPath       string
-	yamlBytes      []byte
-	generationPath string
-	capabilityPath string
+	yamlPath             string
+	yamlBytes            []byte
+	generationPath       string
+	capabilityPath       string
+	clientCertificatePEM []byte
+	clientKeyPEM         []byte
 }
 
 // newProtectedBackendFixture creates one complete backend-conditional generation.
@@ -1269,17 +1325,21 @@ func newProtectedBackendFixture(t *testing.T, backend ReplayBackend) protectedBa
 	capabilityPath := filepath.Join(generationPath, "capability")
 	writeProtectedTestFile(t, capabilityPath, bytes.Repeat([]byte{0xa5}, exactKeyBytes), 0o600)
 	var document string
+	var clientCertificatePEM, clientKeyPEM []byte
 	switch backend {
 	case ReplayDisabled:
 		document = disabledYAML()
 	case ReplayMemory:
 		document = memoryYAML("1", "capability")
 		writeProtectedTestFile(t, filepath.Join(generationPath, "hmac"), bytes.Repeat([]byte{0xb6}, exactKeyBytes), 0o600)
-	case ReplayValkey:
-		document = valkeyYAML()
+	case ReplayRedis:
+		document = redisProtectedYAML()
 		writeProtectedTestFile(t, filepath.Join(generationPath, "hmac"), bytes.Repeat([]byte{0xb6}, exactKeyBytes), 0o600)
-		writeProtectedTestFile(t, filepath.Join(generationPath, "application-password"), []byte("application-password"), 0o600)
-		writeProtectedTestFile(t, filepath.Join(generationPath, "auditor-password"), []byte("auditor-password"), 0o600)
+		writeProtectedTestFile(t, filepath.Join(generationPath, "redis-password"), []byte("redis-password"), 0o600)
+		writeProtectedTestFile(t, filepath.Join(generationPath, "sentinel-password"), []byte("sentinel-password"), 0o600)
+		clientCertificatePEM, clientKeyPEM, _ = serverTLSFixture(t, "client.example", time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+		writeProtectedTestFile(t, filepath.Join(generationPath, "client-cert"), clientCertificatePEM, 0o600)
+		writeProtectedTestFile(t, filepath.Join(generationPath, "client-key"), clientKeyPEM, 0o600)
 		certificate := testProtectedCertificateDER(t, 400, true, 0)
 		writeProtectedTestFile(
 			t,
@@ -1296,10 +1356,12 @@ func newProtectedBackendFixture(t *testing.T, backend ReplayBackend) protectedBa
 	writeProtectedTestFile(t, yamlPath, yamlBytes, 0o600)
 	sealGeneration(t, generationPath)
 	return protectedBackendFixture{
-		yamlPath:       yamlPath,
-		yamlBytes:      yamlBytes,
-		generationPath: generationPath,
-		capabilityPath: capabilityPath,
+		yamlPath:             yamlPath,
+		yamlBytes:            yamlBytes,
+		generationPath:       generationPath,
+		capabilityPath:       capabilityPath,
+		clientCertificatePEM: clientCertificatePEM,
+		clientKeyPEM:         clientKeyPEM,
 	}
 }
 

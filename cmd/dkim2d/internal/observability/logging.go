@@ -23,6 +23,7 @@ const (
 	keyProvider        = "provider"
 	keyProviderState   = "provider_state"
 	keyCacheResult     = "cache_result"
+	keyConfigWarning   = "config_warning"
 	keyDNSResult       = "dns_result"
 	keyOperation       = "operation"
 	keyPolicyMode      = "policy_mode"
@@ -90,7 +91,7 @@ const (
 var errRejectedRecord = errors.New("observability record rejected")
 
 var allowedLogKeys = []string{
-	keyCacheResult, "chain_length_bucket", "debug_module", keyDisposition,
+	keyCacheResult, "chain_length_bucket", keyConfigWarning, "debug_module", keyDisposition,
 	keyDNSResult, "draft", "duration_bucket", "error_class", keyEventID, keyEvidenceStage,
 	"lifecycle_state", "message_size_bucket", keyMethod, keyOperation,
 	keyPolicyMode, keyProvider, keyProviderState, keyReady, keyReasonClass, "recipient_count_bucket",
@@ -125,7 +126,7 @@ var allowedLogValues = map[string][]string{
 	keyDNSResult:   {valueFound, "missing", valueInvalid, "ambiguous", valueTemporary, valueInternal},
 	"draft":        {dkim2.DraftIdentifier},
 	"error_class":  {valueNone, "canceled", "deadline", valueTimeout, valueTransport, "tls", "encoding", "shutdown", valueInternal},
-	keyEventID:     {"config.accepted", "lifecycle.transition", "readiness.transition", "http.request.completed", "process.completed", "dsn.evidence.completed", "dsn.unsigned.completed", "dsn.received.completed", "dsn.propagation.completed", "dns.lookup.completed", "replay.coordinate.completed", "datasource.operation.completed", "telemetry.export.failed"},
+	keyEventID:     {"config.accepted", "lifecycle.transition", "readiness.transition", "http.request.completed", "process.completed", "dsn.evidence.completed", "dsn.unsigned.completed", "dsn.received.completed", "dsn.propagation.completed", "dns.lookup.completed", "replay.coordinate.completed", "datasource.operation.completed", "telemetry.export.failed", eventReplayConfigWarning},
 	keyEvidenceStage: {
 		string(dkim2.DSNEvidenceStagePreflight), string(dkim2.DSNEvidenceStageMIMEParse),
 		string(dkim2.DSNEvidenceStageEmbeddedMessage), string(dkim2.DSNEvidenceStageEmbeddedVerification),
@@ -155,6 +156,7 @@ var allowedLogValues = map[string][]string{
 	"recipient_count_bucket": {"0", "1", "2_10", "11_100", "101_1000", "gte_1001"},
 	"signature_count_bucket": {"0", "1", "2_4", "5_8", valueGTE9},
 	"chain_length_bucket":    {"0", "1", "2_4", "5_8", valueGTE9},
+	keyConfigWarning:         {string(ReplayConfigWarningInsecureSkipVerify), string(ReplayConfigWarningNoEvictionUnchecked)},
 }
 
 // closedStageUnion returns the union of both closed DSN stage vocabularies

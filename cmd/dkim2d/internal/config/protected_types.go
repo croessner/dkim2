@@ -62,8 +62,10 @@ type protectedState struct {
 	hmac                   [32]byte
 	hasHMAC                bool
 
-	applicationPassword        []byte
-	auditorPassword            []byte
+	redisPassword              []byte
+	redisSentinelPassword      []byte
+	redisClientCertificatePEM  []byte
+	redisClientKeyPEM          []byte
 	rootCertificatesDER        [][]byte
 	tracingRootCertificatesDER [][]byte
 	datasourcePassword         []byte
@@ -102,13 +104,89 @@ type ReplayStartupMaterial struct {
 	token *runtimeToken
 }
 
-// ReplayAuditorMaterial lends the least-authority auditor credential only after commit.
-type ReplayAuditorMaterial struct {
-	state *protectedState
-	token *runtimeToken
+// ReplayMaterial is one callback-scoped view of cloned protected replay
+// inputs. The HMAC key is always present. The Redis password, Sentinel
+// password, client certificate, client key, and trust roots are nil unless
+// the matching replay.redis path is configured; empty roots select the system
+// trust store. Every returned slice is a callback-local clone that is zeroed
+// when the lending callback returns, so callers must copy what they retain.
+// The material lives behind a pointer so that no formatting verb, including
+// the %p error path that bypasses Format, can render protected bytes.
+type ReplayMaterial struct {
+	lease *replayMaterialLease
 }
 
-// ReplayRuntimePreparation binds one startup borrow to its exact post-commit auditor handle.
+// replayMaterialLease owns the callback-local clones of one replay borrow.
+type replayMaterialLease struct {
+	hmac                 []byte
+	password             []byte
+	sentinelPassword     []byte
+	clientCertificatePEM []byte
+	clientKeyPEM         []byte
+	rootsDER             [][]byte
+}
+
+// HMAC returns the lent replay HMAC key clone.
+func (m ReplayMaterial) HMAC() []byte {
+	if m.lease == nil {
+		return nil
+	}
+	return m.lease.hmac
+}
+
+// Password returns the lent data-path password clone, nil when not configured.
+func (m ReplayMaterial) Password() []byte {
+	if m.lease == nil {
+		return nil
+	}
+	return m.lease.password
+}
+
+// SentinelPassword returns the lent Sentinel password clone, nil when not configured.
+func (m ReplayMaterial) SentinelPassword() []byte {
+	if m.lease == nil {
+		return nil
+	}
+	return m.lease.sentinelPassword
+}
+
+// ClientCertificatePEM returns the lent client-certificate PEM clone, nil when not configured.
+func (m ReplayMaterial) ClientCertificatePEM() []byte {
+	if m.lease == nil {
+		return nil
+	}
+	return m.lease.clientCertificatePEM
+}
+
+// ClientKeyPEM returns the lent client private-key PEM clone, nil when not configured.
+func (m ReplayMaterial) ClientKeyPEM() []byte {
+	if m.lease == nil {
+		return nil
+	}
+	return m.lease.clientKeyPEM
+}
+
+// RootsDER returns the lent DER trust-root clones, empty for system roots.
+func (m ReplayMaterial) RootsDER() [][]byte {
+	if m.lease == nil {
+		return nil
+	}
+	return m.lease.rootsDER
+}
+
+// clear zeroes and detaches every lent slice exactly once per borrow.
+func (l *replayMaterialLease) clear() {
+	for _, value := range [][]byte{l.hmac, l.password, l.sentinelPassword, l.clientCertificatePEM, l.clientKeyPEM} {
+		clear(value)
+	}
+	for index := range l.rootsDER {
+		clear(l.rootsDER[index])
+		l.rootsDER[index] = nil
+	}
+}
+
+// ReplayRuntimePreparation binds one startup replay borrow to its exact
+// same-generation runtime preparation.
 type ReplayRuntimePreparation struct {
 	state *protectedState
 	token *runtimeToken
@@ -240,14 +318,6 @@ func (p *RuntimePreparation) Snapshot() Snapshot {
 		return Snapshot{}
 	}
 	return ReplayStartupMaterial{state: p.state, token: p.token}.Snapshot()
-}
-
-// ReplayAuditor returns the non-owning post-commit auditor-material handle.
-func (p *RuntimePreparation) ReplayAuditor() ReplayAuditorMaterial {
-	if p == nil {
-		return ReplayAuditorMaterial{}
-	}
-	return ReplayAuditorMaterial{state: p.state, token: p.token}
 }
 
 // SigningDatasource returns the non-owning network-provider startup handle.
@@ -442,15 +512,8 @@ func (m ReplayRuntimePreparation) Snapshot() Snapshot {
 }
 
 // UseReplayMaterial lends complete callback-scoped material before commit.
-func (m ReplayRuntimePreparation) UseReplayMaterial(
-	use func(hmac, applicationPassword, auditorPassword []byte, rootsDER [][]byte) error,
-) error {
+func (m ReplayRuntimePreparation) UseReplayMaterial(use func(material ReplayMaterial) error) error {
 	return ReplayStartupMaterial(m).UseReplayMaterial(use)
-}
-
-// ReplayAuditor returns the exact same-generation post-commit auditor handle.
-func (m ReplayRuntimePreparation) ReplayAuditor() ReplayAuditorMaterial {
-	return ReplayAuditorMaterial(m)
 }
 
 // Snapshot returns the immutable typed runtime configuration.
@@ -467,10 +530,11 @@ func (r *RuntimeMaterial) Snapshot() Snapshot {
 	return r.state.snapshot
 }
 
-// UseReplayMaterial lends protected replay inputs only for synchronous startup construction.
-func (m ReplayStartupMaterial) UseReplayMaterial(
-	use func(hmac, applicationPassword, auditorPassword []byte, rootsDER [][]byte) error,
-) (resultErr error) {
+// UseReplayMaterial lends protected replay inputs only for synchronous
+// startup construction. Every slice reachable from the lent ReplayMaterial is
+// a fresh callback-local clone that is zeroed when the callback returns or
+// panics; the callback must copy whatever it retains.
+func (m ReplayStartupMaterial) UseReplayMaterial(use func(material ReplayMaterial) error) (resultErr error) {
 	if m.state == nil || m.token == nil || use == nil {
 		return newError(CodeProtectedClosed)
 	}
@@ -486,14 +550,18 @@ func (m ReplayStartupMaterial) UseReplayMaterial(
 		return newError(CodeProtectedContent)
 	}
 	m.state.borrowed = true
-	hmac := append([]byte(nil), m.state.hmac[:]...)
-	applicationPassword := append([]byte(nil), m.state.applicationPassword...)
-	auditorPassword := append([]byte(nil), m.state.auditorPassword...)
-	rootsDER := cloneProtectedRoots(m.state.rootCertificatesDER)
+	lease := &replayMaterialLease{
+		hmac:                 append([]byte(nil), m.state.hmac[:]...),
+		password:             cloneOptionalProtected(m.state.redisPassword),
+		sentinelPassword:     cloneOptionalProtected(m.state.redisSentinelPassword),
+		clientCertificatePEM: cloneOptionalProtected(m.state.redisClientCertificatePEM),
+		clientKeyPEM:         cloneOptionalProtected(m.state.redisClientKeyPEM),
+		rootsDER:             cloneProtectedRoots(m.state.rootCertificatesDER),
+	}
 	m.state.mu.Unlock()
 	defer func() {
 		panicValue := recover()
-		clearReplayBorrow(hmac, applicationPassword, auditorPassword, rootsDER)
+		lease.clear()
 		m.state.mu.Lock()
 		m.state.borrowed = false
 		m.state.mu.Unlock()
@@ -501,44 +569,7 @@ func (m ReplayStartupMaterial) UseReplayMaterial(
 			resultErr = newError(CodeProtectedContent)
 		}
 	}()
-	if err := use(hmac, applicationPassword, auditorPassword, rootsDER); err != nil {
-		return newError(CodeProtectedContent)
-	}
-	return nil
-}
-
-// UseReplayAuditorPassword lends only one fresh post-commit auditor credential clone.
-func (m ReplayAuditorMaterial) UseReplayAuditorPassword(
-	use func(auditorPassword []byte) error,
-) (resultErr error) {
-	if m.state == nil || m.token == nil || use == nil {
-		return newError(CodeProtectedClosed)
-	}
-	m.state.mu.Lock()
-	if m.state.phase != protectedOwnedByRuntime ||
-		m.state.runtimeToken != m.token ||
-		m.state.borrowed {
-		m.state.mu.Unlock()
-		return newError(CodeProtectedClosed)
-	}
-	if len(m.state.auditorPassword) == 0 {
-		m.state.mu.Unlock()
-		return newError(CodeProtectedContent)
-	}
-	m.state.borrowed = true
-	auditorPassword := append([]byte(nil), m.state.auditorPassword...)
-	m.state.mu.Unlock()
-	defer func() {
-		panicValue := recover()
-		clear(auditorPassword)
-		m.state.mu.Lock()
-		m.state.borrowed = false
-		m.state.mu.Unlock()
-		if panicValue != nil {
-			resultErr = newError(CodeProtectedContent)
-		}
-	}()
-	if err := use(auditorPassword); err != nil {
+	if err := use(ReplayMaterial{lease: lease}); err != nil {
 		return newError(CodeProtectedContent)
 	}
 	return nil
@@ -717,8 +748,10 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 	}
 	s.hmac = [32]byte{}
 	s.hasHMAC = false
-	clear(s.applicationPassword)
-	clear(s.auditorPassword)
+	clear(s.redisPassword)
+	clear(s.redisSentinelPassword)
+	clear(s.redisClientCertificatePEM)
+	clear(s.redisClientKeyPEM)
 	for index := range s.rootCertificatesDER {
 		clear(s.rootCertificatesDER[index])
 		s.rootCertificatesDER[index] = nil
@@ -732,8 +765,10 @@ func (s *protectedState) clearProtected(releasedBy protectedPhase) {
 		clear(s.tracingRootCertificatesDER[index])
 		s.tracingRootCertificatesDER[index] = nil
 	}
-	s.applicationPassword = nil
-	s.auditorPassword = nil
+	s.redisPassword = nil
+	s.redisSentinelPassword = nil
+	s.redisClientCertificatePEM = nil
+	s.redisClientKeyPEM = nil
 	s.rootCertificatesDER = nil
 	s.datasourcePassword = nil
 	s.datasourceRootsDER = nil
@@ -752,15 +787,13 @@ func cloneProtectedRoots(input [][]byte) [][]byte {
 	return cloned
 }
 
-// clearReplayBorrow invalidates all callback-local protected byte slices.
-func clearReplayBorrow(hmac, applicationPassword, auditorPassword []byte, rootsDER [][]byte) {
-	clear(hmac)
-	clear(applicationPassword)
-	clear(auditorPassword)
-	for index := range rootsDER {
-		clear(rootsDER[index])
-		rootsDER[index] = nil
+// cloneOptionalProtected returns a callback-local copy, or nil for absent
+// optional material so that callers can distinguish "not configured".
+func cloneOptionalProtected(input []byte) []byte {
+	if len(input) == 0 {
+		return nil
 	}
+	return append([]byte(nil), input...)
 }
 
 // validateProtectedSeparation rejects equal secrets across distinct roles.
@@ -770,16 +803,12 @@ func validateProtectedSeparation(state *protectedState) error {
 	if state == nil {
 		return newError(CodeInternal)
 	}
-	if len(state.applicationPassword) > 0 &&
-		bytes.Equal(state.applicationPassword, state.auditorPassword) {
-		return newError(CodeProtectedContent)
-	}
 	if err := distinctProtectedKeys(state); err != nil {
 		return err
 	}
 	passwords := [][]byte{
-		state.applicationPassword,
-		state.auditorPassword,
+		state.redisPassword,
+		state.redisSentinelPassword,
 		state.datasourcePassword,
 	}
 	for left := range passwords {
@@ -896,22 +925,22 @@ func (ReplayStartupMaterial) MarshalText() ([]byte, error) {
 	return nil, newError(CodeSerialization)
 }
 
-// String returns a constant content-free auditor-material representation.
-func (ReplayAuditorMaterial) String() string { return protectedRedactedText }
+// String returns a constant content-free replay-material representation.
+func (ReplayMaterial) String() string { return protectedRedactedText }
 
-// GoString returns a constant content-free auditor-material representation.
-func (ReplayAuditorMaterial) GoString() string { return protectedRedactedText }
+// GoString returns a constant content-free replay-material representation.
+func (ReplayMaterial) GoString() string { return protectedRedactedText }
 
-// Format prevents formatting verbs from exposing auditor material.
-func (ReplayAuditorMaterial) Format(state fmt.State, _ rune) { writeProtectedRedacted(state) }
+// Format prevents formatting verbs from exposing lent replay material.
+func (ReplayMaterial) Format(state fmt.State, _ rune) { writeProtectedRedacted(state) }
 
-// MarshalJSON rejects serialization of auditor material.
-func (ReplayAuditorMaterial) MarshalJSON() ([]byte, error) {
+// MarshalJSON rejects serialization of lent replay material.
+func (ReplayMaterial) MarshalJSON() ([]byte, error) {
 	return nil, newError(CodeSerialization)
 }
 
-// MarshalText rejects text serialization of auditor material.
-func (ReplayAuditorMaterial) MarshalText() ([]byte, error) {
+// MarshalText rejects text serialization of lent replay material.
+func (ReplayMaterial) MarshalText() ([]byte, error) {
 	return nil, newError(CodeSerialization)
 }
 

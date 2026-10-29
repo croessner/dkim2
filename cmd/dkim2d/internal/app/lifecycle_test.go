@@ -124,8 +124,8 @@ func (*lifecyclePanicServeObserver) NotifyServeReturn() {
 	panic("private serve observer marker")
 }
 
-// lifecycleRevalidatorFake blocks until its app-owned parent is canceled.
-type lifecycleRevalidatorFake struct {
+// lifecycleHealthProbeFake blocks until its app-owned parent is canceled.
+type lifecycleHealthProbeFake struct {
 	order                 *lifecycleOrder
 	started               chan struct{}
 	activation            chan struct{}
@@ -141,25 +141,25 @@ type lifecycleRevalidatorFake struct {
 }
 
 // Started returns the producer-owned Run entry proof.
-func (r *lifecycleRevalidatorFake) Started() <-chan struct{} { return r.started }
+func (r *lifecycleHealthProbeFake) Started() <-chan struct{} { return r.started }
 
 // Running reports whether the fake producer still owns Run.
-func (r *lifecycleRevalidatorFake) Running() bool { return r.running.Load() }
+func (r *lifecycleHealthProbeFake) Running() bool { return r.running.Load() }
 
 // Activate releases the initialized fake after protected transfer.
-func (r *lifecycleRevalidatorFake) Activate() error {
-	r.order.add("revalidator-activate")
+func (r *lifecycleHealthProbeFake) Activate() error {
+	r.order.add("health-probe-activate")
 	r.activeOnce.Do(func() { close(r.activation) })
 	return nil
 }
 
 // Run records activation and joins on cancellation.
-func (r *lifecycleRevalidatorFake) Run(ctx context.Context) error {
+func (r *lifecycleHealthProbeFake) Run(ctx context.Context) error {
 	return r.run(ctx, nil)
 }
 
 // run executes the fake loop with producer-ordered terminal publication.
-func (r *lifecycleRevalidatorFake) run(
+func (r *lifecycleHealthProbeFake) run(
 	ctx context.Context,
 	observer ServeReturnObserver,
 ) error {
@@ -179,7 +179,7 @@ func (r *lifecycleRevalidatorFake) run(
 			observer.NotifyServeReturn()
 		}
 	}()
-	r.order.add("revalidator-run")
+	r.order.add("health-probe-run")
 	close(r.started)
 	select {
 	case <-r.activation:
@@ -187,20 +187,20 @@ func (r *lifecycleRevalidatorFake) run(
 		return ctx.Err()
 	}
 	if r.returnAfterActivation {
-		return errors.New("private revalidator terminal marker")
+		return errors.New("private healthProbe terminal marker")
 	}
 	if r.ignoreCancel {
 		<-r.exitBlock
-		r.order.add("revalidator-exit")
-		return errors.New("private revalidator marker")
+		r.order.add("health-probe-exit")
+		return errors.New("private healthProbe marker")
 	}
 	<-ctx.Done()
-	r.order.add("revalidator-exit")
+	r.order.add("health-probe-exit")
 	return ctx.Err()
 }
 
 // RunObserved synchronously classifies the fake producer's physical return.
-func (r *lifecycleRevalidatorFake) RunObserved(
+func (r *lifecycleHealthProbeFake) RunObserved(
 	ctx context.Context,
 	observer ServeReturnObserver,
 ) error {
@@ -390,7 +390,7 @@ func (f *lifecycleHTTPFactoryFake) Assemble(input HTTPAssemblyInput) (HTTPAssemb
 func lifecycleTestDependencies(
 	order *lifecycleOrder,
 	replay *lifecycleReplayFake,
-	revalidator lifecycleRevalidator,
+	healthProbe lifecycleHealthProbe,
 ) lifecycleDependencies {
 	return lifecycleDependencies{
 		withTimeout: func(parent context.Context, duration time.Duration) (context.Context, context.CancelFunc) {
@@ -423,6 +423,7 @@ func lifecycleTestDependencies(
 			context.Context,
 			replayRollbackFactory,
 			*config.RuntimePreparation,
+			*observability.Runtime,
 		) (lifecycleReplay, error) {
 			order.add("replay")
 			return replay, nil
@@ -439,12 +440,12 @@ func lifecycleTestDependencies(
 			order.add("readiness")
 			return NewReadiness(authority)
 		},
-		newRevalidator: func(
+		newHealthProbe: func(
 			*config.RuntimePreparation,
 			lifecycleReplay,
-		) (lifecycleRevalidator, error) {
-			order.add("revalidator")
-			return revalidator, nil
+		) (lifecycleHealthProbe, error) {
+			order.add("health-probe")
+			return healthProbe, nil
 		},
 		newHTTPInput: func(
 			baseContext context.Context,
@@ -483,7 +484,7 @@ func TestLifecycleContractDurations(t *testing.T) {
 		LifecycleAcquisitionTimeout != 100*time.Second ||
 		LifecycleRollbackTimeout != 10*time.Second ||
 		LifecycleServeJoinTimeout != 5*time.Second ||
-		LifecycleRevalidatorJoinTimeout != 30*time.Second ||
+		LifecycleHealthProbeJoinTimeout != 30*time.Second ||
 		LifecycleFinalCleanupTimeout != 5*time.Second {
 		t.Fatal("lifecycle contract duration drift")
 	}
@@ -500,7 +501,7 @@ func TestLifecycleContractDurations(t *testing.T) {
 func TestLifecycleStartStopOrder(t *testing.T) {
 	order := &lifecycleOrder{}
 	replay := &lifecycleReplayFake{order: order, ready: true}
-	revalidator := &lifecycleRevalidatorFake{
+	healthProbe := &lifecycleHealthProbeFake{
 		order: order, started: make(chan struct{}), activation: make(chan struct{}),
 	}
 	runtime := &lifecycleHTTPRuntimeFake{
@@ -513,7 +514,7 @@ func TestLifecycleStartStopOrder(t *testing.T) {
 	lifecycle, err := newLifecycleWithDependencies(
 		&config.Prebootstrap{},
 		factory,
-		lifecycleTestDependencies(order, replay, revalidator),
+		lifecycleTestDependencies(order, replay, healthProbe),
 	)
 	if err != nil {
 		t.Fatalf("construct lifecycle: %v", err)
@@ -521,7 +522,7 @@ func TestLifecycleStartStopOrder(t *testing.T) {
 	if err := lifecycle.Start(context.Background()); err != nil {
 		t.Fatalf("start lifecycle: %v", err)
 	}
-	<-revalidator.started
+	<-healthProbe.started
 	if !lifecycle.Ready() {
 		t.Fatal("successful transfer did not publish readiness")
 	}
@@ -535,12 +536,12 @@ func TestLifecycleStartStopOrder(t *testing.T) {
 	}
 	want := []string{
 		"timeout:1m55s", "timeout:1m40s", "prepare", "observability", "dns", "replay",
-		lifecycleAuthorityReadyStep, "application", "readiness", "revalidator",
-		"http-input", "assemble", "bind", "serve", "revalidator-run",
-		lifecycleAuthorityReadyStep, "commit", lifecycleAuthorityReadyStep, "revalidator-activate", "activate",
+		lifecycleAuthorityReadyStep, "application", "readiness", "health-probe",
+		"http-input", "assemble", "bind", "serve", "health-probe-run",
+		lifecycleAuthorityReadyStep, "commit", lifecycleAuthorityReadyStep, "health-probe-activate", "activate",
 		lifecycleAuthorityReadyStep, lifecycleAuthorityReadyStep, "timeout:57s", lifecycleRejectStep,
 		lifecycleFiveSecondStep, "listener-close", "serve-exit", "timeout:7s",
-		lifecycleShutdownStep, lifecycleFiveSecondStep, "timeout:30s", "revalidator-exit",
+		lifecycleShutdownStep, lifecycleFiveSecondStep, "timeout:30s", "health-probe-exit",
 		lifecycleFiveSecondStep, lifecycleReplayCloseStep, lifecycleMaterialCloseStep,
 	}
 	if got := order.snapshot(); !equalLifecycleOrder(got, want) {
@@ -711,11 +712,11 @@ func TestLifecycleCancellationAfterInitialAuthorityPreventsApplication(t *testin
 	assertLifecycleCanceledBeforeStep(t, factory, deps, order, "application")
 }
 
-// TestLifecycleCancellationAfterServeProofPreventsRevalidatorRun freezes that gate.
-func TestLifecycleCancellationAfterServeProofPreventsRevalidatorRun(t *testing.T) {
+// TestLifecycleCancellationAfterServeProofPreventsHealthProbeRun freezes that gate.
+func TestLifecycleCancellationAfterServeProofPreventsHealthProbeRun(t *testing.T) {
 	order := &lifecycleOrder{}
 	replay := &lifecycleReplayFake{order: order, ready: true}
-	revalidator := &lifecycleRevalidatorFake{
+	healthProbe := &lifecycleHealthProbeFake{
 		order: order, started: make(chan struct{}), activation: make(chan struct{}),
 	}
 	runtimeHTTP := &lifecycleHTTPRuntimeFake{
@@ -725,13 +726,13 @@ func TestLifecycleCancellationAfterServeProofPreventsRevalidatorRun(t *testing.T
 		order: order, assembly: &lifecycleHTTPAssemblyFake{order: order, runtime: runtimeHTTP},
 		runtime: runtimeHTTP,
 	}
-	deps, cancelAcquisition := cancellableLifecycleDependencies(order, replay, revalidator)
+	deps, cancelAcquisition := cancellableLifecycleDependencies(order, replay, healthProbe)
 	runtimeHTTP.servingHook = func(call int) {
 		if call == 1 {
 			cancelAcquisition()
 		}
 	}
-	assertLifecycleCanceledBeforeStep(t, factory, deps, order, "revalidator-run")
+	assertLifecycleCanceledBeforeStep(t, factory, deps, order, "health-probe-run")
 }
 
 // TestLifecycleCancellationBeforePublicationPreventsReadiness freezes the final gate.
@@ -776,9 +777,9 @@ func TestLifecycleCancellationBeforePublicationPreventsReadiness(t *testing.T) {
 func cancellableLifecycleDependencies(
 	order *lifecycleOrder,
 	replay *lifecycleReplayFake,
-	revalidator lifecycleRevalidator,
+	healthProbe lifecycleHealthProbe,
 ) (lifecycleDependencies, context.CancelFunc) {
-	deps := lifecycleTestDependencies(order, replay, revalidator)
+	deps := lifecycleTestDependencies(order, replay, healthProbe)
 	var acquisitionCancel context.CancelFunc
 	originalWithTimeout := deps.withTimeout
 	deps.withTimeout = func(
@@ -1256,14 +1257,14 @@ func TestLifecycleHandlerNonjoinRetainsDependencies(t *testing.T) {
 	}
 }
 
-// TestLifecycleRevalidatorNonjoinRetainsDependencies freezes audit-owner safety.
-func TestLifecycleRevalidatorNonjoinRetainsDependencies(t *testing.T) {
+// TestLifecycleHealthProbeNonjoinRetainsDependencies freezes health-probe owner safety.
+func TestLifecycleHealthProbeNonjoinRetainsDependencies(t *testing.T) {
 	order := &lifecycleOrder{}
 	replay := &lifecycleReplayFake{order: order, ready: true}
-	revalidatorRelease := make(chan struct{})
-	revalidator := &lifecycleRevalidatorFake{
+	healthProbeRelease := make(chan struct{})
+	healthProbe := &lifecycleHealthProbeFake{
 		order: order, started: make(chan struct{}), activation: make(chan struct{}),
-		ignoreCancel: true, exitBlock: revalidatorRelease,
+		ignoreCancel: true, exitBlock: healthProbeRelease,
 	}
 	runtimeHTTP := &lifecycleHTTPRuntimeFake{
 		order: order, serve: make(chan struct{}), started: make(chan struct{}),
@@ -1273,14 +1274,14 @@ func TestLifecycleRevalidatorNonjoinRetainsDependencies(t *testing.T) {
 		assembly: &lifecycleHTTPAssemblyFake{order: order, runtime: runtimeHTTP},
 		runtime:  runtimeHTTP,
 	}
-	deps := lifecycleTestDependencies(order, replay, revalidator)
+	deps := lifecycleTestDependencies(order, replay, healthProbe)
 	deps.withTimeout = func(
 		parent context.Context,
 		duration time.Duration,
 	) (context.Context, context.CancelFunc) {
 		order.add("timeout:" + duration.String())
 		ctx, cancel := context.WithCancel(parent)
-		if duration == LifecycleRevalidatorJoinTimeout {
+		if duration == LifecycleHealthProbeJoinTimeout {
 			cancel()
 		}
 		return ctx, cancel
@@ -1295,15 +1296,15 @@ func TestLifecycleRevalidatorNonjoinRetainsDependencies(t *testing.T) {
 		t.Fatalf("start lifecycle: %v", err)
 	}
 	if err := lifecycle.Stop(context.Background()); !IsLifecycleError(err) {
-		t.Fatalf("revalidator nonjoin returned %T", err)
+		t.Fatalf("health-probe nonjoin returned %T", err)
 	}
 	steps := order.snapshot()
 	for _, forbidden := range []string{lifecycleReplayCloseStep, lifecycleMaterialCloseStep} {
 		if containsLifecycleStep(steps, forbidden) {
-			t.Fatalf("revalidator nonjoin tore down %q: %v", forbidden, steps)
+			t.Fatalf("health-probe nonjoin tore down %q: %v", forbidden, steps)
 		}
 	}
-	close(revalidatorRelease)
+	close(healthProbeRelease)
 }
 
 // TestLifecycleBlockedReplayCloseStillAttemptsMaterialRelease freezes final cleanup aggregation.
@@ -1506,8 +1507,8 @@ func TestLifecycleServeTerminalAndPublicationCASOrder(t *testing.T) {
 	}
 }
 
-// TestLifecycleRevalidatorTerminalAndPublicationCASOrder freezes both audit-loop winners.
-func TestLifecycleRevalidatorTerminalAndPublicationCASOrder(t *testing.T) {
+// TestLifecycleHealthProbeTerminalAndPublicationCASOrder freezes both health-probe loop winners.
+func TestLifecycleHealthProbeTerminalAndPublicationCASOrder(t *testing.T) {
 	for _, publicationWins := range []bool{false, true} {
 		name := "terminal_wins"
 		if publicationWins {
@@ -1524,7 +1525,7 @@ func TestLifecycleRevalidatorTerminalAndPublicationCASOrder(t *testing.T) {
 				publicationEntered = make(chan struct{})
 				publicationRelease = make(chan struct{})
 			}
-			revalidator := &lifecycleRevalidatorFake{
+			healthProbe := &lifecycleHealthProbeFake{
 				order: order, started: make(chan struct{}), activation: make(chan struct{}),
 				returnAfterActivation: true, terminalEntered: terminalEntered,
 				terminalRelease: terminalRelease,
@@ -1537,7 +1538,7 @@ func TestLifecycleRevalidatorTerminalAndPublicationCASOrder(t *testing.T) {
 				assembly: &lifecycleHTTPAssemblyFake{order: order, runtime: runtimeHTTP},
 				runtime:  runtimeHTTP,
 			}
-			deps := lifecycleTestDependencies(order, replay, revalidator)
+			deps := lifecycleTestDependencies(order, replay, healthProbe)
 			if !publicationWins {
 				deps.beforePublication = func() {
 					close(publicationEntered)
@@ -1565,7 +1566,7 @@ func TestLifecycleRevalidatorTerminalAndPublicationCASOrder(t *testing.T) {
 				close(terminalRelease)
 				<-lifecycle.ShutdownRequests()
 				if lifecycle.Ready() {
-					t.Fatal("post-publication revalidator return stayed ready")
+					t.Fatal("post-publication health-probe return stayed ready")
 				}
 				if err := lifecycle.Stop(context.Background()); !IsLifecycleError(err) {
 					t.Fatalf("fatal cleanup Stop returned %T", err)
@@ -1579,7 +1580,7 @@ func TestLifecycleRevalidatorTerminalAndPublicationCASOrder(t *testing.T) {
 					t.Fatalf("terminal winner returned %T", err)
 				}
 				if lifecycle.Ready() {
-					t.Fatal("terminal revalidator winner published readiness")
+					t.Fatal("terminal health-probe winner published readiness")
 				}
 			}
 		})
@@ -1641,8 +1642,8 @@ func TestLifecycleServeObserverFallbackContainsOmissionAndPanic(t *testing.T) {
 	}
 }
 
-// TestLifecycleRevalidatorObserverFallbackContainsOmissionAndPanic freezes defense-in-depth.
-func TestLifecycleRevalidatorObserverFallbackContainsOmissionAndPanic(t *testing.T) {
+// TestLifecycleHealthProbeObserverFallbackContainsOmissionAndPanic freezes defense-in-depth.
+func TestLifecycleHealthProbeObserverFallbackContainsOmissionAndPanic(t *testing.T) {
 	tests := []struct {
 		name     string
 		omit     bool
@@ -1656,7 +1657,7 @@ func TestLifecycleRevalidatorObserverFallbackContainsOmissionAndPanic(t *testing
 			order := &lifecycleOrder{}
 			replay := &lifecycleReplayFake{order: order, ready: true}
 			terminalEntered := make(chan struct{})
-			revalidator := &lifecycleRevalidatorFake{
+			healthProbe := &lifecycleHealthProbeFake{
 				order: order, started: make(chan struct{}), activation: make(chan struct{}),
 				returnAfterActivation: true, omitObserver: testCase.omit,
 				overrideObserver: testCase.observer, terminalEntered: terminalEntered,
@@ -1672,14 +1673,14 @@ func TestLifecycleRevalidatorObserverFallbackContainsOmissionAndPanic(t *testing
 			lifecycle, err := newLifecycleWithDependencies(
 				&config.Prebootstrap{},
 				factory,
-				lifecycleTestDependencies(order, replay, revalidator),
+				lifecycleTestDependencies(order, replay, healthProbe),
 			)
 			if err != nil {
 				t.Fatalf("construct lifecycle: %v", err)
 			}
 			startErr := lifecycle.Start(context.Background())
 			if startErr != nil && !IsLifecycleError(startErr) {
-				t.Fatalf("revalidator fallback returned %T", startErr)
+				t.Fatalf("health-probe fallback returned %T", startErr)
 			}
 			<-terminalEntered
 			<-lifecycle.ShutdownRequests()
@@ -1689,10 +1690,10 @@ func TestLifecycleRevalidatorObserverFallbackContainsOmissionAndPanic(t *testing
 				}
 			}
 			if lifecycle.Ready() {
-				t.Fatal("revalidator fallback left readiness published")
+				t.Fatal("health-probe fallback left readiness published")
 			}
-			if revalidator.Running() {
-				t.Fatal("revalidator fallback left producer live")
+			if healthProbe.Running() {
+				t.Fatal("health-probe fallback left producer live")
 			}
 		})
 	}

@@ -10,7 +10,8 @@ import (
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
-	"github.com/croessner/dkim2/cmd/dkim2d/internal/replay/valkey"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/observability"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/replay/redisstore"
 )
 
 const (
@@ -32,16 +33,13 @@ func (*ReplayRuntimeError) Is(target error) bool {
 	return ok
 }
 
-// replayMaterialSource is the startup-only protected replay boundary.
+// replayMaterialSource is the startup-only protected replay boundary. The
+// callback receives the replay HMAC key and the Redis transport secrets as
+// callback-local views that are zeroed when it returns; consumers copy what
+// they retain.
 type replayMaterialSource interface {
 	Snapshot() config.Snapshot
-	UseReplayMaterial(func([]byte, []byte, []byte, [][]byte) error) error
-	ReplayAuditorSource() replayAuditorSource
-}
-
-// replayAuditorSource retains only the periodic least-authority credential seam.
-type replayAuditorSource interface {
-	UseReplayAuditorPassword(func([]byte) error) error
+	UseReplayMaterial(func(hmac []byte, secrets redisstore.Secrets) error) error
 }
 
 // replayRollbackFactory returns the hook-owned shared first-failure rollback context.
@@ -70,22 +68,32 @@ type preparedReplayMaterial struct {
 // Snapshot returns the prepared immutable startup configuration.
 func (m preparedReplayMaterial) Snapshot() config.Snapshot { return m.material.Snapshot() }
 
-// UseReplayMaterial lends callback-scoped startup material before commit.
+// UseReplayMaterial lends callback-scoped startup material before commit and
+// projects the protected Redis inputs into the provider's secret carrier.
+// Every projected slice aliases the config-owned lease, which is zeroed when
+// the borrow ends.
 func (m preparedReplayMaterial) UseReplayMaterial(
-	use func([]byte, []byte, []byte, [][]byte) error,
+	use func(hmac []byte, secrets redisstore.Secrets) error,
 ) error {
-	return m.material.UseReplayMaterial(use)
+	if use == nil {
+		return &ReplayRuntimeError{}
+	}
+	return m.material.UseReplayMaterial(func(material config.ReplayMaterial) error {
+		return use(material.HMAC(), redisstore.Secrets{
+			Password:             material.Password(),
+			SentinelPassword:     material.SentinelPassword(),
+			ClientCertificatePEM: material.ClientCertificatePEM(),
+			ClientKeyPEM:         material.ClientKeyPEM(),
+			RootsDER:             material.RootsDER(),
+		})
+	})
 }
 
-// ReplayAuditorSource narrows retained runtime authority to the auditor handle.
-func (m preparedReplayMaterial) ReplayAuditorSource() replayAuditorSource {
-	return m.material.ReplayAuditor()
-}
-
-// replayAuthorityStore adds the production authority operations owned by M12.
+// replayAuthorityStore adds the production backend health operations: one
+// bounded probe and one no-I/O readiness fact.
 type replayAuthorityStore interface {
 	dkim2.ManagedReplayStore
-	Revalidate(context.Context, valkey.AuditorConfig) error
+	Probe(context.Context) error
 	AuthorityReady() bool
 }
 
@@ -96,11 +104,13 @@ type replayRuntimeFactories struct {
 	newDisabled   func() dkim2.ManagedReplayStore
 	newProduction func(
 		context.Context,
-		valkey.ClientConfig,
-		valkey.OperatorAttestation,
-		valkey.AuditorConfig,
+		redisstore.Config,
+		redisstore.Secrets,
 	) (replayAuthorityStore, error)
 	clock dkim2.ReplayClock
+	// warnConfig receives one closed warning per accepted weakened Redis
+	// setting; nil discards them in focused construction tests.
+	warnConfig func(observability.ReplayConfigWarning)
 }
 
 // ReplayRuntime owns exactly one configured replay backend and its local policy.
@@ -110,19 +120,17 @@ type ReplayRuntime struct {
 
 // replayRuntimeState owns provider dependencies behind one format-safe handle.
 type replayRuntimeState struct {
-	backend          config.ReplayBackend
-	coordinator      *ReplayCoordinator
-	deriver          *dkim2.ReplayDeriver
-	retention        dkim2.ReplayRetention
-	closeDeriver     func(context.Context) error
-	store            dkim2.ManagedReplayStore
-	authority        replayAuthorityStore
-	auditorSource    replayAuditorSource
-	auditorUsername  string
-	revalidatePeriod time.Duration
-	counting         dkim2.ReplayCountingPolicy
-	startCleanup     replayCleanupStarter
-	close            replayRuntimeClose
+	backend        config.ReplayBackend
+	coordinator    *ReplayCoordinator
+	deriver        *dkim2.ReplayDeriver
+	retention      dkim2.ReplayRetention
+	closeDeriver   func(context.Context) error
+	store          dkim2.ManagedReplayStore
+	authority      replayAuthorityStore
+	healthInterval time.Duration
+	counting       dkim2.ReplayCountingPolicy
+	startCleanup   replayCleanupStarter
+	close          replayRuntimeClose
 }
 
 // replayRuntimeClose linearizes exact-once store and deriver cleanup.
@@ -169,39 +177,77 @@ func (t *replayOwnerTransaction) rollbackOwners() error {
 	return err
 }
 
-// NewReplayRuntime composes exactly the configured disabled, memory, or Valkey backend.
+// NewReplayRuntime composes exactly the configured disabled, memory, or Redis
+// backend. Startup warnings for weakened Redis settings go through the
+// central observability runtime, which is therefore required.
 func NewReplayRuntime(
 	acquisitionCtx context.Context,
 	rollback replayRollbackFactory,
 	preparation *config.RuntimePreparation,
+	telemetry *observability.Runtime,
 ) (*ReplayRuntime, error) {
-	if preparation == nil {
+	if preparation == nil || telemetry == nil {
 		return nil, &ReplayRuntimeError{}
 	}
 	return newReplayRuntimeWithRollback(
 		acquisitionCtx,
 		rollback,
 		preparedReplayMaterial{material: preparation.ReplayRuntime()},
-		productionReplayRuntimeFactories(),
+		productionReplayRuntimeFactories(telemetry),
 	)
 }
 
-// productionReplayRuntimeFactories returns the exact production provider constructors.
-func productionReplayRuntimeFactories() replayRuntimeFactories {
+// productionReplayRuntimeFactories returns the exact production provider
+// constructors and binds configuration warnings to the central logger.
+func productionReplayRuntimeFactories(telemetry *observability.Runtime) replayRuntimeFactories {
 	return replayRuntimeFactories{
-		newDeriver:  dkim2.NewReplayDeriver,
-		newMemory:   dkim2.NewReplayMemoryStore,
-		newDisabled: newDisabledReplayStore,
-		newProduction: func(
-			ctx context.Context,
-			client valkey.ClientConfig,
-			attestation valkey.OperatorAttestation,
-			auditor valkey.AuditorConfig,
-		) (replayAuthorityStore, error) {
-			return valkey.NewProductionStore(ctx, client, attestation, auditor)
-		},
-		clock: dkim2.ReplayClockFunc(func() time.Time { return time.Now() }),
+		newDeriver:    dkim2.NewReplayDeriver,
+		newMemory:     dkim2.NewReplayMemoryStore,
+		newDisabled:   newDisabledReplayStore,
+		newProduction: newRedisReplayStore,
+		clock:         dkim2.ReplayClockFunc(func() time.Time { return time.Now() }),
+		warnConfig:    telemetry.WarnReplayConfig,
 	}
+}
+
+// redisConfigWarnings returns the closed startup warnings of one validated
+// provider configuration in a stable order: disabled certificate
+// verification, then a disabled noeviction startup check.
+func redisConfigWarnings(storeConfig redisstore.Config) []observability.ReplayConfigWarning {
+	var warnings []observability.ReplayConfigWarning
+	if storeConfig.TLS.Enabled && storeConfig.TLS.InsecureSkipVerify {
+		warnings = append(warnings, observability.ReplayConfigWarningInsecureSkipVerify)
+	}
+	if !storeConfig.RequireNoEviction {
+		warnings = append(warnings, observability.ReplayConfigWarningNoEvictionUnchecked)
+	}
+	return warnings
+}
+
+// emitRedisConfigWarnings reports every weakened setting once before the
+// store connects, so the warning precedes any startup-check outcome.
+func emitRedisConfigWarnings(storeConfig redisstore.Config, warn func(observability.ReplayConfigWarning)) {
+	if warn == nil {
+		return
+	}
+	for _, warning := range redisConfigWarnings(storeConfig) {
+		warn(warning)
+	}
+}
+
+// newRedisReplayStore constructs the production Redis store, which runs its
+// synchronous startup checks before returning, and never returns a typed-nil
+// authority.
+func newRedisReplayStore(
+	ctx context.Context,
+	storeConfig redisstore.Config,
+	secrets redisstore.Secrets,
+) (replayAuthorityStore, error) {
+	store, err := redisstore.NewStore(ctx, storeConfig, secrets)
+	if err != nil || store == nil {
+		return nil, err
+	}
+	return store, nil
 }
 
 // newDisabledReplayStore constructs the exact explicit no-storage provider.
@@ -264,7 +310,7 @@ func newReplayRuntimeWithRollback(
 		runtime = constructMemoryReplayRuntime(
 			owners, material, replayConfig, retention, limits, factories,
 		)
-	case config.ReplayValkey:
+	case config.ReplayRedis:
 		if !replayConfig.Enabled() || factories.newDeriver == nil ||
 			factories.newProduction == nil {
 			return nil, &ReplayRuntimeError{}
@@ -273,15 +319,10 @@ func newReplayRuntimeWithRollback(
 		if err != nil {
 			return nil, err
 		}
-		auditorSource := material.ReplayAuditorSource()
-		if nilInterface(auditorSource) {
-			return nil, &ReplayRuntimeError{}
-		}
-		runtime = constructValkeyReplayRuntime(
+		runtime = constructRedisReplayRuntime(
 			acquisitionCtx,
 			owners,
 			material,
-			auditorSource,
 			replayConfig,
 			retention,
 			limits,
@@ -331,7 +372,7 @@ func constructMemoryReplayRuntime(
 		coordinator  *ReplayCoordinator
 		operationErr error
 	)
-	borrowErr := material.UseReplayMaterial(func(hmac, _, _ []byte, _ [][]byte) error {
+	borrowErr := material.UseReplayMaterial(func(hmac []byte, _ redisstore.Secrets) error {
 		deriver, operationErr = factories.newDeriver(hmac, replayConfig.Epoch())
 		owners.retainDeriver(deriver)
 		if operationErr != nil || deriver == nil {
@@ -361,82 +402,118 @@ func constructMemoryReplayRuntime(
 	}}
 }
 
-// constructValkeyReplayRuntime composes one audited direct production authority.
-func constructValkeyReplayRuntime(
+// constructRedisReplayRuntime composes one Redis-compatible production
+// authority. One protected-material borrow builds both the deriver and the
+// store; the store copies the transport secrets it needs, so nothing lent by
+// the borrow outlives the callback. The store runs its startup checks before
+// it is returned, so a composed runtime is authority-ready at publication.
+func constructRedisReplayRuntime(
 	acquisitionCtx context.Context,
 	owners *replayOwnerTransaction,
 	material replayMaterialSource,
-	auditorSource replayAuditorSource,
 	replayConfig config.ReplayConfig,
 	retention dkim2.ReplayRetention,
 	limits dkim2.ReplayLimits,
 	factories replayRuntimeFactories,
 ) *ReplayRuntime {
-	valkeyConfig, valkeyPresent := replayConfig.Valkey()
-	attestation, attestationPresent := replayConfig.OperatorAttestation()
-	if !valkeyPresent || !attestationPresent {
+	redisConfig, present := replayConfig.Redis()
+	if !present {
 		return nil
 	}
+	storeConfig := redisStoreConfig(redisConfig, limits)
+	if storeConfig.Validate() != nil {
+		return nil
+	}
+	emitRedisConfigWarnings(storeConfig, factories.warnConfig)
 	var (
 		deriver      *dkim2.ReplayDeriver
 		store        replayAuthorityStore
 		coordinator  *ReplayCoordinator
 		operationErr error
 	)
-	borrowErr := material.UseReplayMaterial(
-		func(hmac, applicationPassword, auditorPassword []byte, rootsDER [][]byte) error {
-			deriver, operationErr = factories.newDeriver(hmac, replayConfig.Epoch())
-			owners.retainDeriver(deriver)
-			if operationErr != nil || deriver == nil {
-				return nil
-			}
-			client := valkey.NewClientConfig(
-				valkeyConfig.Address(),
-				valkeyConfig.ServerName(),
-				rootsDER,
-				valkeyConfig.ApplicationUsername(),
-				applicationPassword,
-				valkeyConfig.DialTimeout(),
-				valkeyConfig.TCPKeepalive(),
-				valkeyConfig.ConnectionWriteTimeout(),
-				replayConfig.Epoch(),
-				limits,
-			)
-			defer client.Close()
-			auditor := valkey.NewAuditorConfig(valkeyConfig.AuditorUsername(), auditorPassword)
-			defer auditor.Close()
-			store, operationErr = factories.newProduction(
-				acquisitionCtx, client, attestation, auditor,
-			)
-			owners.retainStore(store)
-			if operationErr != nil || nilInterface(store) {
-				return nil
-			}
-			coordinator, operationErr = NewEnabledReplayCoordinator(deriver, store, retention, replayCounting(replayConfig))
-			if operationErr != nil || coordinator == nil {
-				return nil
-			}
+	borrowErr := material.UseReplayMaterial(func(hmac []byte, secrets redisstore.Secrets) error {
+		deriver, operationErr = factories.newDeriver(hmac, replayConfig.Epoch())
+		owners.retainDeriver(deriver)
+		if operationErr != nil || deriver == nil {
 			return nil
-		},
-	)
+		}
+		store, operationErr = factories.newProduction(acquisitionCtx, storeConfig, secrets)
+		owners.retainStore(store)
+		if operationErr != nil || nilInterface(store) {
+			return nil
+		}
+		coordinator, operationErr = NewEnabledReplayCoordinator(deriver, store, retention, replayCounting(replayConfig))
+		if operationErr != nil || coordinator == nil {
+			return nil
+		}
+		return nil
+	})
 	if borrowErr != nil || operationErr != nil || deriver == nil ||
 		nilInterface(store) || coordinator == nil {
 		return nil
 	}
 	return &ReplayRuntime{state: &replayRuntimeState{
-		backend:          config.ReplayValkey,
-		coordinator:      coordinator,
-		deriver:          deriver,
-		retention:        retention,
-		closeDeriver:     deriver.Close,
-		store:            store,
-		authority:        store,
-		counting:         replayCounting(replayConfig),
-		auditorSource:    auditorSource,
-		auditorUsername:  valkeyConfig.AuditorUsername(),
-		revalidatePeriod: replayConfig.RevalidateInterval(),
-		startCleanup:     startReplayRuntimeCleanup,
+		backend:        config.ReplayRedis,
+		coordinator:    coordinator,
+		deriver:        deriver,
+		retention:      retention,
+		closeDeriver:   deriver.Close,
+		store:          store,
+		authority:      store,
+		counting:       replayCounting(replayConfig),
+		healthInterval: redisConfig.HealthInterval(),
+		startCleanup:   startReplayRuntimeCleanup,
 	}}
+}
+
+// redisStoreConfig projects the validated typed replay.redis configuration
+// into the provider's plain configuration value. Address lists are copied so
+// the provider never aliases config-owned state.
+func redisStoreConfig(redis config.RedisConfig, limits dkim2.ReplayLimits) redisstore.Config {
+	storeConfig := redisstore.DefaultConfig("")
+	switch redis.Mode() {
+	case config.RedisStandalone:
+		storeConfig.Mode = redisstore.ModeStandalone
+		storeConfig.StandaloneAddress = redis.StandaloneAddress()
+	case config.RedisSentinel:
+		storeConfig.Mode = redisstore.ModeSentinel
+		storeConfig.SentinelMasterName = redis.SentinelMasterName()
+		storeConfig.SentinelAddresses = append([]string(nil), redis.SentinelAddresses()...)
+		storeConfig.SentinelUsername = redis.SentinelUsername()
+	case config.RedisCluster:
+		storeConfig.Mode = redisstore.ModeCluster
+		storeConfig.ClusterAddresses = append([]string(nil), redis.ClusterAddresses()...)
+	default:
+		storeConfig.Mode = 0
+	}
+	storeConfig.ClusterMaxRedirects = redis.ClusterMaxRedirects()
+	storeConfig.Username = redis.Username()
+	storeConfig.DatabaseNumber = redis.DatabaseNumber()
+	storeConfig.KeyPrefix = redis.KeyPrefix()
+	storeConfig.Protocol = redis.Protocol()
+	storeConfig.TLS = redisstore.TLSConfig{
+		Enabled:            redis.TLSEnabled(),
+		ServerName:         redis.TLSServerName(),
+		MinVersion:         redisstore.TLSVersion(redis.TLSMinVersion()),
+		InsecureSkipVerify: redis.TLSInsecureSkipVerify(),
+	}
+	storeConfig.PoolSize = redis.PoolSize()
+	storeConfig.MinIdleConnections = redis.MinIdleConnections()
+	storeConfig.PoolTimeout = redis.PoolTimeout()
+	storeConfig.DialTimeout = redis.DialTimeout()
+	storeConfig.ReadTimeout = redis.ReadTimeout()
+	storeConfig.WriteTimeout = redis.WriteTimeout()
+	storeConfig.MaxAttempts = redis.RetryMaxAttempts()
+	storeConfig.MinRetryBackoff = redis.RetryMinBackoff()
+	storeConfig.MaxRetryBackoff = redis.RetryMaxBackoff()
+	storeConfig.Health = redisstore.HealthConfig{
+		Interval:         redis.HealthInterval(),
+		Timeout:          redis.HealthTimeout(),
+		FailureThreshold: redis.HealthFailureThreshold(),
+	}
+	storeConfig.RequireNoEviction = redis.RequireNoEviction()
+	storeConfig.Limits = limits
+	return storeConfig
 }
 
 // replayLimits projects the validated stable configuration into public provider limits.
@@ -500,43 +577,34 @@ func (r *ReplayRuntime) AuthorityReady() bool {
 		return r.state.store.State() == dkim2.ReplayStoreDisabled
 	case config.ReplayMemory:
 		return r.state.store.State() == dkim2.ReplayStoreReady
-	case config.ReplayValkey:
+	case config.ReplayRedis:
 		return !nilInterface(r.state.authority) && r.state.authority.AuthorityReady()
 	default:
 		return false
 	}
 }
 
-// Revalidate performs one least-authority production audit with a fresh credential clone.
-func (r *ReplayRuntime) Revalidate(ctx context.Context) error {
+// ProbeHealth performs one bounded backend health probe. The store records
+// the outcome as a recovery fact that AuthorityReady reflects; typed replay
+// failures are returned unchanged so the probe loop keeps running, while an
+// untyped provider error collapses to a runtime invariant failure. Caller
+// cancellation keeps precedence over every provider result.
+func (r *ReplayRuntime) ProbeHealth(ctx context.Context) error {
 	if err := runtimeContextError(ctx); err != nil {
 		return err
 	}
-	if r == nil || r.state == nil || r.state.backend != config.ReplayValkey ||
-		nilInterface(r.state.authority) || nilInterface(r.state.auditorSource) ||
-		r.state.auditorUsername == "" {
+	if r == nil || r.state == nil || r.state.backend != config.ReplayRedis ||
+		nilInterface(r.state.authority) {
 		return &ReplayRuntimeError{}
 	}
-	var operationErr error
-	borrowErr := r.state.auditorSource.UseReplayAuditorPassword(func(auditorPassword []byte) error {
-		auditor := valkey.NewAuditorConfig(r.state.auditorUsername, auditorPassword)
-		defer auditor.Close()
-		operationErr = r.state.authority.Revalidate(ctx, auditor)
-		return nil
-	})
+	err := r.state.authority.Probe(ctx)
 	if contextErr := runtimeContextError(ctx); contextErr != nil {
 		return contextErr
 	}
-	if borrowErr != nil {
+	if err != nil && !dkim2.IsReplayError(err) {
 		return &ReplayRuntimeError{}
 	}
-	if operationErr != nil && !dkim2.IsReplayError(operationErr) {
-		return &ReplayRuntimeError{}
-	}
-	if operationErr != nil && !allowedRevalidationError(operationErr) {
-		return &ReplayRuntimeError{}
-	}
-	return operationErr
+	return err
 }
 
 // freezeReplayCleanupBound validates and snapshots one caller bound exactly once.
@@ -608,26 +676,13 @@ func replayCleanupCallerError(bound replayCleanupBound) (resultErr error) {
 	}
 }
 
-// allowedRevalidationError accepts only live nonterminal M12 audit outcomes.
-func allowedRevalidationError(err error) bool {
-	if !dkim2.IsReplayError(err) {
-		return false
-	}
-	switch dkim2.ReplayErrorCodeOf(err) {
-	case dkim2.ReplayErrorLimitExceeded, dkim2.ReplayErrorUnavailable,
-		dkim2.ReplayErrorInconsistent, dkim2.ReplayErrorInternalInvariant:
-		return true
-	default:
-		return false
-	}
-}
-
-// RevalidationInterval returns the validated production audit interval.
-func (r *ReplayRuntime) RevalidationInterval() time.Duration {
-	if r == nil || r.state == nil || r.state.backend != config.ReplayValkey {
+// HealthInterval returns the validated Redis health-probe interval, or zero
+// for backends without a networked authority.
+func (r *ReplayRuntime) HealthInterval() time.Duration {
+	if r == nil || r.state == nil || r.state.backend != config.ReplayRedis {
 		return 0
 	}
-	return r.state.revalidatePeriod
+	return r.state.healthInterval
 }
 
 // Close releases the selected provider and replay-key owner.

@@ -227,6 +227,36 @@ func (r *Runtime) SetReady(ready bool) {
 	}
 }
 
+// eventReplayConfigWarning is the event ID of one accepted but weakened
+// replay-store setting.
+const eventReplayConfigWarning = "replay.config.warning"
+
+// ReplayConfigWarning identifies one closed replay-store setting that the
+// daemon accepts only with an operator-visible startup warning.
+type ReplayConfigWarning string
+
+const (
+	// ReplayConfigWarningInsecureSkipVerify reports disabled Redis TLS
+	// certificate verification.
+	ReplayConfigWarningInsecureSkipVerify ReplayConfigWarning = "tls_insecure_skip_verify"
+	// ReplayConfigWarningNoEvictionUnchecked reports a disabled startup check
+	// of the Redis maxmemory-policy noeviction requirement.
+	ReplayConfigWarningNoEvictionUnchecked ReplayConfigWarning = "noeviction_unchecked"
+)
+
+// WarnReplayConfig emits one bounded warning for one closed weakened
+// replay-store setting. The record carries only the closed warning class and
+// never an address, username, path, or secret; an unknown class is rejected
+// by the bounded handler.
+func (r *Runtime) WarnReplayConfig(warning ReplayConfigWarning) {
+	r.Logger().Warn(
+		eventReplayConfigWarning,
+		slog.String("operation", "config"),
+		slog.String("result", valueSuccess),
+		slog.String(keyConfigWarning, string(warning)),
+	)
+}
+
 // logLifecycle emits one closed instance lifecycle transition.
 func (r *Runtime) logLifecycle(state string) {
 	if r == nil {

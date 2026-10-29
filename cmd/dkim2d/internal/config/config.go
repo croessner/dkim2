@@ -17,7 +17,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/croessner/dkim2"
-	"github.com/croessner/dkim2/cmd/dkim2d/internal/replay/valkey"
 )
 
 const (
@@ -94,8 +93,8 @@ const (
 type ReplayBackend uint8
 
 const (
-	// ReplayValkey selects the directly addressed Valkey provider.
-	ReplayValkey ReplayBackend = iota + 1
+	// ReplayRedis selects the networked Redis-compatible provider.
+	ReplayRedis ReplayBackend = iota + 1
 	// ReplayMemory selects the process-local bounded provider.
 	ReplayMemory
 	// ReplayDisabled selects the explicit disabled provider.
@@ -266,25 +265,10 @@ type replayState struct {
 	pruneBudget         uint32
 	maxInFlight         uint32
 	maxAdmissionWaiters uint32
-	revalidateInterval  time.Duration
 	countDirect         bool
-	valkey              valkeyState
-	operatorAttestation valkey.OperatorAttestation
+	redis               redisState
 	hasReplayConfig     bool
-	hasValkeyConfig     bool
-}
-
-type valkeyState struct {
-	address                 string
-	serverName              string
-	caFile                  string
-	applicationUsername     string
-	applicationPasswordFile string
-	auditorUsername         string
-	auditorPasswordFile     string
-	dialTimeout             time.Duration
-	tcpKeepalive            time.Duration
-	connectionWriteTimeout  time.Duration
+	hasRedisConfig      bool
 }
 
 // Load validates one already-owned YAML document and returns an immutable snapshot.
@@ -426,6 +410,9 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 	if !validGeneration(generation) {
 		return nil, newError(CodeInvalidField)
 	}
+	if err := rejectRemovedValue(pathReplayBackend, text(values, pathReplayBackend)); err != nil {
+		return nil, err
+	}
 	backend, err := parseBackend(text(values, pathReplayBackend))
 	if err != nil {
 		return nil, err
@@ -445,7 +432,7 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 	if err != nil {
 		return nil, err
 	}
-	replay, err := parseReplay(values, presence, backend, generation, server.capabilityFile)
+	replay, err := parseReplay(values, backend, generation, server.capabilityFile)
 	if err != nil {
 		return nil, err
 	}
@@ -643,8 +630,8 @@ func replayProtectedPaths(replay replayState) []string {
 		return nil
 	}
 	paths := []string{replay.hmacKeyFile}
-	if replay.hasValkeyConfig {
-		paths = append(paths, replay.valkey.caFile, replay.valkey.applicationPasswordFile, replay.valkey.auditorPasswordFile)
+	if replay.hasRedisConfig {
+		paths = append(paths, replay.redis.protectedPaths()...)
 	}
 	return paths
 }
@@ -1329,7 +1316,7 @@ func parseDNS(values map[string]rawValue) (dnsState, error) {
 }
 
 // parseReplay validates selected provider-neutral and provider-specific values.
-func parseReplay(values map[string]rawValue, presence map[string]Presence, backend ReplayBackend, generation, capabilityPath string) (replayState, error) {
+func parseReplay(values map[string]rawValue, backend ReplayBackend, generation, capabilityPath string) (replayState, error) {
 	result := replayState{backend: backend}
 	if backend == ReplayDisabled {
 		if !sameGenerationPath(generation, capabilityPath) {
@@ -1388,149 +1375,13 @@ func parseReplay(values map[string]rawValue, presence map[string]Presence, backe
 	if backend == ReplayMemory {
 		return result, nil
 	}
-	revalidate, err := durationValue(values, pathReplayRevalidate, 10*time.Second, 60*time.Second, false)
+	redisConfig, err := parseRedis(values, generation, capabilityPath, hmacPath)
 	if err != nil {
 		return replayState{}, err
 	}
-	valkeyConfig, attestation, err := parseValkey(values, presence, generation, capabilityPath, hmacPath)
-	if err != nil {
-		return replayState{}, err
-	}
-	result.revalidateInterval = revalidate
-	result.valkey = valkeyConfig
-	result.operatorAttestation = attestation
-	result.hasValkeyConfig = true
+	result.redis = redisConfig
+	result.hasRedisConfig = true
 	return result, nil
-}
-
-// parseValkey validates direct authority, protected paths, and deployment attestation.
-func parseValkey(values map[string]rawValue, presence map[string]Presence, generation string, commonPaths ...string) (valkeyState, valkey.OperatorAttestation, error) {
-	address := text(values, pathValkeyAddress)
-	serverName := text(values, pathValkeyServerName)
-	appUsername := text(values, pathValkeyApplicationUser)
-	auditUsername := text(values, pathValkeyAuditorUser)
-	if !valkey.ValidAuthority(address, serverName, appUsername, auditUsername) {
-		return valkeyState{}, valkey.OperatorAttestation{}, newError(CodeInvalidField)
-	}
-	protectedPaths := append(append([]string(nil), commonPaths...),
-		text(values, pathValkeyCAFile),
-		text(values, pathValkeyApplicationPass),
-		text(values, pathValkeyAuditorPass),
-	)
-	if !sameGenerationPaths(generation, protectedPaths...) || !allDistinct(protectedPaths) {
-		return valkeyState{}, valkey.OperatorAttestation{}, newError(CodeInvalidField)
-	}
-	dialTimeout, err := durationValue(values, pathValkeyDialTimeout, 100*time.Millisecond, 30*time.Second, false)
-	if err != nil {
-		return valkeyState{}, valkey.OperatorAttestation{}, err
-	}
-	keepalive, err := durationValue(values, pathValkeyTCPKeepalive, time.Second, 5*time.Minute, false)
-	if err != nil {
-		return valkeyState{}, valkey.OperatorAttestation{}, err
-	}
-	writeTimeout, err := durationValue(values, pathValkeyWriteTimeout, 100*time.Millisecond, 30*time.Second, false)
-	if err != nil {
-		return valkeyState{}, valkey.OperatorAttestation{}, err
-	}
-	attestation, err := parseAttestation(values, presence)
-	if err != nil {
-		return valkeyState{}, valkey.OperatorAttestation{}, err
-	}
-	return valkeyState{
-		address:                 address,
-		serverName:              serverName,
-		caFile:                  protectedPaths[len(commonPaths)],
-		applicationUsername:     appUsername,
-		applicationPasswordFile: protectedPaths[len(commonPaths)+1],
-		auditorUsername:         auditUsername,
-		auditorPasswordFile:     protectedPaths[len(commonPaths)+2],
-		dialTimeout:             dialTimeout,
-		tcpKeepalive:            keepalive,
-		connectionWriteTimeout:  writeTimeout,
-	}, attestation, nil
-}
-
-// parseAttestation delegates the complete persistence grammar to the M12 owner.
-func parseAttestation(values map[string]rawValue, _ map[string]Presence) (valkey.OperatorAttestation, error) {
-	persistence, ok := map[string]valkey.PersistenceMode{
-		valuePersistenceRDB: valkey.PersistenceModeRDB,
-		"aof":               valkey.PersistenceModeAOF,
-		"rdb_aof":           valkey.PersistenceModeRDBAOF,
-	}[text(values, pathAttestationPersistence)]
-	if !ok {
-		return valkey.OperatorAttestation{}, newError(CodeInvalidField)
-	}
-	fsync, ok := map[string]valkey.AppendFsyncPolicy{
-		"inactive": valkey.AppendFsyncInactive,
-		"always":   valkey.AppendFsyncAlways,
-		"everysec": valkey.AppendFsyncEverySecond,
-	}[text(values, pathAttestationFsync)]
-	if !ok {
-		return valkey.OperatorAttestation{}, newError(CodeInvalidField)
-	}
-	rotation, ok := map[string]valkey.RotationState{
-		"unchanged":       valkey.RotationUnchanged,
-		"drain_completed": valkey.RotationDrainCompleted,
-	}[text(values, pathAttestationRotation)]
-	if !ok || text(values, pathAttestationLossWindow) != "asynchronous_acknowledged" {
-		return valkey.OperatorAttestation{}, newError(CodeInvalidField)
-	}
-	minReplicas, err := uintValue(values, pathAttestationMinReplicas, 0, 3)
-	if err != nil {
-		return valkey.OperatorAttestation{}, err
-	}
-	maxLag, err := uintValue(values, pathAttestationMaxLag, 1, 3600)
-	if err != nil {
-		return valkey.OperatorAttestation{}, err
-	}
-	booleanPaths := []string{
-		pathAttestationNoGlobalExactlyOnce,
-		pathAttestationDedicatedDeployment,
-		pathAttestationDedicatedDatabase,
-		pathAttestationDirectIPAuthority,
-		pathAttestationNoSubstitution,
-		pathAttestationStandaloneAuthority,
-		pathAttestationSharedDraft,
-		pathAttestationSharedAlgorithm,
-		pathAttestationSharedNamespace,
-		pathAttestationSharedEpoch,
-		pathAttestationSharedSecretSet,
-		pathAttestationSharedRetention,
-	}
-	for _, path := range booleanPaths {
-		if _, booleanErr := boolValue(values, path); booleanErr != nil {
-			return valkey.OperatorAttestation{}, booleanErr
-		}
-		if !boolText(values, path) {
-			return valkey.OperatorAttestation{}, newError(CodeInvalidField)
-		}
-	}
-	input := valkey.NewOperatorAttestationInput(
-		persistence,
-		fsync,
-		text(values, pathAttestationSave),
-		uint8(minReplicas),
-		uint16(maxLag),
-		valkey.LossWindowAsynchronousAcknowledged,
-		rotation,
-		valkey.AssertNoGlobalExactlyOnceClaim,
-		valkey.AssertDedicatedDeployment,
-		valkey.AssertDedicatedDatabaseZero,
-		valkey.AssertDirectIPAuthority,
-		valkey.AssertNoEndpointSubstitution,
-		valkey.AssertStandaloneAuthority,
-		valkey.AssertSharedDraft,
-		valkey.AssertSharedAlgorithm,
-		valkey.AssertSharedNamespace,
-		valkey.AssertSharedEpoch,
-		valkey.AssertSharedSecretSet,
-		valkey.AssertSharedRetention,
-	)
-	attestation, err := valkey.NewOperatorAttestation(input)
-	if err != nil {
-		return valkey.OperatorAttestation{}, newError(CodeInvalidField)
-	}
-	return attestation, nil
 }
 
 // validateBackendMatrix rejects missing and forbidden explicit sources before defaults matter.
@@ -1567,41 +1418,14 @@ func validateBackendMatrix(backend ReplayBackend, presence map[string]Presence, 
 		}
 	case ReplayMemory:
 		if !require(pathReplayBackend, pathReplayHMACFile, pathReplayEpoch) ||
-			presence[pathReplayRevalidate].Explicit() ||
-			!forbidPrefix("replay.valkey.") {
+			!forbidPrefix(redisPathPrefix) {
 			return newError(CodeInvalidMatrix)
 		}
-	case ReplayValkey:
-		required := []string{
-			pathReplayHMACFile, pathReplayEpoch,
-			pathValkeyAddress, pathValkeyServerName, pathValkeyCAFile,
-			pathValkeyApplicationUser, pathValkeyApplicationPass,
-			pathValkeyAuditorUser, pathValkeyAuditorPass,
-			pathAttestationPersistence, pathAttestationFsync,
-			pathAttestationMinReplicas,
-			pathAttestationMaxLag,
-			pathAttestationLossWindow, pathAttestationRotation,
-			pathAttestationNoGlobalExactlyOnce,
-			pathAttestationDedicatedDeployment,
-			pathAttestationDedicatedDatabase,
-			pathAttestationDirectIPAuthority,
-			pathAttestationNoSubstitution,
-			pathAttestationStandaloneAuthority,
-			pathAttestationSharedDraft,
-			pathAttestationSharedAlgorithm,
-			pathAttestationSharedNamespace,
-			pathAttestationSharedEpoch,
-			pathAttestationSharedSecretSet,
-			pathAttestationSharedRetention,
-		}
-		if !require(required...) {
+	case ReplayRedis:
+		if !require(pathReplayHMACFile, pathReplayEpoch) {
 			return newError(CodeInvalidMatrix)
 		}
-		mode := text(values, pathAttestationPersistence)
-		savePresent := presence[pathAttestationSave].Explicit()
-		if (mode == "aof" && savePresent) || ((mode == valuePersistenceRDB || mode == "rdb_aof") && !savePresent) {
-			return newError(CodeInvalidMatrix)
-		}
+		return validateRedisMatrix(presence, values)
 	default:
 		return newError(CodeInvalidMatrix)
 	}
@@ -1625,8 +1449,8 @@ func parsePolicy(value string) (PolicyMode, error) {
 // parseBackend converts one exact replay backend enum.
 func parseBackend(value string) (ReplayBackend, error) {
 	switch value {
-	case valueBackendValkey:
-		return ReplayValkey, nil
+	case valueBackendRedis:
+		return ReplayRedis, nil
 	case "memory":
 		return ReplayMemory, nil
 	case valueBackendDisabled:
@@ -1639,11 +1463,6 @@ func parseBackend(value string) (ReplayBackend, error) {
 // text returns one merged scalar without formatting it.
 func text(values map[string]rawValue, path string) string {
 	return values[path].text
-}
-
-// boolText converts one already type-checked exact boolean.
-func boolText(values map[string]rawValue, path string) bool {
-	return values[path].text == canonicalTrue
 }
 
 // boolValue enforces exact source typing and lowercase boolean spelling.

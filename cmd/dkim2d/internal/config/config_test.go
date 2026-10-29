@@ -16,7 +16,7 @@ const (
 	testTenant     = "tenant-a"
 )
 
-const testValkeyAddress = "127.0.0.1:6379"
+const testRedisAddress = "redis.internal:6379"
 
 const testSigningUseOriginator = "originator"
 
@@ -160,9 +160,14 @@ func TestRemovedDraft06SigningFlagKeysFailWithMigrationGuidance(t *testing.T) {
 		t.Fatalf("Load(signing) without removed keys code = %s", CodeOf(err))
 	}
 	const secretMarker = "removed-key-secret-marker"
-	fields := removedFields()
+	fields := make([]removedField, 0, 6)
+	for _, field := range removedFields() {
+		if field.guidance == removedDraft06FlagGuidance {
+			fields = append(fields, field)
+		}
+	}
 	if len(fields) != 6 {
-		t.Fatalf("removed field count = %d, want 6", len(fields))
+		t.Fatalf("removed Draft-06 field count = %d, want 6", len(fields))
 	}
 	for _, field := range fields {
 		segments := strings.Split(field.path, ".")
@@ -563,40 +568,22 @@ func TestProtectedPathGenerationInvariants(t *testing.T) {
 	}
 }
 
-// TestLoadValkeyDelegatesAttestation proves the complete required matrix and
-// M12 persistence constructor are used together.
-func TestLoadValkeyDelegatesAttestation(t *testing.T) {
-	clearStableEnvironment(t)
-	snapshot, err := Load([]byte(valkeyYAML()), FlagValues{})
-	if err != nil {
-		t.Fatalf("Load() failed with code %s", CodeOf(err))
-	}
-	value, present := snapshot.Replay().Valkey()
-	if !present || value.Address() != testValkeyAddress ||
-		value.ApplicationUsername() != "application" ||
-		value.AuditorUsername() != "auditor" {
-		t.Fatal("Load() did not construct the exact Valkey configuration")
-	}
-	if _, present := snapshot.Replay().OperatorAttestation(); !present {
-		t.Fatal("Load() did not retain the validated operator attestation")
-	}
-}
-
 // TestConfigurationFormattingAndSerializationStayContentFree proves opaque
 // wrappers cannot leak user-controlled values through ordinary diagnostics.
 func TestConfigurationFormattingAndSerializationStayContentFree(t *testing.T) {
 	clearStableEnvironment(t)
 	const marker = "private-config-marker"
 	flags := NewFlagValues(marker, true, marker, true, marker, true)
-	document := strings.Replace(valkeyYAML(), "application_username: application", "application_username: "+marker, 1)
-	document = strings.Replace(document, "application-password", marker+"-password", 1)
+	document := strings.Replace(redisYAML(), "username: application", "username: "+marker, 1)
+	document = strings.Replace(document, "redis-password", marker+"-password", 1)
+	document = strings.Replace(document, "address: "+testRedisAddress, "address: "+marker+".internal:6379", 1)
 	snapshot, err := Load([]byte(document), FlagValues{})
 	if err != nil {
 		t.Fatalf("Load() failed with code %s", CodeOf(err))
 	}
-	valkeyConfig, present := snapshot.Replay().Valkey()
+	redisConfig, present := snapshot.Replay().Redis()
 	if !present {
-		t.Fatal("Load() omitted selected Valkey configuration")
+		t.Fatal("Load() omitted selected Redis configuration")
 	}
 	values := []any{
 		flags, &flags, []any{flags},
@@ -604,7 +591,7 @@ func TestConfigurationFormattingAndSerializationStayContentFree(t *testing.T) {
 		snapshot.Server(), &snapshot.state.server, []any{snapshot.Server()},
 		snapshot.DNS(), []any{snapshot.DNS()},
 		snapshot.Replay(), []any{snapshot.Replay()},
-		valkeyConfig, []any{valkeyConfig},
+		redisConfig, []any{redisConfig}, redisConfig.Mode(),
 		snapshot.PolicyMode(), snapshot.Backend(),
 	}
 	for _, value := range values {
@@ -616,7 +603,7 @@ func TestConfigurationFormattingAndSerializationStayContentFree(t *testing.T) {
 	}
 	for _, value := range []any{
 		flags, snapshot, snapshot.Server(), snapshot.DNS(), snapshot.Replay(),
-		valkeyConfig, snapshot.PolicyMode(), snapshot.Backend(),
+		redisConfig, snapshot.PolicyMode(), snapshot.Backend(),
 	} {
 		if _, marshalErr := json.Marshal(value); CodeOf(marshalErr) != CodeSerialization {
 			t.Fatalf("%T allowed JSON serialization", value)
@@ -648,11 +635,11 @@ func TestLoadedSnapshotDoesNotRereadEnvironment(t *testing.T) {
 // expanded winners are each bounded by their own aggregate accounting pass.
 func TestSourceAndExpansionAggregatesAreIndependent(t *testing.T) {
 	stableNames := []string{
-		"DKIM2D_REPLAY_VALKEY_ADDRESS",
-		"DKIM2D_REPLAY_VALKEY_SERVER_NAME",
-		"DKIM2D_REPLAY_VALKEY_CA_FILE",
-		"DKIM2D_REPLAY_VALKEY_APPLICATION_USERNAME",
-		"DKIM2D_REPLAY_VALKEY_APPLICATION_PASSWORD_FILE",
+		"DKIM2D_REPLAY_REDIS_" + "STANDALONE_ADDRESS",
+		"DKIM2D_REPLAY_REDIS_" + "TLS_SERVER_NAME",
+		"DKIM2D_REPLAY_REDIS_" + "TLS_CA_FILE",
+		"DKIM2D_REPLAY_REDIS_" + "AUTH_USERNAME",
+		"DKIM2D_REPLAY_REDIS_" + "AUTH_PASSWORD_FILE",
 	}
 	t.Run("pre expansion", func(t *testing.T) {
 		clearStableEnvironment(t)
@@ -675,30 +662,22 @@ func TestSourceAndExpansionAggregatesAreIndependent(t *testing.T) {
 	})
 }
 
-// TestValkeyMappedIPv6MatchesM12Grammar prevents the command-layer validator
-// from narrowing a canonical authority accepted by the M12 owner.
-func TestValkeyMappedIPv6MatchesM12Grammar(t *testing.T) {
-	clearStableEnvironment(t)
-	document := strings.Replace(valkeyYAML(), "address: "+testValkeyAddress, "address: \"[::ffff:192.0.2.1]:6379\"", 1)
-	document = strings.Replace(document, "server_name: replay.example", "server_name: \"::ffff:192.0.2.1\"", 1)
-	if _, err := Load([]byte(document), FlagValues{}); err != nil {
-		t.Fatalf("Load() narrowed the M12 authority grammar with code %s", CodeOf(err))
-	}
-}
-
 // TestBackendMatrixExhaustivelyChecksPresence freezes every required,
 // optional, and forbidden backend key independently of typed defaults.
 func TestBackendMatrixExhaustivelyChecksPresence(t *testing.T) {
 	common := []string{pathConfigVersion, pathProtectedGeneration, pathServerCapability}
 	allReplay := make([]string, 0)
-	allValkey := make([]string, 0)
+	allRedis := make([]string, 0)
 	for _, spec := range stableFieldSpecs() {
 		if strings.HasPrefix(spec.path, "replay.") {
 			allReplay = append(allReplay, spec.path)
 		}
-		if strings.HasPrefix(spec.path, "replay.valkey.") {
-			allValkey = append(allValkey, spec.path)
+		if strings.HasPrefix(spec.path, redisPathPrefix) {
+			allRedis = append(allRedis, spec.path)
 		}
+	}
+	if len(allRedis) != 33 {
+		t.Fatalf("replay.redis schema has %d paths, want 33", len(allRedis))
 	}
 	t.Run("disabled forbidden", func(t *testing.T) {
 		base := append(append([]string(nil), common...), pathReplayBackend)
@@ -727,7 +706,7 @@ func TestBackendMatrixExhaustivelyChecksPresence(t *testing.T) {
 				t.Fatal("memory matrix accepted a missing required key")
 			}
 		}
-		for _, path := range append(allValkey, "replay.revalidate_interval") {
+		for _, path := range allRedis {
 			present := append(append([]string(nil), required...), path)
 			if err := validateBackendMatrix(ReplayMemory, explicitPresence(present...), nil); CodeOf(err) != CodeInvalidMatrix {
 				t.Fatal("memory matrix accepted a forbidden key")
@@ -744,96 +723,54 @@ func TestBackendMatrixExhaustivelyChecksPresence(t *testing.T) {
 			}
 		}
 	})
-	t.Run("valkey required", func(t *testing.T) {
+	t.Run("redis required", func(t *testing.T) {
 		required := []string{
 			pathConfigVersion, pathProtectedGeneration, pathServerCapability,
-			pathReplayHMACFile, pathReplayEpoch,
-			pathValkeyAddress, pathValkeyServerName, pathValkeyCAFile,
-			pathValkeyApplicationUser, pathValkeyApplicationPass,
-			pathValkeyAuditorUser, pathValkeyAuditorPass,
-			pathAttestationPersistence,
-			pathAttestationFsync,
-			pathAttestationSave,
-			pathAttestationMinReplicas,
-			pathAttestationMaxLag,
-			pathAttestationLossWindow,
-			pathAttestationRotation,
-			pathAttestationNoGlobalExactlyOnce, pathAttestationDedicatedDeployment,
-			pathAttestationDedicatedDatabase, pathAttestationDirectIPAuthority,
-			pathAttestationNoSubstitution, pathAttestationStandaloneAuthority,
-			pathAttestationSharedDraft, pathAttestationSharedAlgorithm,
-			pathAttestationSharedNamespace, pathAttestationSharedEpoch,
-			pathAttestationSharedSecretSet, pathAttestationSharedRetention,
+			pathReplayHMACFile, pathReplayEpoch, pathRedisStandaloneAddress,
 		}
 		values := map[string]rawValue{
-			"replay.valkey.attestation.persistence_mode": {text: "rdb"},
+			pathRedisMode:       {text: valueRedisStandalone, kind: scalarString, source: SourceDefault},
+			pathRedisTLSEnabled: {text: canonicalTrue, kind: scalarBool, source: SourceDefault},
 		}
-		if err := validateBackendMatrix(ReplayValkey, explicitPresence(required...), values); err != nil {
-			t.Fatal("valid Valkey matrix was rejected")
+		if err := validateBackendMatrix(ReplayRedis, explicitPresence(required...), values); err != nil {
+			t.Fatal("valid Redis matrix was rejected")
 		}
 		for index := range required {
 			missing := append([]string(nil), required[:index]...)
 			missing = append(missing, required[index+1:]...)
-			if err := validateBackendMatrix(ReplayValkey, explicitPresence(missing...), values); CodeOf(err) != CodeInvalidMatrix {
-				t.Fatal("Valkey matrix accepted a missing required key")
+			if err := validateBackendMatrix(ReplayRedis, explicitPresence(missing...), values); CodeOf(err) != CodeInvalidMatrix {
+				t.Fatal("Redis matrix accepted a missing required key")
 			}
 		}
 		for _, path := range []string{
 			pathReplayBackend, pathReplayRetention, pathReplayMaxEntries,
 			pathReplayMaxWaiters, pathReplayPruneBudget,
-			pathReplayMaxInFlight, pathReplayMaxAdmission,
-			pathReplayRevalidate, pathValkeyDialTimeout,
-			pathValkeyTCPKeepalive, pathValkeyWriteTimeout,
+			pathReplayMaxInFlight, pathReplayMaxAdmission, pathReplayCountDirect,
+			pathRedisMode, pathRedisAuthPasswordFile,
+			pathRedisDatabaseNumber, pathRedisKeyPrefix, pathRedisProtocol,
+			pathRedisTLSEnabled, pathRedisTLSCAFile, pathRedisTLSServerName,
+			pathRedisTLSMinVersion, pathRedisTLSInsecureSkipVerify,
+			pathRedisPoolSize, pathRedisMinIdleConnections, pathRedisPoolTimeout,
+			pathRedisDialTimeout, pathRedisReadTimeout, pathRedisWriteTimeout,
+			pathRedisRetriesMaxAttempts, pathRedisRetriesMinBackoff, pathRedisRetriesMaxBackoff,
+			pathRedisHealthInterval, pathRedisHealthTimeout, pathRedisHealthFailureThreshold,
+			pathRedisRequireNoEviction,
 		} {
 			present := append(append([]string(nil), required...), path)
-			if err := validateBackendMatrix(ReplayValkey, explicitPresence(present...), values); err != nil {
-				t.Fatal("Valkey matrix rejected an optional key")
+			if err := validateBackendMatrix(ReplayRedis, explicitPresence(present...), values); err != nil {
+				t.Fatalf("Redis matrix rejected optional key %s", path)
+			}
+		}
+		for _, path := range allRedis {
+			if !strings.HasPrefix(path, redisPathPrefix+"sentinel.") && !strings.HasPrefix(path, redisPathPrefix+"cluster.") {
+				continue
+			}
+			present := append(append([]string(nil), required...), path)
+			if err := validateBackendMatrix(ReplayRedis, explicitPresence(present...), values); CodeOf(err) != CodeInvalidMatrix {
+				t.Fatalf("standalone Redis matrix accepted forbidden key %s", path)
 			}
 		}
 	})
-}
-
-// TestValkeyAttestationPresenceIsExhaustive proves explicit zero is distinct
-// from absence and every trusted assertion is required.
-func TestValkeyAttestationPresenceIsExhaustive(t *testing.T) {
-	clearStableEnvironment(t)
-	requiredLines := []string{
-		"      persistence_mode: rdb\n",
-		"      append_fsync_policy: inactive\n",
-		"      save_schedule: \"60 1\"\n",
-		"      min_replicas_to_write: 0\n",
-		"      min_replicas_max_lag_seconds: 30\n",
-		"      loss_window_acceptance: asynchronous_acknowledged\n",
-		"      rotation_state: unchanged\n",
-		"      no_global_exactly_once_claim: true\n",
-		"      dedicated_deployment: true\n",
-		"      dedicated_database_zero: true\n",
-		"      direct_ip_authority: true\n",
-		"      no_endpoint_substitution: true\n",
-		"      standalone_authority: true\n",
-		"      shared_draft: true\n",
-		"      shared_algorithm: true\n",
-		"      shared_namespace: true\n",
-		"      shared_epoch: true\n",
-		"      shared_secret_set: true\n",
-		"      shared_retention: true\n",
-	}
-	for _, line := range requiredLines {
-		document := strings.Replace(valkeyYAML(), line, "", 1)
-		if _, err := Load([]byte(document), FlagValues{}); err == nil {
-			t.Fatal("Load() accepted a missing attestation leaf")
-		}
-	}
-	aof := strings.Replace(valkeyYAML(), "persistence_mode: rdb", "persistence_mode: aof", 1)
-	aof = strings.Replace(aof, "append_fsync_policy: inactive", "append_fsync_policy: always", 1)
-	aof = strings.Replace(aof, "      save_schedule: \"60 1\"\n", "", 1)
-	if _, err := Load([]byte(aof), FlagValues{}); err != nil {
-		t.Fatalf("Load() rejected valid AOF absence with code %s", CodeOf(err))
-	}
-	aofWithSave := strings.Replace(aof, "      min_replicas_to_write: 0\n", "      save_schedule: \"60 1\"\n      min_replicas_to_write: 0\n", 1)
-	if _, err := Load([]byte(aofWithSave), FlagValues{}); CodeOf(err) != CodeInvalidMatrix {
-		t.Fatal("Load() accepted forbidden AOF save_schedule")
-	}
 }
 
 // TestScalarLexicalAndRangeTables freezes canonical boolean, integer, and
@@ -896,8 +833,12 @@ func TestScalarLexicalAndRangeTables(t *testing.T) {
 		{path: pathReplayPruneBudget, min: 1, max: 65_536},
 		{path: pathReplayMaxInFlight, min: 1, max: 65_536},
 		{path: pathReplayMaxAdmission, min: 1, max: 65_536},
-		{path: pathAttestationMinReplicas, min: 0, max: 3},
-		{path: pathAttestationMaxLag, min: 1, max: 3600},
+		{path: pathRedisClusterMaxRedirects, min: 1, max: 16},
+		{path: pathRedisDatabaseNumber, min: 0, max: 15},
+		{path: pathRedisProtocol, min: 2, max: 3},
+		{path: pathRedisPoolSize, min: 1, max: 1024},
+		{path: pathRedisRetriesMaxAttempts, min: 1, max: 10},
+		{path: pathRedisHealthFailureThreshold, min: 1, max: 10},
 	}
 	for _, bounds := range uintRanges {
 		for _, valid := range []uint64{bounds.min, bounds.max} {
@@ -938,10 +879,13 @@ func TestScalarLexicalAndRangeTables(t *testing.T) {
 		{path: pathDNSNegativeTTLCap, min: 0, max: time.Hour, minText: "0s", maxText: "1h", aboveText: "61m", allowZero: true},
 		{path: pathDNSStableErrorTTLCap, min: 0, max: 5 * time.Minute, minText: "0s", maxText: "5m", aboveText: "301s", allowZero: true},
 		{path: pathReplayRetention, min: time.Second, max: 720 * time.Hour, minText: "1s", maxText: "720h", belowText: "0s", aboveText: "721h"},
-		{path: pathReplayRevalidate, min: 10 * time.Second, max: 60 * time.Second, minText: "10s", maxText: defaultDeadline, belowText: "9s", aboveText: "61s"},
-		{path: pathValkeyDialTimeout, min: 100 * time.Millisecond, max: 30 * time.Second, minText: defaultAdmissionWait, maxText: defaultReadTimeout, belowText: duration99ms, aboveText: duration31s},
-		{path: pathValkeyTCPKeepalive, min: time.Second, max: 5 * time.Minute, minText: "1s", maxText: "5m", belowText: duration999ms, aboveText: "301s"},
-		{path: pathValkeyWriteTimeout, min: 100 * time.Millisecond, max: 30 * time.Second, minText: defaultAdmissionWait, maxText: defaultReadTimeout, belowText: duration99ms, aboveText: duration31s},
+		{path: pathRedisPoolTimeout, min: time.Millisecond, max: 30 * time.Second, minText: duration1ms, maxText: defaultReadTimeout, belowText: "0s", aboveText: duration31s},
+		{path: pathRedisDialTimeout, min: 100 * time.Millisecond, max: 30 * time.Second, minText: defaultAdmissionWait, maxText: defaultReadTimeout, belowText: duration99ms, aboveText: duration31s},
+		{path: pathRedisReadTimeout, min: 100 * time.Millisecond, max: 30 * time.Second, minText: defaultAdmissionWait, maxText: defaultReadTimeout, belowText: duration99ms, aboveText: duration31s},
+		{path: pathRedisWriteTimeout, min: 100 * time.Millisecond, max: 30 * time.Second, minText: defaultAdmissionWait, maxText: defaultReadTimeout, belowText: duration99ms, aboveText: duration31s},
+		{path: pathRedisRetriesMinBackoff, min: time.Millisecond, max: 5 * time.Second, minText: duration1ms, maxText: "5s", belowText: "0s", aboveText: "5001ms"},
+		{path: pathRedisRetriesMaxBackoff, min: time.Millisecond, max: 5 * time.Second, minText: duration1ms, maxText: "5s", belowText: "0s", aboveText: "5001ms"},
+		{path: pathRedisHealthInterval, min: time.Second, max: time.Minute, minText: "1s", maxText: defaultDeadline, belowText: duration999ms, aboveText: "61s"},
 	}
 	for _, bounds := range durationRanges {
 		for _, valid := range []string{bounds.minText, bounds.maxText} {
@@ -1010,7 +954,9 @@ func FuzzLoadStrict(f *testing.F) {
 	clearStableEnvironmentF(f)
 	f.Add([]byte(disabledYAML()))
 	f.Add([]byte(memoryYAML("1", "capability")))
-	f.Add([]byte(valkeyYAML()))
+	f.Add([]byte(redisYAML()))
+	f.Add([]byte(redisSentinelYAML()))
+	f.Add([]byte(redisClusterYAML()))
 	f.Add([]byte(disabledYAML() + `
 observability:
   tracing:
@@ -1175,48 +1121,6 @@ replay:
   backend: memory
   hmac_key_file: /secure/` + testGeneration + `/hmac
   epoch: ` + epoch + `
-`
-}
-
-// valkeyYAML returns one complete valid Valkey document.
-func valkeyYAML() string {
-	return `config:
-  version: dkim2d-config-v1
-protected:
-  generation: ` + testGeneration + `
-server:
-  capability_file: /secure/` + testGeneration + `/capability
-replay:
-  hmac_key_file: /secure/` + testGeneration + `/hmac
-  epoch: 1
-  valkey:
-    address: 127.0.0.1:6379
-    server_name: replay.example
-    ca_file: /secure/` + testGeneration + `/ca
-    application_username: application
-    application_password_file: /secure/` + testGeneration + `/application-password
-    auditor_username: auditor
-    auditor_password_file: /secure/` + testGeneration + `/auditor-password
-    attestation:
-      persistence_mode: rdb
-      append_fsync_policy: inactive
-      save_schedule: "60 1"
-      min_replicas_to_write: 0
-      min_replicas_max_lag_seconds: 30
-      loss_window_acceptance: asynchronous_acknowledged
-      rotation_state: unchanged
-      no_global_exactly_once_claim: true
-      dedicated_deployment: true
-      dedicated_database_zero: true
-      direct_ip_authority: true
-      no_endpoint_substitution: true
-      standalone_authority: true
-      shared_draft: true
-      shared_algorithm: true
-      shared_namespace: true
-      shared_epoch: true
-      shared_secret_set: true
-      shared_retention: true
 `
 }
 

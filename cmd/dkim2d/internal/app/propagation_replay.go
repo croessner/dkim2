@@ -8,9 +8,14 @@ import (
 
 	"github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/config"
+	"github.com/croessner/dkim2/cmd/dkim2d/internal/replay/redisstore"
 )
 
 const propagationReplayRedacted = "dkim2d_propagation_replay"
+
+// The production Redis provider must satisfy the two-phase propagation
+// contract so PropagationReplay can compose it without a runtime fallback.
+var _ dkim2.ReplayPropagationStore = (*redisstore.Store)(nil)
 
 // PropagationReplayService is the narrow two-phase propagation replay seam.
 // ReservePropagation derives the propagation coordinate of one verified
@@ -177,7 +182,7 @@ func (*PropagationReplayCoordinator) Format(state fmt.State, _ rune) {
 // PropagationReplay returns the runtime's propagation replay policy over its
 // own backend: the disabled backend reports disabled outcomes, and every
 // enabled backend must implement the two-phase propagation contract, which
-// the memory and Valkey providers do. A backend without that contract is
+// the memory and Redis providers do. A backend without that contract is
 // refused so that the propagation route is never composed over a store that
 // cannot hold a pending record.
 func (r *ReplayRuntime) PropagationReplay(lease time.Duration) (PropagationReplayService, error) {

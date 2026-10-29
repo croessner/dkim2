@@ -60,7 +60,7 @@ const (
 	postfixComposeArtifact      = "postfix-qualification-compose"
 	postfixDockerfileArtifact   = "postfix-qualification-dockerfile"
 	postfixRuntimeArtifact      = "postfix-qualification-runtime"
-	valkeyRunnerName            = "valkey-tests"
+	redisRunnerName             = "redis-tests"
 	environmentHomeTmp          = "HOME=/tmp"
 	environmentLangC            = "LANG=C"
 	environmentLocaleC          = "LC_ALL=C"
@@ -572,10 +572,10 @@ var portableDefinitions = []runnerDefinition{
 		},
 	},
 	{
-		name: valkeyRunnerName, module: daemonModule, pkg: "./internal/replay/valkey",
+		name: redisRunnerName, module: daemonModule, pkg: "./internal/replay/redisstore",
 		timeout: 4 * time.Minute,
 		cases: []runnerCase{
-			{key: "replay\x00valkey-set-nx-px", testName: "TestRealValkeyHarness", artifacts: []string{"valkey-harness-script", "valkey-replay-source"}},
+			{key: "replay\x00redis-set-nx-get-px", testName: "TestRealRedisHarness", artifacts: []string{"redis-harness-script", "redis-replay-source"}},
 		},
 	},
 	{
@@ -711,8 +711,8 @@ func executeRunners(
 			runErr      error
 		)
 		switch selected.name {
-		case valkeyRunnerName:
-			digest, passedCases, extraTools, runErr = executeValkeyHarness(root, selected)
+		case redisRunnerName:
+			digest, passedCases, extraTools, runErr = executeRedisHarness(root, selected)
 		case postfixRunnerName:
 			digest, passedCases, extraTools, runErr = executePostfixQualification(
 				root,
@@ -907,8 +907,9 @@ func validatePostfixQualificationReport(
 	)
 }
 
-// executeValkeyHarness owns exact server startup, authenticated execution, and cleanup evidence.
-func executeValkeyHarness(
+// executeRedisHarness owns exact pinned Valkey server binaries, the
+// standalone, Sentinel, and cluster harness execution, and cleanup evidence.
+func executeRedisHarness(
 	root string,
 	definition runnerDefinition,
 ) (string, []string, []conformance.ToolIdentity, error) {
@@ -923,7 +924,7 @@ func executeValkeyHarness(
 	if err != nil {
 		return "", nil, nil, errors.New("runner_dependency")
 	}
-	directory, err := os.MkdirTemp("/tmp", ".dkim2-valkey-runner-")
+	directory, err := os.MkdirTemp("/tmp", ".dkim2-redis-runner-")
 	if err != nil {
 		return "", nil, nil, errors.New("runner_build")
 	}
@@ -936,11 +937,11 @@ func executeValkeyHarness(
 	if err != nil {
 		return "", nil, nil, err
 	}
-	testBinary := filepath.Join(directory, "valkey-integration.test")
+	testBinary := filepath.Join(directory, "redis-integration.test")
 	buildContext, cancelBuild := context.WithTimeout(context.Background(), definition.timeout)
 	build := exec.CommandContext(
 		buildContext,
-		"go", "test", "-tags=valkeyintegration", "-c", "-o", testBinary, definition.pkg,
+		"go", "test", "-tags=redisintegration", "-c", "-o", testBinary, definition.pkg,
 	)
 	build.Dir = filepath.Join(root, definition.module)
 	build.Stdout = io.Discard
@@ -967,8 +968,8 @@ func executeValkeyHarness(
 		!matchesValkeyVersion(versionOutput.String(), expectedVersion) {
 		return "", nil, nil, errors.New("runner_dependency")
 	}
-	sourceScriptPath := filepath.Join(root, "scripts", "test-valkey.sh")
-	scriptPath := filepath.Join(directory, "test-valkey.sh")
+	sourceScriptPath := filepath.Join(root, "scripts", "test-redis.sh")
+	scriptPath := filepath.Join(directory, "test-redis.sh")
 	if err := copyExecutable(sourceScriptPath, scriptPath); err != nil {
 		return "", nil, nil, err
 	}
@@ -976,7 +977,7 @@ func executeValkeyHarness(
 	if err != nil {
 		return "", nil, nil, err
 	}
-	before, err := filepath.Glob("/tmp/dkim2-valkey-integration.*")
+	before, err := filepath.Glob("/tmp/dkim2-redis-integration.*")
 	if err != nil {
 		return "", nil, nil, errors.New("runner_cleanup")
 	}
@@ -1000,7 +1001,7 @@ func executeValkeyHarness(
 	runErr := command.Run()
 	contextErr := runContext.Err()
 	cancelRun()
-	after, globErr := filepath.Glob("/tmp/dkim2-valkey-integration.*")
+	after, globErr := filepath.Glob("/tmp/dkim2-redis-integration.*")
 	sort.Strings(after)
 	if globErr != nil || !slices.Equal(before, after) {
 		return "", nil, nil, errors.New("runner_cleanup")
@@ -1026,7 +1027,7 @@ func executeValkeyHarness(
 		return "", nil, nil, errors.New("runner_unstable")
 	}
 	return testDigest, []string{definition.cases[0].key}, []conformance.ToolIdentity{
-		{Name: "valkey-harness-script", Digest: scriptDigest},
+		{Name: "redis-harness-script", Digest: scriptDigest},
 		{Name: "valkey-server-" + expectedVersion, Digest: serverDigest},
 	}, nil
 }
