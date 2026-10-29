@@ -124,7 +124,8 @@ Draft-08 migration (`v0.1.48`):
   `SigningCredential`.
 - Changed: `DraftIdentifier`, `NewDSNSigningEvidenceRequest`.
 
-Recorded chain description (after `v0.2.0`):
+Recorded chain description (after `v0.2.0`; reviewed base `306bddf4`, 915
+declarations):
 
 - Added: `DescribeRecordedChain`, `RecordedHop`, `RecordedHop.Format`,
   `RecordedHop.GoString`, `RecordedHop.IntroducesInstance`,
