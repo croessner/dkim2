@@ -133,7 +133,8 @@ declarations):
   `RecordedHop.RecipeMode`, `RecordedHop.Sequence`,
   `RecordedHop.SignerDomain`, `RecordedHop.String`, `RecordedHop.Valid`.
 
-Draft-09 Domain Policy Record and two-way Authentic From (disposition
+Draft-09 Domain Policy Record and two-way Authentic From (`v0.3.0`; reviewed
+base `542c3c08`, 933 declarations; disposition
 `docs/specs/draft-09-migration-disposition.md` C1 to C3, C6, C14; D1 to D3,
 D8, D9):
 
@@ -177,7 +178,7 @@ invalid record is PERMERROR `domain_policy_ambiguous` or
 passed and are counted as provider calls. Signers and the DSN identity
 resolver stay downward only (D8) and never query a Domain Policy Record.
 
-Draft-09 baseline (disposition C4, C5, C7, C9):
+Draft-09 baseline (`v0.3.0`; disposition C4, C5, C7, C9):
 
 - Added: `MaxCarriedTXTRecords`.
 - Changed: `DraftIdentifier` (`draft-ietf-dkim-dkim2-spec-09`).

@@ -24,7 +24,7 @@ import (
 const (
 	apiSchemaName   = "dkim2.go-api.v1"
 	apiBaselinePath = "testdata/reference/go-api-base.json"
-	apiBaseRevision = "306bddf46de75005d5cc4ed8680400b698e7dcd7"
+	apiBaseRevision = "542c3c080c5fe7fbb0d65211e4919cc8d70cd79d"
 	maxAPIBytes     = int64(2 << 20)
 )
 
