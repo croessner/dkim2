@@ -125,7 +125,7 @@ const (
 	// PropagationForbiddenIdentityMisaligned reports that the propagated
 	// report's signing domain, the completion d=, does not relaxed-match the
 	// rt= address of the previous hop, which becomes the highest signature of
-	// the rebuilt report (Draft-08 Sections 7.1 item 4, 16.2, and 16.3).
+	// the rebuilt report (Draft-09 Sections 7.1 item 4, 16.2, and 16.3).
 	PropagationForbiddenIdentityMisaligned PropagationResult = "forbidden_identity_misaligned"
 	// PropagationUnsupportedChain reports a custody chain this system does not
 	// qualify for reconstruction: an nd= previous hop, a run member that does

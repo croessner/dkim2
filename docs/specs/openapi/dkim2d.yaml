@@ -5,7 +5,7 @@ info:
   description: >
     Verification, signing, revision, policy, and replay API for the DKIM2
     reference daemon. Protocol behavior is pinned to
-    draft-ietf-dkim-dkim2-spec-08.
+    draft-ietf-dkim-dkim2-spec-09.
 paths:
   /metrics:
     get:
@@ -323,13 +323,18 @@ paths:
       summary: Process one inbound DKIM2 message.
       description: >
         Classifies DKIM2 applicability before verification. A message with no
-        Message-Instance and no DKIM2-Signature fields returns 204 without
-        starting verification, policy, replay, DNS, or mutation work. An
-        applicable message is verified, receives server-owned policy and the
+        Message-Instance and no DKIM2-Signature fields is the Draft-09 Section
+        14.1 NONE state: it returns 200 with verification and authentication
+        state NONE, policy verdict continue with reason none, replay
+        not_checked, and disposition continue, without starting verification,
+        policy evaluation, replay, DNS, or signing work. Its only possible
+        action is the daemon-owned Authentication-Results dkim2=none report
+        when a local reporting authority is configured. A message carrying
+        either field family is verified, receives server-owned policy and the
         configured replay check, and returns a closed final disposition. This
-        operation neither signs nor revises a message. Authentication-Results uses
-        the bounded reporting profile in docs/specs/companion-conformance.md;
-        unsigned 204 responses deliberately omit dkim2=none.
+        operation neither signs nor revises a message. Authentication-Results
+        uses the bounded reporting profile in
+        docs/specs/companion-conformance.md.
       security:
         - localCapability: []
       requestBody:
@@ -356,18 +361,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProcessResponse"
-        "204":
-          description: >
-            DKIM2 verification is not applicable because both DKIM2 protocol
-            field families are absent. The caller continues without a
-            terminal decision or mutation.
-          headers:
-            Cache-Control:
-              $ref: "#/components/headers/CacheControl"
-            Connection:
-              $ref: "#/components/headers/Connection"
-            Date:
-              $ref: "#/components/headers/Date"
         "400":
           $ref: "#/components/responses/BadRequest"
         "403":
@@ -650,11 +643,11 @@ paths:
             delivery_status_identity_unavailable: the embedded original
             verified, but no local delivery_status profile domain
             relaxed-matches an rt= address of its highest DKIM2-Signature
-            (Draft-08 Sections 7.1 item 4 and 16.2), for example a bounce of
+            (Draft-09 Sections 7.1 item 4 and 16.2), for example a bounce of
             a message this system sent to a remote recipient.
             delivery_status_from_not_authentic: matching profile domains
             exist, but none makes the report's own From header field
-            Authentic (Draft-08 Sections 11 and 12.4). A report is never
+            Authentic (Draft-09 Sections 11 and 12.4). A report is never
             signed under a domain that fails either rule.
           headers:
             Cache-Control:
@@ -1577,7 +1570,7 @@ components:
             Byte offset in current message where the completed fields are
             inserted. It is always 0, the start of the header block:
             Message-Instance and DKIM2-Signature are trace header fields
-            (Draft-08 Sections 9 and 10), and RFC 5322 Section 3.6 says trace
+            (Draft-09 Sections 9 and 10), and RFC 5322 Section 3.6 says trace
             fields SHOULD be kept in blocks prepended to the message. The
             client inserts the completed fields there, above the previous top
             field.
@@ -1649,9 +1642,12 @@ components:
       type: object
       additionalProperties: false
       description: >
-        Applicable inbound processing result. Reject and tempfail carry no
-        actions. Accept and non-terminal continue may carry the sole
-        daemon-owned Authentication-Results reporting action.
+        Inbound processing result. Reject and tempfail carry no actions.
+        Accept and non-terminal continue may carry the sole daemon-owned
+        Authentication-Results reporting action. A NONE result (no DKIM2 field
+        of either family) always continues, carries replay not_checked, no
+        verifier projection, no delivery-status projection, and at most the
+        reasonless dkim2=none report.
       required:
         - api_version
         - draft
@@ -2050,7 +2046,7 @@ components:
         Ordered header actions for one hop. Array order is the top-down order
         of the hop's new fields: Message-Instance, then DKIM2-Signature, then
         any X-DKIM2-Info. Message-Instance and DKIM2-Signature are trace header
-        fields (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6.7), so
+        fields (Draft-09 Sections 9 and 10, RFC 5322 Section 3.6.7), so
         consumers SHOULD insert the whole block above the current topmost
         header field, keeping array order, and must not interleave it with
         other fields. Verification does not depend on this placement.
@@ -2163,9 +2159,9 @@ components:
         signature_algorithms:
           description: >-
             Sorted unique algorithms of the hop's passing signature sets. The
-            vocabulary is exactly the Draft-08 Section 3 signature algorithms
+            vocabulary is exactly the Draft-09 Section 3 signature algorithms
             this verifier implements; DNS-02 registry entries without a
-            Draft-08 signing definition never verify and are never listed.
+            Draft-09 signing definition never verify and are never listed.
           type: array
           minItems: 1
           maxItems: 3
@@ -2280,9 +2276,9 @@ components:
         historical_content:
           type: string
           description: >-
-            Authenticated historical content coverage. Under Draft-08 Section 13
-            a history with a null body Recipe is not Fully Verified and is
-            reported as FAIL body_history_unavailable, so a PASS reports
+            Authenticated historical content coverage. Under Draft-09 Sections
+            13 and 14.2 a history with a null body Recipe is not Fully Verified
+            and is reported as PERMERROR body_history_unavailable, so a PASS reports
             complete; partial is retained in the closed vocabulary and is not
             produced.
           enum:
@@ -2379,7 +2375,7 @@ components:
         selector:
           type: string
           description: >-
-            Draft-08 Section 14.6 step 8. The parsed, DNS-label-validated
+            Draft-09 Section 14.6 step 8. The parsed, DNS-label-validated
             selector of every set whose status is not pass: fail, permerror
             (key errors and unknown or locally disabled algorithms, which are
             the Section 14.6 step 4 PERMERROR intermediate
@@ -2473,10 +2469,11 @@ components:
           type: string
           description: >-
             Local replay delivery-policy class. not_checked means replay was
-            skipped because verification or policy did not reach PASS/accept.
+            skipped because verification or policy did not reach PASS/accept,
+            including the NONE state that is never verified.
             not_eligible means the message passed but carried only the
             originator's i=1 DKIM2-Signature, so no intermediary re-sent it
-            and Draft-08 Section 15.1 replay counting does not apply.
+            and Draft-09 Section 15.1 replay counting does not apply.
           enum:
             - not_checked
             - not_eligible
@@ -2505,6 +2502,10 @@ components:
             - invalid_recipe_json
             - invalid_recipe
             - from_not_authentic
+            - from_subdomain_forbidden
+            - domain_policy_temporary
+            - domain_policy_ambiguous
+            - domain_policy_invalid
             - duplicate_selector
             - missing_protocol
             - sequence_invalid
@@ -2609,7 +2610,7 @@ components:
     DraftVersion:
       type: string
       enum:
-        - draft-ietf-dkim-dkim2-spec-08
+        - draft-ietf-dkim-dkim2-spec-09
     CanonicalUint64:
       type: string
       pattern: "^[1-9][0-9]{0,19}$"
@@ -2622,21 +2623,30 @@ components:
     VerificationState:
       type: string
       description: >-
-        Draft-08 Section 14.1 verification state. PASS: the message is a Fully
+        Draft-09 Section 14.1 verification state. PASS: the message is a Fully
         Verified DKIM2 Message. FAIL: verification completed and the message is
         not Fully Verified, reported with hash_mismatch, signature_mismatch,
         timestamp_invalid, envelope_mismatch, domain_alignment_mismatch,
         next_domain_mismatch, custody_mismatch, out_of_band_required,
-        from_not_authentic, or body_history_unavailable. PERMERROR: an
-        unrecoverable error such as malformed, missing, or duplicate protocol
-        state, invalid sequencing, an unsupported algorithm, a key error, an
-        invalid Recipe, or a local limit. TEMPERROR: a temporary inability to
-        retrieve a public key.
+        from_not_authentic, or from_subdomain_forbidden (the From domain's
+        Domain Policy Record carries f=strict, Sections 3.8 and 14.8).
+        PERMERROR: an unrecoverable error such as malformed, missing, or
+        duplicate protocol state, invalid sequencing, an unsupported
+        algorithm, a key error, an invalid Recipe, a null body Recipe
+        (body_history_unavailable, Section 14.2), multiple or invalid Domain
+        Policy Records (domain_policy_ambiguous, domain_policy_invalid), or a
+        local limit. TEMPERROR: a temporary inability to retrieve a DNS
+        record, either a public key (provider_temporary) or a Domain Policy
+        Record (domain_policy_temporary). NONE: the message does not contain any
+        DKIM2-Signature or Message-Instance header field; it is classified
+        before verification, always carries primary_reason none, and is
+        never produced for a message carrying only one field family.
       enum:
         - PASS
         - FAIL
         - PERMERROR
         - TEMPERROR
+        - NONE
     VerificationReason:
       type: string
       enum:
@@ -2648,6 +2658,10 @@ components:
         - invalid_recipe_json
         - invalid_recipe
         - from_not_authentic
+        - from_subdomain_forbidden
+        - domain_policy_temporary
+        - domain_policy_ambiguous
+        - domain_policy_invalid
         - duplicate_selector
         - missing_protocol
         - sequence_invalid
@@ -2673,7 +2687,11 @@ components:
         - internal_contract
     PolicyReason:
       type: string
+      description: >-
+        Local policy reason. none is used only for the NONE verification
+        state, whose policy is never evaluated and always continues.
       enum:
+        - none
         - protocol_pass
         - protocol_fail
         - protocol_permerror
@@ -2694,3 +2712,25 @@ components:
         - received_dsn_not_local
         - received_dsn_recipient_unlinked
         - received_dsn_linked
+      x-enum-varnames:
+        - PolicyReasonNone
+        - ProtocolPass
+        - ProtocolFail
+        - ProtocolPermerror
+        - ProtocolTemperror
+        - PermissiveOverride
+        - TestingModeObserve
+        - FeedbackRequested
+        - FeedbackRelaySelected
+        - FeedhereInert
+        - ExplodedReported
+        - ReceivedDsnOuterPolicy
+        - ReceivedDsnStructureInvalid
+        - ReceivedDsnEmbeddedUnverified
+        - ReceivedDsnEmbeddedAbsent
+        - ReceivedDsnTemporaryFailure
+        - ReceivedDsnTenantUnavailable
+        - ReceivedDsnIdentityMismatch
+        - ReceivedDsnNotLocal
+        - ReceivedDsnRecipientUnlinked
+        - ReceivedDsnLinked

@@ -8,7 +8,7 @@ import (
 
 var scannerKnownTags = MustKnownTags("m", "h", "r", "empty")
 
-// TestScanHeaderAcceptsOptionalFinalSemicolon reproduces the Draft-08 Section 8
+// TestScanHeaderAcceptsOptionalFinalSemicolon reproduces the Draft-09 Section 8
 // tag-list rule that makes the final semicolon optional in header fields.
 func TestScanHeaderAcceptsOptionalFinalSemicolon(t *testing.T) {
 	for _, input := range []string{"m=1; h=abc", "m=1; h=abc;", "m=1; h=abc; \t"} {
@@ -71,7 +71,7 @@ func TestScanHeaderPreservesLowercaseNamesAndValues(t *testing.T) {
 	}
 }
 
-// TestScanHeaderRejectsUppercaseTagNames reproduces the Draft-08 Sections 9
+// TestScanHeaderRejectsUppercaseTagNames reproduces the Draft-09 Sections 9
 // and 10 requirement that every header tag name is lowercase, including
 // unknown extension names.
 func TestScanHeaderRejectsUppercaseTagNames(t *testing.T) {

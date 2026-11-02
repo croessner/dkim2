@@ -55,7 +55,7 @@ func (f *observedCoordinatorFake) Prepare(ctx context.Context, _ *domainadmin.Jo
 }
 
 // DNSExport emits one configured DNS-export result.
-func (f *observedCoordinatorFake) DNSExport(ctx context.Context, _ *domainadmin.JournalStore, _ string) (domainadmin.OnboardingResult, error) {
+func (f *observedCoordinatorFake) DNSExport(ctx context.Context, _ *domainadmin.JournalStore, _ string, _ domainadmin.DNSExportOptions) (domainadmin.OnboardingResult, error) {
 	return f.workflow(ctx, domainadmin.CommandDNSExport)
 }
 

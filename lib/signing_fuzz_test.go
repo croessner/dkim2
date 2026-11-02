@@ -125,7 +125,7 @@ func newPublicFuzzSigner(t testing.TB, rsaKey *rsa.PrivateKey) *Signer {
 	signer, err := NewSigner(
 		provider, publicRouteMemoryAuthority{value: routeplan.NewMemoryAuthority()},
 		&authorizeOrdinary{}, provider,
-		WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+		WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }), WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)

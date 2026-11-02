@@ -23,7 +23,7 @@ import (
 
 const (
 	// batchFixtureHostedDomain sits under batchFixtureForwarderDomain:
-	// Draft-08 Sections 16.2 and 16.3 require the propagating completion d=
+	// Draft-09 Sections 16.2 and 16.3 require the propagating completion d=
 	// to relaxed-match the previous hop's rt= address (alias@<hosted>).
 	batchFixtureHostedDomain      = "hosted.forwarder.test"
 	batchFixtureOriginDomain      = "origin.test"
@@ -163,7 +163,7 @@ func loadBatchFixture(t *testing.T, directory string) batchViaFixture {
 	f := newPropagationFixture(t)
 	f.clock.now = time.Now().UTC()
 	var err error
-	f.verifier, err = dkim2.NewVerifier(f.provider, dkim2.WithVerificationClock(f.clock.Now))
+	f.verifier, err = dkim2.NewVerifier(f.provider, dkim2.WithVerificationClock(f.clock.Now), dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("fixture verifier failed")
 	}

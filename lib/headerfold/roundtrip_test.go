@@ -83,7 +83,7 @@ func TestRestoreRoundTripsLongSignatureField(t *testing.T) {
 // TestRestoreRoundTripsMLDSA44SignatureField renders the longest signer
 // layout, an 8192-bit RSA set and an Ed25519 set as one sig-all group plus a
 // pure ML-DSA-44 alternative after "|", whose 2420-octet value is 3228 base64
-// characters (Draft-08 Section 3.4). The renderer folds the value inside the
+// characters (Draft-09 Section 3.4). The renderer folds the value inside the
 // base64string, and the REST projection plus Restore must rebuild the exact
 // fold points with every physical line inside the RFC 5322 limit.
 func TestRestoreRoundTripsMLDSA44SignatureField(t *testing.T) {

@@ -39,12 +39,15 @@ func (a Assessment) Verification() (Result, bool) {
 	return a.result, true
 }
 
-// NewVerifier constructs a service coordinator with immutable validated policy.
-func NewVerifier(provider verify.KeyProvider, config Config) (Verifier, error) {
+// NewVerifier constructs a service coordinator with immutable validated
+// policy. fromAuthorization is the explicit Draft-09 Section 11.1 choice; a
+// zero value fails construction closed.
+func NewVerifier(provider verify.KeyProvider, fromAuthorization verify.FromAuthorization, config Config) (Verifier, error) {
 	if nilKeyProvider(provider) || config.Limits.Validate() != nil || config.Clock == nil {
 		return Verifier{}, newError(ErrorInvalidConfig)
 	}
 	core, err := verify.NewVerifier(provider,
+		verify.WithFromAuthorization(fromAuthorization),
 		verify.WithAlgorithmPolicy(config.AlgorithmPolicy),
 		verify.WithClock(config.Clock),
 		verify.WithLimits(verify.Limits{
@@ -163,7 +166,7 @@ func (v Verifier) assessWithAbsencePolicy(ctx context.Context, request Request, 
 // all-hop rejection. An inherited signature's permanent key failure keeps
 // its specific reason, as the current target does; no privacy rule requires
 // collapsing it into provider_permanent. The state of every reason comes
-// from its single Draft-08 Section 14.1 owner.
+// from its single Draft-09 Section 14.1 owner.
 func mapRevisionProofFailure(current Result, outcome verify.RevisionProofOutcome) Result {
 	reason, class := ReasonMalformedProtocol, CheckProtocol
 	switch outcome {
@@ -203,6 +206,14 @@ func mapRevisionProofFailure(current Result, outcome verify.RevisionProofOutcome
 		reason, class = ReasonBodyHistoryUnavailable, CheckBodyHash
 	case verify.RevisionProofFromNotAuthentic:
 		reason = ReasonFromNotAuthentic
+	case verify.RevisionProofFromSubdomainForbidden:
+		reason = ReasonFromSubdomainForbidden
+	case verify.RevisionProofDomainPolicyTemporary:
+		reason, class = ReasonDomainPolicyTemporary, CheckProvider
+	case verify.RevisionProofDomainPolicyAmbiguous:
+		reason = ReasonDomainPolicyAmbiguous
+	case verify.RevisionProofDomainPolicyInvalid:
+		reason = ReasonDomainPolicyInvalid
 	case verify.RevisionProofProtocolRejected:
 	default:
 		reason, class = ReasonInternalContract, CheckInternalContract
@@ -233,7 +244,7 @@ func attachRevisionProof(current Result, proof verify.RevisionProof) Result {
 	if current.Target() == (Target{Sequence: 1, Instance: 1}) {
 		return attachOriginProof(current, proof)
 	}
-	// A null body Recipe is refused by the core proof (Draft-08 Section 13);
+	// A null body Recipe is refused by the core proof (Draft-09 Section 13);
 	// a verified proof that still carries the gap is an internal defect.
 	if facts.HistoryHasUnavailableBody() {
 		return internalContractResult(current.Target())
@@ -349,7 +360,7 @@ func mapVerificationError(err error) Result {
 	return result.withPolicyProjection(projection)
 }
 
-// chainOfCustodyFailureResult reports a Draft-08 Section 14.4 Chain of
+// chainOfCustodyFailureResult reports a Draft-09 Section 14.4 Chain of
 // Custody failure for the already selected target. The verifier stopped
 // before any key lookup, so the sealed policy projection carries neither
 // signature facts nor authenticated hops.
@@ -400,7 +411,7 @@ func unavailableVerificationFailure(code verify.ErrorCode, reason Reason, class 
 
 // mapVerificationErrorCode exhaustively maps bounded verification error
 // codes to a reason and check class; the state comes from the single
-// Draft-08 Section 14.1 owner.
+// Draft-09 Section 14.1 owner.
 func mapVerificationErrorCode(code verify.ErrorCode) (Reason, CheckClass, State) {
 	reason, class := verificationErrorReason(code)
 	return reason, class, StateForReason(reason)

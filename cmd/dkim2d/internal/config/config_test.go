@@ -243,7 +243,7 @@ func TestDeliveryStatusUnsignedOriginalPolicyDefaultsToRejectAndFailsClosed(t *t
 			t.Fatal("unsigned_original changed the originator null-sender policy")
 		}
 	}
-	for _, value := range []string{"accept", "Continue", "CONTINUE", "true", "\"\"", "\"reject \"", "sign"} {
+	for _, value := range []string{"accept", "Continue", "CONTINUE", canonicalTrue, "\"\"", "\"reject \"", "sign"} {
 		if _, err := Load([]byte(withPolicy(value)), FlagValues{}); err == nil {
 			t.Fatalf("unknown unsigned_original value %q was accepted", value)
 		}

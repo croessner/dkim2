@@ -2,7 +2,7 @@
 
 This guide deploys the implemented daemon and Milter with Postfix while
 preserving the existing trust boundaries. Protocol behavior remains pinned to
-`draft-ietf-dkim-dkim2-spec-08` and the tested
+`draft-ietf-dkim-dkim2-spec-09` and the tested
 `draft-ietf-dkim-dkim2-dns-02` behavior. The authoritative HTTP contract remains
 [`docs/specs/openapi/dkim2d.yaml`](../specs/openapi/dkim2d.yaml).
 
@@ -156,8 +156,8 @@ Milter route whose signing block contains only the administrative tenant and
 `domain_source: verified_embedded`; it must not contain `signing.domain` or
 `signing.dsn_domain`. The adapter admits that route only for the exact
 EOH-confirmed `{postfix_internal_origin}=bounce` value. The daemon then verifies
-the complete embedded Draft-08 evidence before datasource access and chooses
-the signing domain under draft-ietf-dkim-dkim2-spec-08 Section 16.2. This
+the complete embedded Draft-09 evidence before datasource access and chooses
+the signing domain under draft-ietf-dkim-dkim2-spec-09 Section 16.2. This
 permits one route to serve multiple domains without trusting the outer
 envelope or caller-selected domain. Ambiguous, unavailable, malformed, or
 mismatched policy/profile data fails closed.
@@ -219,7 +219,7 @@ signing:
 ```
 
 Migration from the Draft-07 behavior: `reporting_domain` used to sign every
-bounce, including bounces for recipients outside that domain. Draft-08
+bounce, including bounces for recipients outside that domain. Draft-09
 forbids that, so such bounces now leave unsigned with
 `delivery_status_identity_unavailable`. Review the counter after the upgrade;
 a high `delivery_status_from_not_authentic` count means `$myorigin` does not
@@ -434,7 +434,7 @@ no `main.cf` or `master.cf` setting changes that. Revise such mail through a
 client that presents both envelopes explicitly, as the qualification lane
 does through the daemon route; the Milter chain must not be attached to it.
 
-An unchanged-envelope ordinary-transit route must preserve Draft-08 custody
+An unchanged-envelope ordinary-transit route must preserve Draft-09 custody
 continuity: the successor `mf=` domain must relaxed-match a predecessor `rt=`
 domain, and each non-null signature `d=` must align with its own `mf=` domain.
 The isolated deployment test therefore uses one reserved mail domain across
@@ -461,7 +461,7 @@ only the missing outer brackets as documented.
 ## Delivery-status propagation
 
 Forwarded mail that fails at a later hop produces a delivery-status
-notification addressed to the return path this system signed. Draft-08
+notification addressed to the return path this system signed. Draft-09
 Section 16.3 requires that notification to be rebuilt for, and delivered to,
 the previous hop of the forwarded message. The transport component is
 `dkim2-dsn-propagator`, an MTA-neutral adapter that is not a Milter: it
@@ -616,7 +616,7 @@ audit.
 - One reserved subdomain of a local authority domain, for example
   `returns.operator.test`, keyed by domain in `transport_maps` and listed in
   `relay_domains`. The signing `d=` must still relaxed-match the `mf=` domain
-  under Draft-08 Section 7, which a subdomain of the signing domain
+  under Draft-09 Section 7, which a subdomain of the signing domain
   satisfies. Use this when the return path carries a variable local part.
 - A regular-expression table over a variable-envelope return path prefix. This
   is the only shape that can accidentally capture ordinary mail, so anchor the
@@ -633,7 +633,7 @@ case, and a rewritten address is indistinguishable from a misrouted one.
 The propagation signing domain is the canonical `d=` of the removed, verified
 completion signature. The outgoing delivery-status identity resolver and
 `reporting_domain` do not apply and are not reachable through the propagation
-capability. Draft-08 Sections 16.2 and 16.3 additionally require that domain
+capability. Draft-09 Sections 16.2 and 16.3 additionally require that domain
 to relaxed-match the `rt=` address of the previous hop, which becomes the
 highest signature of the rebuilt report; otherwise propagation is discarded
 with `delivery_status.propagation = forbidden_identity_misaligned`. A
@@ -953,9 +953,9 @@ READMEs and linked durable specs.
 
 The source-linked Exim adapter, `local_scan()`, transport filter, packaging
 validation, and five-row qualification matrix runner are implemented separately from
-this Postfix deployment. Exim is `unqualified_draft08`: its exact five-row
+this Postfix deployment. Exim is `unqualified_draft09`: its exact five-row
 compatibility report is historical Draft-04 evidence and does not extend this
-Postfix deployment or qualify current Draft-08 bytes. No universal binary
+Postfix deployment or qualify current Draft-09 bytes. No universal binary
 package or Exim image is claimed.
 
 LDAP, PostgreSQL, MySQL, and MariaDB providers, drivers, pools, schema/DDL delivery, immutable

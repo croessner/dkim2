@@ -1,6 +1,6 @@
 package combine
 
-// Result is one Draft-08 intermediate or overall verification result of a
+// Result is one Draft-09 intermediate or overall verification result of a
 // signature or hash-set combination (Sections 14.6 and 14.7).
 type Result uint8
 
@@ -47,7 +47,7 @@ func (o Outcome) Valid() bool { return o.valid }
 // Pass reports whether the outcome is a valid overall PASS.
 func (o Outcome) Pass() bool { return o.valid && o.result == ResultPass }
 
-// Signatures combines per-signature intermediates exactly as Draft-08
+// Signatures combines per-signature intermediates exactly as Draft-09
 // Section 14.6 steps 5 to 7 prescribe. Each sig-all group is PASS when every
 // signature passes, else TEMPERROR when every non-PASS signature is
 // TEMPERROR, else FAIL when any signature is FAIL, else PERMERROR. The
@@ -57,7 +57,7 @@ func Signatures(layout Layout, intermediates []Result) Outcome {
 	return combine(layout, intermediates, signatureAll, signatureAny, true)
 }
 
-// Hashes combines per-hash-set intermediates exactly as Draft-08 Section
+// Hashes combines per-hash-set intermediates exactly as Draft-09 Section
 // 14.7 steps 3 to 5 prescribe. A single hash-set yields its intermediate.
 // Each hash-all group is PASS when every hash-set passes, else FAIL when any
 // is FAIL, else PERMERROR; the hash-any result is PASS when any group passes,

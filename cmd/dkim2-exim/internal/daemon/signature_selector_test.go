@@ -6,10 +6,10 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2-exim/internal/daemon/generated"
 )
 
-// TestSignatureSelectorPresenceFollowsDraft08Step8 proves the response
-// boundary admits a selector exactly for non-passing sets (Draft-08 Section
+// TestSignatureSelectorPresenceFollowsDraft09Step8 proves the response
+// boundary admits a selector exactly for non-passing sets (Draft-09 Section
 // 14.6 step 8) and rejects it for pass and for internal-contract facts.
-func TestSignatureSelectorPresenceFollowsDraft08Step8(t *testing.T) {
+func TestSignatureSelectorPresenceFollowsDraft09Step8(t *testing.T) {
 	selector := "selector.test"
 	tests := []struct {
 		status generated.SignatureSetResultStatus

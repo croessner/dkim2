@@ -45,7 +45,7 @@ outer DSN message, exact null outer envelope, and tenant; it has no caller-
 selected fidelity. The Postfix-exclusive route and its dedicated capability
 attest the representation. Its expected response operation is `delivery_status`.
 The daemon chooses the domain only among local profile domains that
-relaxed-match a verified embedded `rt=` address (Draft-08 Section 16.2); a
+relaxed-match a verified embedded `rt=` address (Draft-09 Section 16.2); a
 report without such a domain is the 204 response, which must carry exactly one
 closed `X-DKIM2-Unsigned-Reason`.
 The two propagation fixture kinds require the fifth, distinct propagation
@@ -63,11 +63,11 @@ Credentials, raw messages, envelope values,
 paths, URLs, headers, response bodies, and raw errors never enter output.
 
 Checked draft-versioned examples live under
-`cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-08/`. Validate the
+`cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-09/`. Validate the
 complete offline set without protected-file or network access:
 
 ```text
-dkim2ctl fixture validate cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-08/*.json
+dkim2ctl fixture validate cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-09/*.json
 ```
 
 Their expectations are allowlisted typed projections rather than response

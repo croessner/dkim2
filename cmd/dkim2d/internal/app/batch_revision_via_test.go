@@ -66,7 +66,7 @@ func TestBatchRevisionControlledReturnRejectsUntrustedEvidence(t *testing.T) {
 // TestBatchRevisionSignedNullSenderStillNeedsValidDSN reuses an unchanged real-signature conformance vector.
 func TestBatchRevisionSignedNullSenderStillNeedsValidDSN(t *testing.T) {
 	f := newPropagationFixture(t)
-	data, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/received-dsn-golden.json")
+	data, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/received-dsn-golden.json")
 	if err != nil {
 		t.Fatal("received DSN corpus unavailable")
 	}
@@ -171,7 +171,7 @@ func newBatchViaFixtureAt(t *testing.T, at time.Time) batchViaFixture {
 		f.clock.now = at
 	}
 	var err error
-	f.verifier, err = dkim2.NewVerifier(f.provider, dkim2.WithVerificationClock(f.clock.Now))
+	f.verifier, err = dkim2.NewVerifier(f.provider, dkim2.WithVerificationClock(f.clock.Now), dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("batch verifier construction failed")
 	}

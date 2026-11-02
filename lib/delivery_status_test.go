@@ -243,7 +243,7 @@ func TestDSNEvidencePreservesVerificationStageOnInFlightCancellation(t *testing.
 	})
 	signer, err := NewSigner(
 		provider, NewRequestRouteAuthority(), fixture.authorizer, fixture.provider,
-		WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+		WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }), WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -509,7 +509,7 @@ func signEvaluatedDSN(t *testing.T, fixture publicSigningFixture, outer []byte, 
 	))
 }
 
-// TestDSNSigningIdentityFollowsRecipientNotReportingDomain reproduces Draft-08
+// TestDSNSigningIdentityFollowsRecipientNotReportingDomain reproduces Draft-09
 // Section 16.2: the highest embedded rt= is under profile A (example.test),
 // the configured reporting domain is B (example.net). The report is signed
 // with A; B never signs because it does not relaxed-match an rt= address.
@@ -593,7 +593,7 @@ func TestDSNSigningIdentityUnavailableLeavesReportUnsigned(t *testing.T) {
 	assertDSNUnsigned(t, evidence, profile, err, DSNEvidenceStageIdentityUnavailable)
 }
 
-// TestDSNSigningIdentityRequiresAuthenticReportFrom reproduces Draft-08
+// TestDSNSigningIdentityRequiresAuthenticReportFrom reproduces Draft-09
 // Sections 11 and 12.4 for MTA-generated DSNs: the report is a new i=1
 // message, so a matching profile whose domain cannot make the report From
 // Authentic yields the explicit from_not_authentic outcome.

@@ -50,7 +50,7 @@ func TestDecodeKeyAcceptsRawMLDSA44Record(t *testing.T) {
 
 // TestDecodeKeyRejectsMalformedMLDSA44Records is the wrong-length key
 // reproducer: any other p= length, or an SPKI wrapper, is invalid_key
-// (Draft-08 Section 14.5 "malformed"); k=/algorithm disagreement in both
+// (Draft-09 Section 14.5 "malformed"); k=/algorithm disagreement in both
 // directions is an algorithm mismatch; revocation stays revoked.
 func TestDecodeKeyRejectsMalformedMLDSA44Records(t *testing.T) {
 	raw := mldsa44RecordKey(t).Bytes()

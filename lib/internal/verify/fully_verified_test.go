@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestRevisionProofRefusesNullBodyRecipeHistory reproduces Draft-08 Section
+// TestRevisionProofRefusesNullBodyRecipeHistory reproduces Draft-09 Section
 // 13: body hashes below a null Recipe cannot be checked, so a history with
 // "b":null is never a Fully Verified DKIM2 Message. The all-hop proof reports
 // body_history_unavailable and issues no proof, while the same history with
@@ -24,7 +24,7 @@ func TestRevisionProofRefusesNullBodyRecipeHistory(t *testing.T) {
 }
 
 // TestRevisionProofSeparatesRecipeJSONFromInvalidRecipes reproduces the
-// Draft-08 Section 14.2 distinction: text that is not a JSON object is
+// Draft-09 Section 14.2 distinction: text that is not a JSON object is
 // invalid_recipe_json, while valid JSON with an invalid step, schema, or
 // application is invalid_recipe.
 func TestRevisionProofSeparatesRecipeJSONFromInvalidRecipes(t *testing.T) {

@@ -1,9 +1,9 @@
 # Exim Adapter Implementation Specification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture. Its `qualified_linux` evidence does not
-> qualify Draft-08.
+> qualify Draft-09.
 
 Status: implementation-ready planning baseline.
 
@@ -533,7 +533,7 @@ content. The adapter performs no Unicode normalization, case folding, IDNA
 conversion, address rewriting or ASCII downgrade. Since the Draft-07
 migration, `filter sign` and `filter revise` admit SMTPUTF8 outgoing envelope
 paths that are valid UTF-8; the daemon and library record U-label domains as
-A-labels (Draft-08 Section 18). Invalid UTF-8 in `$return_path` or a
+A-labels (Draft-09 Section 18). Invalid UTF-8 in `$return_path` or a
 recipient is rejected before evidence access, datasource access or any
 daemon authority. UTF-8 and NUL body octets remain legal on those paths.
 Invalid structure, NUL in a header/envelope/session scalar or lossy Exim
@@ -545,14 +545,17 @@ The Go service always calls generated `POST /v1/process`. It may request the
 daemon-owned RFC 8601 action only when reporting is explicitly enabled with a
 canonical configured `authserv-id`.
 
-An exact bodyless `204` with the OpenAPI-defined no-store and connection-close
-envelope means inbound DKIM2 verification is not applicable. The Go adapter
-maps it to an operation-owned `none`/`continue` plan with no daemon-requested
-DKIM2 action. This does not bypass the separate RFC 8601 trust boundary:
-untrusted local `Authentication-Results` claims are still removed before Exim
-accepts the message. Malformed `204` metadata, a body, representation or
-framing fields, a non-canonical date, or a cross-operation response fails
-closed.
+A message with neither DKIM2 protocol field family is the Draft-09 `NONE`
+state: the daemon answers HTTP 200 with state `NONE`, policy
+`continue`/`none`, and replay `not_checked`. The Go adapter admits it only in
+that exact closed shape and maps it to an operation-owned `none`/`continue`
+plan whose only possible action is the reasonless
+`<authserv-id>; dkim2=none` report, required exactly when reporting is
+enabled and bound to the configured authority. Any other verdict, a
+diagnostic comment, or a non-report action fails closed. This does not bypass
+the separate RFC 8601 trust boundary: untrusted local
+`Authentication-Results` claims are still removed before Exim accepts the
+message. A process `204` is no longer part of the contract and fails closed.
 
 The exact mapping is:
 
@@ -578,7 +581,7 @@ macro; the module does not call `smtp_printf()`. Each text starts with the
 RFC 3463 enhanced status code that follows that reply code. The `4.7.5` text
 is selected only for the DXI1 tempfail reason `key_temporary` (9), which the
 Go adapter emits when the daemon reports TEMPERROR `provider_temporary` with a
-tempfail disposition (Draft-08 Section 13); every other tempfail keeps
+tempfail disposition (Draft-09 Section 13); every other tempfail keeps
 `4.7.1`. Operators therefore find the daemon reason `provider_temporary` for
 every `4.7.5` reply. No daemon, message or identity text is reflected. The
 NOLOGHDR variants are required so Exim does not copy raw rejected headers into
@@ -936,7 +939,7 @@ recipient mutation and body-only replacement are invalid on this path.
 The filter prepends the ordered fields as one block at byte offset 0 of the
 transport message, above the previous top field (Exim's own `Received`
 field), in action order. Message-Instance and DKIM2-Signature are trace
-fields (Draft-08 Sections 9 and 10), and RFC 5322 Section 3.6 says trace
+fields (Draft-09 Sections 9 and 10), and RFC 5322 Section 3.6 says trace
 fields SHOULD be kept in blocks prepended to the message. Placement is outside
 the signed input, so a bottom-placed form and this prepended form verify
 identically; the library's own completed-message output uses the same

@@ -544,7 +544,7 @@ func canonicalTargetRequest(request TargetRequest, limits RenderLimits) (TargetR
 
 // canonicalizeEnvelope validates exactly one supported envelope form and
 // detaches the recorded bytes, mapping U-label mailbox domains to A-labels as
-// Draft-08 Section 18 requires before mf= and rt= are recorded.
+// Draft-09 Section 18 requires before mf= and rt= are recorded.
 func canonicalizeEnvelope(request *TargetRequest, limits RenderLimits) error {
 	hasNextDomain := request.NextDomain != ""
 	hasOrdinary := len(request.MailFrom) != 0 || len(request.Recipients) != 0
@@ -747,9 +747,12 @@ func emitTarget(emitter *fieldEmitter, request TargetRequest, values []renderSet
 		emitter.text("\trt=")
 		for index, recipient := range request.Recipients {
 			if index > 0 {
+				// Draft-09 Sections 10.6 and 2.14: "," is followed directly by a
+				// base64string, which cannot begin with FWS, so the fold moves
+				// inside the next value after its first character.
 				emitter.text(",")
-				emitter.crlf()
-				emitter.text("\t")
+				emitter.base64Continued(recipient, len(recipient))
+				continue
 			}
 			emitter.base64(recipient, len(recipient))
 		}
@@ -851,6 +854,13 @@ func (e *fieldEmitter) crlf() {
 
 // base64 accounts for and optionally writes padded Base64 in exact 64-character folds.
 func (e *fieldEmitter) base64(decoded []byte, decodedBytes int) {
+	e.base64With(decoded, decodedBytes, tagvalue.WalkBase64Chunks)
+}
+
+// base64With accounts for and optionally writes padded Base64 along the
+// chunk boundaries of one tagvalue chunk walker, folding before every
+// non-first chunk.
+func (e *fieldEmitter) base64With(decoded []byte, decodedBytes int, walk func(int, func(bool, int, int)) (int, bool)) {
 	if e.err != nil {
 		return
 	}
@@ -862,7 +872,7 @@ func (e *fieldEmitter) base64(decoded []byte, decodedBytes int) {
 		}
 		encoded = tagvalue.EncodeBase64(decoded)
 	}
-	encodedLen, ok := tagvalue.WalkBase64Chunks(decodedBytes, func(first bool, offset, size int) {
+	encodedLen, ok := walk(decodedBytes, func(first bool, offset, size int) {
 		if !first {
 			e.crlf()
 			e.text("\t")
@@ -876,6 +886,13 @@ func (e *fieldEmitter) base64(decoded []byte, decodedBytes int) {
 	if !ok || e.builder != nil && len(encoded) != encodedLen {
 		e.err = newError(ErrorCodeRenderInvariant, ErrorLocation{}, ErrorDetails{}, nil)
 	}
+}
+
+// base64Continued writes one padded Base64 value that continues the current
+// physical line: its first character stays on that line and the remainder
+// folds in exact 64-character chunks (tagvalue.WalkContinuedBase64Chunks).
+func (e *fieldEmitter) base64Continued(decoded []byte, decodedBytes int) {
+	e.base64With(decoded, decodedBytes, tagvalue.WalkContinuedBase64Chunks)
 }
 
 // renderConstructionError constructs a content-free generator input failure.

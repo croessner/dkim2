@@ -18,14 +18,14 @@ func ValidEnvelopePath(path []byte, allowNull bool) bool { return validEnvelopeP
 
 // CanonicalEnvelopePath validates and clones a path for comparison: every
 // grammar-owned ASCII domain is case-folded and the mailbox domain is mapped
-// from U-labels to lowercase A-labels (Draft-08 Section 18). Local parts are
+// from U-labels to lowercase A-labels (Draft-09 Section 18). Local parts are
 // never changed.
 func CanonicalEnvelopePath(path []byte, allowNull bool) ([]byte, bool) {
 	return canonicalEnvelopePath(path, allowNull)
 }
 
 // RecordableEnvelopePath validates a caller-supplied SMTP path and returns the
-// bytes a signer records in mf= or rt=. Draft-08 Section 18 requires U-label
+// bytes a signer records in mf= or rt=. Draft-09 Section 18 requires U-label
 // mailbox domains to be recorded as A-labels, so such a domain is replaced by
 // its lowercase A-label form; every other path keeps its exact bytes.
 func RecordableEnvelopePath(path []byte, allowNull bool) ([]byte, bool) {
@@ -105,8 +105,13 @@ func parseRecipientPaths(value string, limits Limits, fieldIndex int) ([]Envelop
 
 	paths := make([]EnvelopePath, 0, len(parts))
 	for i, part := range parts {
+		// Draft-09 Sections 2.14 and 10.6: a base64string never ends with
+		// FWS, so white space before a comma is malformed. Leading WSP stays
+		// accepted after a comma only, where earlier signers folded
+		// (DKIM2-ISSUE-0024); the tag-spec FWS around the value is outside
+		// the list.
 		trimmed, _ := trimWSP(part)
-		if len(trimmed) == 0 {
+		if len(trimmed) == 0 || i < len(parts)-1 && isWSP(part[len(part)-1]) {
 			return nil, malformedRecipientListError(fieldIndex)
 		}
 
@@ -128,7 +133,7 @@ func validEnvelopePath(path []byte, allowNull bool) bool {
 }
 
 // validRecordedEnvelopePath checks a path recorded in a DKIM2-Signature. Its
-// mailbox domain must already be ASCII because Draft-08 Section 18 requires
+// mailbox domain must already be ASCII because Draft-09 Section 18 requires
 // signers to record A-labels; recorded U-labels fail closed.
 func validRecordedEnvelopePath(path []byte, allowNull bool) bool {
 	parts, valid := parseEnvelopeParts(path, allowNull)
@@ -224,7 +229,7 @@ func (p envelopeParts) render(path []byte, foldRoute bool) ([]byte, bool) {
 
 // validSourceRoute checks the obsolete A-d-l syntax that RFC 5321 requires
 // receivers to accept. Source-route domains are deliberately ASCII-only: the
-// route is never a DKIM2 identity, and Draft-08 Section 18 conversion applies
+// route is never a DKIM2 identity, and Draft-09 Section 18 conversion applies
 // only to the mailbox domain.
 func validSourceRoute(route []byte) bool {
 	parts := bytes.Split(route, []byte{','})

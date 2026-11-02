@@ -291,7 +291,7 @@ type rebuildState struct {
 	degraded     bool
 }
 
-// Rebuild turns an eligible evaluation into an unsigned Draft-08 Section
+// Rebuild turns an eligible evaluation into an unsigned Draft-09 Section
 // 16.3 report: it removes the local hop run and every unsigned field above
 // the previous hop, descends the run to the previous hop's instance while
 // re-proving every state, restores the pruned wire order for every header
@@ -721,7 +721,7 @@ func mapRebuildContextError(ctx context.Context, err error) error {
 // ProvePropagatedReport re-parses a signed propagated report and requires
 // exactly one Message-Instance m=1 and one DKIM2-Signature i=1 under the
 // signing domain with mf=<> and rt= equal to the next-hop recipient, the
-// Draft-08 Section 16.3 single-signature invariant of a propagated DSN.
+// Draft-09 Section 16.3 single-signature invariant of a propagated DSN.
 func ProvePropagatedReport(raw, nextHop []byte, domain string) error {
 	message, err := rawmsg.Parse(raw)
 	if err != nil {

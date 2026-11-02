@@ -32,11 +32,11 @@ const (
 	// valid JSON or not a JSON object.
 	RevisionProofInvalidRecipeJSON RevisionProofOutcome = "invalid_recipe_json"
 	// RevisionProofInvalidRecipe reports valid authenticated r= JSON whose
-	// schema, steps, or application are invalid (Draft-08 Section 14.2).
+	// schema, steps, or application are invalid (Draft-09 Section 14.2).
 	RevisionProofInvalidRecipe RevisionProofOutcome = "invalid_recipe"
 	// RevisionProofBodyHistoryUnavailable reports an otherwise passing
 	// history that contains a null body Recipe, so the message is not a Fully
-	// Verified DKIM2 Message (Draft-08 Section 13).
+	// Verified DKIM2 Message (Draft-09 Section 13).
 	RevisionProofBodyHistoryUnavailable RevisionProofOutcome = "body_history_unavailable"
 	// RevisionProofHashMismatch reports a supported current or historical hash mismatch.
 	RevisionProofHashMismatch RevisionProofOutcome = "hash_mismatch"
@@ -65,8 +65,22 @@ const (
 	// RevisionProofLimitExceeded reports bounded all-hop work exhaustion.
 	RevisionProofLimitExceeded RevisionProofOutcome = "limit_exceeded"
 	// RevisionProofFromNotAuthentic reports a From state of the authenticated
-	// history that is not Authentic (Draft-08 Sections 11 and 14.8).
+	// history that is not Authentic (Draft-09 Sections 11 and 14.8).
 	RevisionProofFromNotAuthentic RevisionProofOutcome = "from_not_authentic"
+	// RevisionProofFromSubdomainForbidden reports a From state that only the
+	// upward match makes Authentic while the From domain's Domain Policy
+	// Record carries the strict flag (Draft-09 Sections 3.8, 7.1 item 3, and
+	// 14.8).
+	RevisionProofFromSubdomainForbidden RevisionProofOutcome = "from_subdomain_forbidden"
+	// RevisionProofDomainPolicyTemporary reports a Domain Policy Record that
+	// could not be retrieved because of a temporary DNS failure (Section 3.8).
+	RevisionProofDomainPolicyTemporary RevisionProofOutcome = "domain_policy_temporary"
+	// RevisionProofDomainPolicyAmbiguous reports more than one Domain Policy
+	// Record beginning with v=DKIM1 (Section 3.8).
+	RevisionProofDomainPolicyAmbiguous RevisionProofOutcome = "domain_policy_ambiguous"
+	// RevisionProofDomainPolicyInvalid reports an invalid Domain Policy Record
+	// or a permanent lookup failure (local interpretation D1).
+	RevisionProofDomainPolicyInvalid RevisionProofOutcome = "domain_policy_invalid"
 )
 
 // Known reports whether outcome belongs to the closed revision proof vocabulary.
@@ -77,7 +91,8 @@ func (o RevisionProofOutcome) Known() bool {
 		RevisionProofHashMismatch, RevisionProofSignatureMismatch,
 		RevisionProofUnsupported, RevisionProofProviderTemporary,
 		RevisionProofProviderRejected, RevisionProofProviderContract, RevisionProofLimitExceeded,
-		RevisionProofFromNotAuthentic, RevisionProofMissingKey, RevisionProofInvalidKey, RevisionProofRevokedKey,
+		RevisionProofFromNotAuthentic, RevisionProofFromSubdomainForbidden, RevisionProofDomainPolicyTemporary,
+		RevisionProofDomainPolicyAmbiguous, RevisionProofDomainPolicyInvalid, RevisionProofMissingKey, RevisionProofInvalidKey, RevisionProofRevokedKey,
 		RevisionProofAmbiguousKey, RevisionProofUnsupportedKeyType, RevisionProofKeyAlgorithmMismatch:
 		return true
 	default:
@@ -163,7 +178,7 @@ func (f RevisionFacts) Valid() bool {
 	}
 	terminal := f.custody.status == signature.CustodyStatusTerminalNextDomain
 	return (f.envelope == RevisionEnvelopeTerminalNextDomainNotApplicable) == terminal && previousInstance == f.highestInstance && f.usage.protocolFields == f.instanceCount+f.signatureCount && f.usage.signatureSets == totalSets &&
-		f.usage.keyLookups == supported && f.usage.providerCalls == supported && f.usage.history == f.history.usage
+		f.usage.keyLookups == supported && f.usage.providerCalls == supported+f.usage.domainPolicyLookups && f.usage.history == f.history.usage
 }
 
 // HighestSequence returns the highest inherited i= value.
@@ -274,7 +289,7 @@ func (i RevisionInstant) UnixSeconds() uint64 {
 
 // WithinSkewOf reports whether i was captured by the same verifier as
 // reference and lies within the fixed five-minute operation skew of reference
-// in either direction. The skew is independent of the Draft-08 signature
+// in either direction. The skew is independent of the Draft-09 signature
 // timestamp windows. It lets a signing plan accept
 // a caller-supplied instant, such as the one a report was rendered at, only
 // when it is bounded by a fresh capture of the same clock.
@@ -499,7 +514,7 @@ func (v Verifier) executePreparedRevisionProof(ctx context.Context, prepared Pre
 		candidate.fact.sets = setFacts
 		signatures.facts[candidate.fact.sequence-1] = candidate.fact
 	}
-	return v.completePreparedRevisionProof(prepared.input, prepared.base, signatures)
+	return v.completePreparedRevisionProof(ctx, prepared.input, prepared.base, signatures)
 }
 
 // revisionSetsFromCurrent projects the already passing current target's
@@ -553,7 +568,7 @@ func (v Verifier) RevalidateRevisionProofAt(ctx context.Context, proof RevisionP
 
 // valid reports whether the verifier owns coherent immutable dependencies.
 func (v Verifier) valid() bool {
-	return !nilKeyProvider(v.keyProvider) && v.options.Validate() == nil &&
+	return !nilKeyProvider(v.keyProvider) && v.options.Validate() == nil && v.options.FromAuthorization.valid() &&
 		v.history.initialized && v.revisionHistory.initialized && v.revisionOwner != nil
 }
 
@@ -571,6 +586,10 @@ type revisionBaseProof struct {
 	hashes               RevisionHashFacts
 	originDigest         [32]byte
 	hasOriginDigest      bool
+	// upwardFrom lists the deduplicated A-label From domains whose Domain
+	// Policy Record decides the upward Authentic match; it is resolved only
+	// after every inherited signature passed.
+	upwardFrom []string
 }
 
 // revisionSignatureProof stores detached inherited-signature proof state.
@@ -627,7 +646,8 @@ func (p PreparedRevisionProof) Usage() RevisionUsage {
 	return RevisionUsage{
 		protocolFields: len(p.input.instances) + len(p.input.signatures),
 		signatureSets:  p.signatures.totalSets, keyLookups: p.signatures.lookups,
-		providerCalls: p.signatures.lookups, canonicalBytes: p.signatures.canonicalWork,
+		domainPolicyLookups: len(p.base.upwardFrom),
+		providerCalls:       p.signatures.lookups + len(p.base.upwardFrom), canonicalBytes: p.signatures.canonicalWork,
 		currentCanonicalBytes:   p.base.currentCanonicalWork,
 		signatureCanonicalBytes: p.signatures.signatureCanonicalWork, history: p.base.history.Usage(),
 	}
@@ -644,17 +664,24 @@ func (p PreparedRevisionProof) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, p.String())
 }
 
-// completePreparedRevisionProof builds immutable facts after every provider-backed signature passes.
-func (v Verifier) completePreparedRevisionProof(input verificationInput, base revisionBaseProof, signatures revisionSignatureProof) (RevisionProofOutcome, RevisionProof, error) {
+// completePreparedRevisionProof builds immutable facts after every
+// provider-backed signature passes. The Domain Policy Records of upward From
+// candidates are resolved here, after every signature proof and before the
+// proof state and the replay projection are decided, so an unauthenticated
+// message never triggers a policy query (local interpretation D2).
+func (v Verifier) completePreparedRevisionProof(ctx context.Context, input verificationInput, base revisionBaseProof, signatures revisionSignatureProof) (RevisionProofOutcome, RevisionProof, error) {
 	if !base.hashes.Valid() {
 		return "", RevisionProof{}, newError(ErrorCodeInternalMisuse, ErrorLocation{}, ErrorDetails{Class: ErrorClassInternal}, nil)
 	}
-	// Draft-08 Section 13: body hashes below a null Recipe cannot be
+	// Draft-09 Section 13: body hashes below a null Recipe cannot be
 	// checked, so a history that crossed one is never Fully Verified. The
 	// gap is decided last, after every inherited signature passed, in the
 	// Section 14 order where hash validation follows signature checks.
 	if base.history.HadUnavailableBody() {
 		return RevisionProofBodyHistoryUnavailable, RevisionProof{}, nil
+	}
+	if outcome, err := v.options.FromAuthorization.resolveUpwardFromCandidates(ctx, base.upwardFrom); err != nil || outcome != "" {
+		return outcome, RevisionProof{}, err
 	}
 	custodyFacts := revisionCustodyFacts(base.custody, input.signatures)
 	historyFacts := revisionHistoryFacts(base.history)
@@ -667,7 +694,8 @@ func (v Verifier) completePreparedRevisionProof(input verificationInput, base re
 		highestSequence: base.highestSignature.Sequence(), highestInstance: base.highestInstance.Number(),
 		instanceCount: len(input.instances), signatureCount: len(input.signatures),
 		signatures: signatures.facts, hashes: base.hashes, envelope: revisionEnvelopeFact(base.highestSignature), custody: custodyFacts, history: historyFacts,
-		usage: RevisionUsage{protocolFields: len(input.instances) + len(input.signatures), signatureSets: signatures.totalSets, keyLookups: signatures.lookups, providerCalls: signatures.lookups,
+		usage: RevisionUsage{protocolFields: len(input.instances) + len(input.signatures), signatureSets: signatures.totalSets, keyLookups: signatures.lookups,
+			domainPolicyLookups: len(base.upwardFrom), providerCalls: signatures.lookups + len(base.upwardFrom),
 			canonicalBytes: signatures.canonicalWork, currentCanonicalBytes: base.currentCanonicalWork, signatureCanonicalBytes: signatures.signatureCanonicalWork, history: base.history.Usage()}, initialized: true,
 	}
 	exploded := false
@@ -760,8 +788,9 @@ func (v Verifier) verifyRevisionBase(ctx context.Context, input verificationInpu
 	if outcome := rejectedRevisionHistoryOutcome(walk); outcome != "" {
 		return revisionBaseProof{}, outcome, nil
 	}
-	if !historyFromAuthentic(state, walk, input.signatures) {
-		return revisionBaseProof{}, RevisionProofFromNotAuthentic, nil
+	upwardFrom, fromOutcome := v.upwardFromCandidates(state, walk, input.signatures)
+	if fromOutcome != "" {
+		return revisionBaseProof{}, fromOutcome, nil
 	}
 	if walk.Usage().CanonicalBytes() > limits.MaxCanonicalWorkBytes-canonicalWork {
 		return revisionBaseProof{}, RevisionProofLimitExceeded, nil
@@ -770,17 +799,31 @@ func (v Verifier) verifyRevisionBase(ctx context.Context, input verificationInpu
 	// The replay identity is the m=1 hash declaration set, which the complete
 	// authenticated walk proved against the reconstructed origin state.
 	if target.InstanceNumber > 1 && len(walk.Transitions()) != int(target.InstanceNumber-1) {
-		return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
+		return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts, upwardFrom: upwardFrom}, "", nil
 	}
 	origin, err := instanceByNumber(input.instances, 1)
 	if err != nil {
-		return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
+		return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts, upwardFrom: upwardFrom}, "", nil
 	}
 	originDigest, ok := originReplayDigest(origin)
 	if !ok {
-		return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts}, "", nil
+		return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts, upwardFrom: upwardFrom}, "", nil
 	}
-	return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts, originDigest: originDigest, hasOriginDigest: true}, "", nil
+	return revisionBaseProof{highestSignature: highestSignature, highestInstance: highestInstance, custody: custody, history: walk, canonicalWork: canonicalWork, currentCanonicalWork: currentCanonicalWork, hashes: hashFacts, originDigest: originDigest, hasOriginDigest: true, upwardFrom: upwardFrom}, "", nil
+}
+
+// upwardFromCandidates applies the provider-free phase of the Draft-09
+// Sections 11, 11.1, and 14.8 From evaluation (D2). A From state that is not
+// Authentic rejects without DNS; an upward candidate rejects without DNS too
+// when the verifier chose the downward-only policy. Otherwise it returns the
+// deduplicated A-label From domains whose Domain Policy Records are resolved
+// after every signature proof passed.
+func (v Verifier) upwardFromCandidates(current recipe.State, walk HistoryWalk, signatures []signature.Signature) ([]string, RevisionProofOutcome) {
+	plan := historyFromAuthentic(current, walk, signatures)
+	if !plan.accepted || len(plan.upward) > 0 && !v.options.FromAuthorization.subdomainAuthorized() {
+		return nil, RevisionProofFromNotAuthentic
+	}
+	return plan.upward, ""
 }
 
 // rejectedRevisionHistoryOutcome maps every incomplete authenticated walk to

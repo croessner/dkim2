@@ -17,7 +17,7 @@ import (
 
 // DSNIdentity is one canonical DNS domain that may be preferred as the
 // signing identity of a delivery-status notification. It never becomes the
-// signing domain on its own: Draft-08 Section 16.2 admits only domains that
+// signing domain on its own: Draft-09 Section 16.2 admits only domains that
 // relaxed-match an rt= address of the reported message.
 type DSNIdentity struct{ domain string }
 
@@ -34,7 +34,7 @@ const (
 	// DSNEvidenceStageEmbeddedVerification identifies embedded cryptographic evidence failure.
 	DSNEvidenceStageEmbeddedVerification DSNEvidenceStage = "embedded_verification"
 	// DSNEvidenceStageEmbeddedUnsigned identifies a well-formed embedded
-	// original without any DKIM2-Signature header field. Draft-08 Section 16
+	// original without any DKIM2-Signature header field. Draft-09 Section 16
 	// defines DKIM2 DSN handling only for DKIM2-signed originals, so such a
 	// report cannot be authorized for signing. The wrapped cause remains
 	// SigningErrorAuthorizationDenied; only a caller with an explicit
@@ -52,13 +52,13 @@ const (
 	DSNEvidenceStageSigningDomain DSNEvidenceStage = "signing_domain"
 	// DSNEvidenceStageIdentityUnavailable identifies a report for which no
 	// local delivery_status profile domain relaxed-matches an rt= address of
-	// the highest DKIM2-Signature of the reported message (Draft-08 Sections
+	// the highest DKIM2-Signature of the reported message (Draft-09 Sections
 	// 7.1 item 4 and 16.2). The report cannot be DKIM2 signed; callers
 	// deliver it unsigned. The wrapped cause is SigningErrorAuthorizationDenied.
 	DSNEvidenceStageIdentityUnavailable DSNEvidenceStage = "identity_unavailable"
 	// DSNEvidenceStageFromNotAuthentic identifies a report for which Section
 	// 16.2 candidates with a local profile exist, but none makes the report's
-	// own From header field Authentic (Draft-08 Sections 11 and 12.4). The
+	// own From header field Authentic (Draft-09 Sections 11 and 12.4). The
 	// report cannot be DKIM2 signed; callers deliver it unsigned. The wrapped
 	// cause is SigningErrorAuthorizationDenied.
 	DSNEvidenceStageFromNotAuthentic DSNEvidenceStage = "from_not_authentic"
@@ -276,7 +276,7 @@ func (r DSNSigningRequest) Format(state fmt.State, _ rune) { _, _ = io.WriteStri
 // EvaluateDSNForSigning derives the opaque pre-policy authorization for a
 // null reverse-path DSN after RFC 6522/3464 structure and recipient linkage,
 // embedded DKIM2 verification, and outer-recipient binding all pass. It never
-// touches a signing profile; ResolveDSNSigningIdentity selects the Draft-08
+// touches a signing profile; ResolveDSNSigningIdentity selects the Draft-09
 // Section 16.2 signing identity afterwards. A returned original without any
 // DKIM2-Signature header field fails with DSNEvidenceStageEmbeddedUnsigned;
 // one that carries such a field always takes the strict verification path.
@@ -327,14 +327,17 @@ type DSNProfileSource interface {
 	DeliveryStatusProfile(ctx context.Context, domain string) (profile SigningProfile, found bool, err error)
 }
 
-// ResolveDSNSigningIdentity is the single owner of the Draft-08 Section 16.2
+// ResolveDSNSigningIdentity is the single owner of the Draft-09 Section 16.2
 // DSN signing identity. It walks the candidates of
 // dsn.Evidence.SigningIdentityCandidates (domains that relaxed-match an rt=
 // address of the highest DKIM2-Signature of the reported message, RFC 3464
 // linked recipients first, then the preferred identity, then the most specific
 // domain) and binds the first candidate that has a local delivery_status
 // profile and makes the report's own From header field Authentic (Sections 11
-// and 12.4). It returns the bound evidence and that profile.
+// and 12.4) through the downward match only: the DSN identity resolver never
+// uses a subdomain d= to make a parent From Authentic and never queries a
+// Domain Policy Record (Sections 11.1 and 12.4, local disposition D8). It
+// returns the bound evidence and that profile.
 //
 // No candidate with a profile yields DSNEvidenceStageIdentityUnavailable;
 // candidates with a profile that all leave the From non-Authentic yield
@@ -360,7 +363,7 @@ func (s *Signer) ResolveDSNSigningIdentity(ctx context.Context, evidence DSNSign
 		if err := ctx.Err(); err != nil {
 			return DSNSigningEvidence{}, SigningProfile{}, newDSNEvidenceError(DSNEvidenceStageSigningDomain, err)
 		}
-		authentic := verify.FromAuthenticFor(headers, candidate.Domain())
+		authentic := verify.SignerFromAuthenticFor(headers, candidate.Domain())
 		if !authentic && profileFound {
 			continue
 		}

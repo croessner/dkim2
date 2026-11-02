@@ -81,7 +81,7 @@ func TestParseAcceptsInteropFWSAroundTags(t *testing.T) {
 	}
 }
 
-// TestParseRejectsMixedCaseTagNames reproduces the Draft-08 Section 10
+// TestParseRejectsMixedCaseTagNames reproduces the Draft-09 Section 10
 // requirement that every DKIM2-Signature tag name is lowercase. An uppercase
 // alias of a known tag is a syntax error, never a missing tag.
 func TestParseRejectsMixedCaseTagNames(t *testing.T) {
@@ -95,7 +95,7 @@ func TestParseRejectsMixedCaseTagNames(t *testing.T) {
 	}
 }
 
-// TestParseAcceptsOptionalFinalSemicolon reproduces the Draft-08 Section 8
+// TestParseAcceptsOptionalFinalSemicolon reproduces the Draft-09 Section 8
 // rule that the final DKIM2-Signature semicolon is optional.
 func TestParseAcceptsOptionalFinalSemicolon(t *testing.T) {
 	if _, err := Parse(headerField(t, 0, "DKIM2-Signature", validSignatureValue())); err != nil {
@@ -103,7 +103,7 @@ func TestParseAcceptsOptionalFinalSemicolon(t *testing.T) {
 	}
 }
 
-// TestParseAcceptsNextDomainEnvelopeForm reproduces the Draft-08 nd= envelope form.
+// TestParseAcceptsNextDomainEnvelopeForm reproduces the Draft-09 nd= envelope form.
 func TestParseAcceptsNextDomainEnvelopeForm(t *testing.T) {
 	parsed, err := Parse(dkim2SignatureField(t, 0, nextDomainSignatureValue()))
 	if err != nil {
@@ -323,7 +323,7 @@ func TestParseRejectsInvalidSignatureBase64AndLengths(t *testing.T) {
 	}
 }
 
-// TestParseAcceptsExactMLDSA44Signature proves a Draft-08 Section 3.4
+// TestParseAcceptsExactMLDSA44Signature proves a Draft-09 Section 3.4
 // mldsa44 set of exactly 2420 octets (3228 base64 characters), folded with
 // white space inside the base64string, parses as a known algorithm.
 func TestParseAcceptsExactMLDSA44Signature(t *testing.T) {
@@ -352,7 +352,7 @@ func TestParseRejectsDuplicateSelectors(t *testing.T) {
 	}
 }
 
-// TestParseAlgorithmNamesAreCaseSensitive reproduces the Draft-08 Sections
+// TestParseAlgorithmNamesAreCaseSensitive reproduces the Draft-09 Sections
 // 2.14 and 10.9 rule that signature algorithm names are case-sensitive: an
 // uppercase spelling of a supported algorithm is an unknown algorithm.
 func TestParseAlgorithmNamesAreCaseSensitive(t *testing.T) {
@@ -367,7 +367,7 @@ func TestParseAlgorithmNamesAreCaseSensitive(t *testing.T) {
 	}
 }
 
-// TestParseAllowsTwoSameAlgorithmDifferentSelectors proves the Draft-08 per-algorithm allowance.
+// TestParseAllowsTwoSameAlgorithmDifferentSelectors proves the Draft-09 per-algorithm allowance.
 func TestParseAllowsTwoSameAlgorithmDifferentSelectors(t *testing.T) {
 	value := testSelector + ":rsa-sha256:" + base64OfByte(0xaa, 64) +
 		", selector2:rsa-sha256:" + base64OfByte(0xbb, 64)
@@ -381,7 +381,7 @@ func TestParseAllowsTwoSameAlgorithmDifferentSelectors(t *testing.T) {
 	}
 }
 
-// TestParseAcceptsThirdSameAlgorithm pins Draft-08 Section 10.9: more than
+// TestParseAcceptsThirdSameAlgorithm pins Draft-09 Section 10.9: more than
 // one signature with the same algorithm MAY be present with distinct
 // selectors, and the Draft-07 per-algorithm cap of two is gone.
 func TestParseAcceptsThirdSameAlgorithm(t *testing.T) {

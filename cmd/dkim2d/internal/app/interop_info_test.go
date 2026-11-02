@@ -35,7 +35,10 @@ func TestInteropInfoSigningAndRevision(t *testing.T) {
 			t.Fatalf("field count = %d, want %d", len(fields), wantCount)
 		}
 		if enabled {
-			want := "X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-08;\r\n\trepo=github.com/croessner/dkim2; date=2023-11-14; sw=dkim2d;\r\n\taction=sign d=origin.example.test a=rsa-sha256,ed25519-sha256;\r\n"
+			if interopBehaviorDate != "2026-11-02" {
+				t.Fatalf("behavior date = %q; bump it together with this pin", interopBehaviorDate)
+			}
+			want := "X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-09;\r\n\trepo=github.com/croessner/dkim2; date=" + interopBehaviorDate + "; sw=dkim2d;\r\n\taction=sign d=origin.example.test a=rsa-sha256,ed25519-sha256;\r\n"
 			if string(fields[len(fields)-1].Bytes()) != want {
 				t.Fatal("unexpected interop header")
 			}
@@ -50,7 +53,7 @@ func TestInteropInfoSigningAndRevision(t *testing.T) {
 		if enabled && bytes.Count(output, []byte("X-DKIM2-Info:")) != 2 {
 			t.Fatal("revision did not preserve prior diagnostic and append local diagnostic")
 		}
-		verifier, err := dkim2.NewVerifier(fixture.publicKeys, dkim2.WithVerificationClock(service.clock))
+		verifier, err := dkim2.NewVerifier(fixture.publicKeys, dkim2.WithVerificationClock(service.clock), dkim2.WithoutSubdomainFromAuthorization())
 		if err != nil {
 			t.Fatal(err)
 		}

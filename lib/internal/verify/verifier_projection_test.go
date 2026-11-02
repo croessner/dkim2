@@ -13,7 +13,7 @@ func TestRevisionProofSealsCompleteVerifierProjection(t *testing.T) {
 	fixture := newNextDomainChainFixture(t, strings.ToUpper(nextHopDomain))
 	verifier, err := NewVerifier(providerFunc(func(_ context.Context, query KeyQuery) (PublicKey, error) {
 		return publicKeyResult(query.Algorithm, fixture.rsaKey, KeyStatusFound), nil
-	}), testClockOption())
+	}), testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -54,7 +54,7 @@ func TestTerminalNextDomainProofDoesNotExposePermittableProjection(t *testing.T)
 	fixture := newHighestNextDomainFixture(t)
 	verifier, err := NewVerifier(providerFunc(func(_ context.Context, query KeyQuery) (PublicKey, error) {
 		return publicKeyResult(query.Algorithm, fixture.rsaKey, KeyStatusFound), nil
-	}), testClockOption())
+	}), testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}

@@ -39,7 +39,7 @@ func TestExportDNSRejectsForeignProtectedDocumentsWithoutMutation(t *testing.T) 
 	}
 	for _, path := range []string{intentPath, foreignPath} {
 		before, beforeInfo, beforeEntries := protectedArtifactSnapshot(t, path)
-		if _, exportErr := ExportDNS(t.Context(), path, set, DefaultLimits()); CodeOf(exportErr) != CodeConflict {
+		if _, exportErr := ExportDNS(t.Context(), path, set, DNSExportOptions{}, DefaultLimits()); CodeOf(exportErr) != CodeConflict {
 			t.Fatal("foreign protected document was not rejected as a conflict")
 		}
 		after, afterInfo, afterEntries := protectedArtifactSnapshot(t, path)
@@ -62,12 +62,12 @@ func TestExportDNSExactRetryDoesNotReplaceArtifact(t *testing.T) {
 		t.Fatal("protect retry export fixture")
 	}
 	path := filepath.Join(root, "records.zone")
-	first, err := ExportDNS(t.Context(), path, set, DefaultLimits())
+	first, err := ExportDNS(t.Context(), path, set, DNSExportOptions{}, DefaultLimits())
 	if err != nil {
 		t.Fatal("create deterministic DNS artifact")
 	}
 	before, beforeInfo, beforeEntries := protectedArtifactSnapshot(t, path)
-	second, err := ExportDNS(t.Context(), path, set, DefaultLimits())
+	second, err := ExportDNS(t.Context(), path, set, DNSExportOptions{}, DefaultLimits())
 	if err != nil || second != first {
 		t.Fatal("exact deterministic DNS retry was not idempotent")
 	}
@@ -90,7 +90,7 @@ func TestExportDNSConcurrentExactRetriesDoNotReplaceArtifact(t *testing.T) {
 		t.Fatal("protect concurrent retry fixture")
 	}
 	path := filepath.Join(root, "records.zone")
-	want, err := ExportDNS(t.Context(), path, set, DefaultLimits())
+	want, err := ExportDNS(t.Context(), path, set, DNSExportOptions{}, DefaultLimits())
 	if err != nil {
 		t.Fatal("create concurrent retry artifact")
 	}
@@ -101,7 +101,7 @@ func TestExportDNSConcurrentExactRetriesDoNotReplaceArtifact(t *testing.T) {
 	var group sync.WaitGroup
 	for range workers {
 		group.Go(func() {
-			result, exportErr := ExportDNS(t.Context(), path, set, DefaultLimits())
+			result, exportErr := ExportDNS(t.Context(), path, set, DNSExportOptions{}, DefaultLimits())
 			errorsFound <- exportErr
 			results <- result
 		})
@@ -225,7 +225,7 @@ func TestTXTChunkBoundariesAndPresentationGolden(t *testing.T) {
 		owner: []byte("selector._domainkey.example.test."), selector: []byte("selector"),
 		payload: payload, algorithm: provider.AlgorithmRSASHA256,
 	}
-	document, err := formatDNSExport([]DNSRecord{record}, 300, 4096)
+	document, err := formatDNSExport([]DNSRecord{record}, nil, 300, 4096)
 	if err != nil {
 		t.Fatal("format deterministic DNS export")
 	}
@@ -249,7 +249,7 @@ func TestExportDNSWritesOnlyExplicitProtectedArtifact(t *testing.T) {
 		t.Fatal("protect DNS export directory")
 	}
 	path := filepath.Join(root, "records.zone")
-	result, err := ExportDNS(t.Context(), path, set, DefaultLimits())
+	result, err := ExportDNS(t.Context(), path, set, DNSExportOptions{}, DefaultLimits())
 	if err != nil || result.Records != 2 || result.Bytes == 0 {
 		t.Fatal("protected DNS export rejected")
 	}

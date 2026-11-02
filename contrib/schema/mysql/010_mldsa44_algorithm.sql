@@ -1,5 +1,5 @@
 -- Forward-only admission of pure ML-DSA-44 (mldsa44) credentials and custody
--- keys. Draft-08 Section 3.4 replaces the Draft-07 composite with pure
+-- keys. Draft-09 Section 3.4 replaces the Draft-07 composite with pure
 -- ML-DSA-44; 009 removed the composite, and this migration extends the
 -- rsa-sha256 and ed25519-sha256 allowlist by mldsa44. Custody keys are the
 -- seed-only PKCS#8 form (OID 2.16.840.1.101.3.4.3.17, 54 octets) and public

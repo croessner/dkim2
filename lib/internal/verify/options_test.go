@@ -23,11 +23,11 @@ func (*panicTypedNilKeyProvider) LookupKey(context.Context, KeyQuery) (PublicKey
 // TestNewVerifierRejectsTypedNilKeyProvider proves constructor and copied-value validity fail closed.
 func TestNewVerifierRejectsTypedNilKeyProvider(t *testing.T) {
 	var provider *panicTypedNilKeyProvider
-	if verifier, err := NewVerifier(provider); err == nil || verifier.Valid() {
+	if verifier, err := NewVerifier(provider, testFromChoice); err == nil || verifier.Valid() {
 		t.Fatalf("NewVerifier(typed nil) valid=%v error=%v", verifier.Valid(), err)
 	}
 
-	verifier, err := NewVerifier(testKeyProvider{})
+	verifier, err := NewVerifier(testKeyProvider{}, testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -37,11 +37,11 @@ func TestNewVerifierRejectsTypedNilKeyProvider(t *testing.T) {
 	}
 }
 
-// TestDefaultAlgorithmPolicyMatchesDraft08Contract verifies that the default
-// verifier enables exactly the three Draft-08 Section 3 algorithms the
+// TestDefaultAlgorithmPolicyMatchesDraft09Contract verifies that the default
+// verifier enables exactly the three Draft-09 Section 3 algorithms the
 // verifier MUST implement: rsa-sha256, ed25519-sha256, and mldsa44. The
 // Draft-07 composite stays unimplemented.
-func TestDefaultAlgorithmPolicyMatchesDraft08Contract(t *testing.T) {
+func TestDefaultAlgorithmPolicyMatchesDraft09Contract(t *testing.T) {
 	policy := DefaultAlgorithmPolicy()
 	algorithms := policy.Algorithms()
 	if len(algorithms) != 3 {
@@ -75,7 +75,7 @@ func TestAlgorithmPolicyAcceptsExactSharedRSAMaximum(t *testing.T) {
 
 // TestNewVerifierRejectsUnsafeOptions verifies fail-closed construction validation.
 func TestNewVerifierRejectsUnsafeOptions(t *testing.T) {
-	if _, err := NewVerifier(nil); !IsErrorCode(err, ErrorCodeInvalidOptions) {
+	if _, err := NewVerifier(nil, testFromChoice); !IsErrorCode(err, ErrorCodeInvalidOptions) {
 		t.Fatalf("NewVerifier(nil) error = %v, want invalid options", err)
 	}
 
@@ -134,7 +134,7 @@ func TestNewVerifierRejectsUnsafeOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewVerifier(testKeyProvider{}, tt.option)
+			_, err := NewVerifier(testKeyProvider{}, tt.option, testFromChoice)
 			if !IsErrorCode(err, tt.code) {
 				t.Fatalf("NewVerifier() error = %v, want %s", err, tt.code)
 			}
@@ -147,7 +147,7 @@ func TestNewVerifierUsesValidatedDefaults(t *testing.T) {
 	fixedNow := time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC)
 	verifier, err := NewVerifier(testKeyProvider{}, WithClock(func() time.Time {
 		return fixedNow
-	}))
+	}), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -175,7 +175,7 @@ func TestNewVerifierUsesValidatedDefaults(t *testing.T) {
 func TestNewVerifierKeepsRecipeSubLimitsCoherent(t *testing.T) {
 	limits := DefaultRevisionLimits()
 	limits.MaxDecodedRecipeBytes = 64
-	if _, err := NewVerifier(testKeyProvider{}, WithRevisionLimits(limits)); err != nil {
+	if _, err := NewVerifier(testKeyProvider{}, WithRevisionLimits(limits), testFromChoice); err != nil {
 		t.Fatalf("NewVerifier() with narrowed decoded recipe limit error = %v", err)
 	}
 }

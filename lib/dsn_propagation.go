@@ -402,7 +402,7 @@ func (PropagatedDSN) MarshalText() ([]byte, error) {
 	return nil, newSigningError(SigningErrorInvalidRequest)
 }
 
-// RebuildDSNForPropagation evaluates one received DSN under Draft-08 Section
+// RebuildDSNForPropagation evaluates one received DSN under Draft-09 Section
 // 16.4 with the signer's own verifier and, when the evaluation is eligible,
 // rebuilds it under Section 16.3 into an unsigned report addressed to the
 // authenticated previous hop. The signing domain is the canonical d= of the

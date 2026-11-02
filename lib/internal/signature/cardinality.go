@@ -1,6 +1,6 @@
 package signature
 
-// selectorUniqueness owns the Draft-08 Section 10.9 rule that a Selector
+// selectorUniqueness owns the Draft-09 Section 10.9 rule that a Selector
 // appears at most once in one DKIM2-Signature, across every sig-all group.
 // Several sets may use the same algorithm with distinct selectors.
 type selectorUniqueness struct {

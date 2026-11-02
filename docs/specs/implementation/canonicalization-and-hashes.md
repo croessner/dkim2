@@ -1,7 +1,7 @@
 # Canonicalization And Hashes
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 
 Status: completed.
@@ -274,7 +274,7 @@ Section 6.2 header hash canonicalization must apply the draft steps in order.
 M3 must implement them as one authoritative transformation path:
 
 1. Exclude these header fields case-insensitively before hashing. The
-   Draft-08 Section 4.1 summary lists `Apparently-To`,
+   Draft-09 Section 4.1 summary lists `Apparently-To`,
    `ARC-Authentication-Results`, `ARC-Message-Signature`, `ARC-Seal`,
    `Authentication-Results`, `Delivered-To`, `DKIM-Signature`,
    `DL-Expansion-History`, `Original-Recipient`, `Received`, any header field
@@ -299,7 +299,7 @@ M3 must implement them as one authoritative transformation path:
 5. Delete all WSP characters at the end of each unfolded header field value.
 6. Delete WSP before and after the colon separator. The colon remains.
 7. Sort included header fields in ascending octet order of the lower-cased
-   header field name (Draft-08 Section 6.2). The comparison is over the name
+   header field name (Draft-09 Section 6.2). The comparison is over the name
    alone, not over the canonical line, so `a` sorts before `a-b` although `-`
    (0x2d) sorts below `:` (0x3a); `-`, digits, `_`, and letters order by
    their octet values.
@@ -469,7 +469,7 @@ Default behavior is restrictive:
   validation errors, missing target fields, duplicate target identifiers, or
   unsupported line-ending policy.
 - Unknown hash or signature algorithms are PERMERROR intermediates of the
-  Draft-08 Section 14.6/14.7 combination, never a pass; they pass only
+  Draft-09 Section 14.6/14.7 combination, never a pass; they pass only
   through another `|` group.
 - Section 6.2 excluded headers are omitted only from the header hash input.
   They remain visible to the raw message model and future policy layers where
@@ -557,7 +557,7 @@ Unit tests:
   including MIME-looking content and non-UTF-8 bytes.
 - Body SHA-256 returns deterministic 32-byte digest bytes and padded base64
   text for synthetic fixtures.
-- Header hash canonicalization excludes exactly the Draft-08 Section 4.1
+- Header hash canonicalization excludes exactly the Draft-09 Section 4.1
   summary set plus `Message-Instance` and `DKIM2-Signature`
   case-insensitively, and signs `Auto-Submitted`, `VBR-Info`, and `ARC-*`
   names other than the three ARC fields.
@@ -739,10 +739,10 @@ document the exact blocker.
   message parser or tag parser.
 - Settled: Section 6.2 header hash canonicalization and Section 9.6 signature
   input canonicalization must use distinct whitespace rules.
-- Settled: Header hash input excludes the Draft-08 Section 4.1 summary set
+- Settled: Header hash input excludes the Draft-09 Section 4.1 summary set
   (see Header Hash Input step 1) plus `Message-Instance` and
   `DKIM2-Signature`. `Auto-Submitted` and `VBR-Info` are signed again under
-  Draft-08, as under Draft-04; the Draft-07 golden that excluded them is kept
+  Draft-09, as under Draft-04; the Draft-07 golden that excluded them is kept
   under `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-spec-07/`.
 - Settled: Duplicate included header names in header hash input are ordered
   from the last RFC 5322 header occurrence upward.

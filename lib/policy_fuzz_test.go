@@ -93,7 +93,7 @@ func fuzzLibraryResults(f *testing.F) []publicPolicyFuzzSeed {
 	verifyVector := func(name string, provider PublicKeyProvider, options ...VerifierOption) VerifyResult {
 		vector := corpus.Vectors[name]
 		options = append(options, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
-		verifier, err := NewVerifier(provider, options...)
+		verifier, err := NewVerifier(provider, append([]VerifierOption{WithoutSubdomainFromAuthorization()}, options...)...)
 		if err != nil {
 			f.Fatalf("NewVerifier(%s) error = %v", name, err)
 		}
@@ -115,7 +115,7 @@ func fuzzLibraryResults(f *testing.F) []publicPolicyFuzzSeed {
 		{result: verifyVector(goldenVectorMissingProtocol, static(goldenProviderKeys))},
 	}
 	flaggedRaw, flaggedKey := signedPublicFlaggedPolicyMessage(f, publicVectorClock)
-	flaggedVerifier, err := NewVerifier(publicGoldenProvider{mode: goldenProviderKeys, rsa: flaggedKey}, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	flaggedVerifier, err := NewVerifier(publicGoldenProvider{mode: goldenProviderKeys, rsa: flaggedKey}, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		f.Fatalf("NewVerifier(flagged) error = %v", err)
 	}

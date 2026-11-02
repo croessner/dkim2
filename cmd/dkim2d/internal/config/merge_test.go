@@ -179,7 +179,7 @@ func TestStableFieldBindings(t *testing.T) {
 func TestStablePathSetIsExact(t *testing.T) {
 	specs := stableFieldSpecs()
 	golden := stableFieldGoldenContract()
-	if len(specs) != 127 || len(specs) != len(golden) {
+	if len(specs) != 128 || len(specs) != len(golden) {
 		t.Fatal("stable path count changed")
 	}
 	for index, expected := range golden {
@@ -257,6 +257,7 @@ func stableFieldGoldenContract() []stableFieldGolden {
 		{path: "dns.cache.positive_ttl_cap", environment: "DKIM2D_DNS_CACHE_POSITIVE_TTL_CAP", defaultValue: "1h", hasDefault: true},
 		{path: "dns.cache.negative_ttl_cap", environment: "DKIM2D_DNS_CACHE_NEGATIVE_TTL_CAP", defaultValue: "5m", hasDefault: true},
 		{path: "dns.cache.stable_error_ttl_cap", environment: "DKIM2D_DNS_CACHE_STABLE_ERROR_TTL_CAP", defaultValue: "1m", hasDefault: true},
+		{path: "verification.domain_policy.allow_subdomain_from", environment: "DKIM2D_VERIFICATION_DOMAIN_POLICY_ALLOW_SUBDOMAIN_FROM", defaultValue: canonicalTrue, hasDefault: true},
 		{path: "replay.backend", environment: "DKIM2D_REPLAY_BACKEND", defaultValue: "redis", hasDefault: true},
 		{path: "replay.hmac_key_file", environment: "DKIM2D_REPLAY_HMAC_KEY_FILE"},
 		{path: "replay.epoch", environment: "DKIM2D_REPLAY_EPOCH"},

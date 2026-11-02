@@ -220,7 +220,7 @@ func newHistoricalMilterProcessor(t testing.TB, key *rsa.PublicKey, timestamp in
 	t.Helper()
 	verifier, err := dkim2.NewVerifier(
 		selectedMatrixProvider{key: key, outcome: selectedProviderFound},
-		dkim2.WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }),
+		dkim2.WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }), dkim2.WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("historical Milter verifier construction failed")

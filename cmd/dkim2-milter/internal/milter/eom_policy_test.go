@@ -130,10 +130,15 @@ func TestUnsignedInboundEOMContinuesWithoutActions(t *testing.T) {
 }
 
 // TestUnsignedInboundEOMRemovesForgedLocalAuthenticationResults proves the
-// RFC 8601 trust-boundary scrub remains mandatory when DKIM2 is not applicable.
+// RFC 8601 trust-boundary scrub remains mandatory for the Draft-09 NONE state
+// and that the daemon-owned dkim2=none report is inserted afterwards.
 func TestUnsignedInboundEOMRemovesForgedLocalAuthenticationResults(t *testing.T) {
 	handler := &testHandler{result: Result{
 		Operation: operationProcess, Result: resultNone, Outcome: DispositionContinue,
+		Actions: []Action{{
+			Kind: ActionAddHeader, Name: headerAuthResults,
+			Value: testAuthservID + "; dkim2=none",
+		}},
 	}}
 	session := testSession(t, handler, false, modeInbound, testAuthservID)
 	input := appendPeerFrames(
@@ -152,9 +157,10 @@ func TestUnsignedInboundEOMRemovesForgedLocalAuthenticationResults(t *testing.T)
 		t.Fatalf("Serve() error=%v calls=%d", err, handler.calls)
 	}
 	commands := responseCommands(t, stream.writer.Bytes())
-	if len(commands) < 2 || commands[len(commands)-2] != replyChangeHeader ||
+	if len(commands) < 3 || commands[len(commands)-3] != replyChangeHeader ||
+		commands[len(commands)-2] != replyInsertHeader ||
 		commands[len(commands)-1] != replyAccept {
-		t.Fatalf("response commands=%q, want local-header deletion then accept", commands)
+		t.Fatalf("response commands=%q, want local-header deletion, none report insertion, then accept", commands)
 	}
 }
 

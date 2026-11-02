@@ -7,7 +7,7 @@ import (
 )
 
 // signatureSetIntermediate maps one evaluated signature set onto its
-// Draft-08 Section 14.6 intermediate result: PASS for a verified signature,
+// Draft-09 Section 14.6 intermediate result: PASS for a verified signature,
 // FAIL for a signature mismatch, TEMPERROR for a temporarily unavailable
 // key, and PERMERROR for every permanent key or provider error, for an
 // algorithm this verifier does not implement (step 4, decided without a key

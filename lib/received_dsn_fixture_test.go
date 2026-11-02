@@ -223,7 +223,7 @@ func receivedDSNClockOption() VerifierOption {
 // mustReceivedDSNVerifier constructs the public verifier over the fixture provider.
 func mustReceivedDSNVerifier(t testing.TB, provider PublicKeyProvider) *Verifier {
 	t.Helper()
-	evaluator, err := NewVerifier(provider, receivedDSNClockOption())
+	evaluator, err := NewVerifier(provider, receivedDSNClockOption(), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error=%v", err)
 	}

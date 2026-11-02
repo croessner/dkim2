@@ -134,14 +134,37 @@ func (r Resolver) resolveLookup(ctx context.Context, query Query) flightResult {
 		return flightResult{outcome: outcome, expiry: boundedCacheExpiry(observedAt, lookup.PositiveTTL(), r.limits.MaxStableErrorTTL)}
 	}
 	records := lookup.Records()
-	if len(records) != 1 {
-		return flightResult{outcome: newStatusOutcome(KeyOutcomeProviderContract, algorithm)}
-	}
-	payload := records[0].Payload()
-	if len(payload) > r.limits.MaxTXTRecordBytes {
-		outcome := newStatusOutcome(KeyOutcomeInvalid, algorithm)
+	if len(records) == 0 {
+		// Count-only ambiguity: the Section 3.7 filter has no payloads to inspect.
+		outcome := newStatusOutcome(KeyOutcomeAmbiguous, algorithm)
 		return flightResult{outcome: outcome, expiry: boundedCacheExpiry(observedAt, lookup.PositiveTTL(), r.limits.MaxStableErrorTTL)}
 	}
+	candidates := make([][]byte, 0, len(records))
+	for _, txt := range records {
+		// Section 3.7 ignores foreign-version records first, so the
+		// per-record byte bound applies to key record candidates only.
+		payload := txt.Payload()
+		if foreignVersionRecord(payload) {
+			continue
+		}
+		if len(payload) > r.limits.MaxTXTRecordBytes {
+			outcome := newStatusOutcome(KeyOutcomeInvalid, algorithm)
+			return flightResult{outcome: outcome, expiry: boundedCacheExpiry(observedAt, lookup.PositiveTTL(), r.limits.MaxStableErrorTTL)}
+		}
+		candidates = append(candidates, payload)
+	}
+	switch len(candidates) {
+	case 0:
+		// Draft-09 Section 3.7: every record carried a non-DKIM1 version, so no
+		// key record exists at this selector.
+		outcome := newStatusOutcome(KeyOutcomeMissing, algorithm)
+		return flightResult{outcome: outcome, expiry: boundedCacheExpiry(observedAt, lookup.PositiveTTL(), r.limits.MaxNegativeTTL)}
+	case 1:
+	default:
+		outcome := newStatusOutcome(KeyOutcomeAmbiguous, algorithm)
+		return flightResult{outcome: outcome, expiry: boundedCacheExpiry(observedAt, lookup.PositiveTTL(), r.limits.MaxStableErrorTTL)}
+	}
+	payload := candidates[0]
 	record, parseErr := ParseRecord(payload, r.limits)
 	if parseErr != nil {
 		if IsRecordErrorCode(parseErr, RecordErrorContract) {
@@ -211,7 +234,8 @@ func lookupResultValid(result LookupResult) bool {
 		if result.Absence() != "" || result.NegativeTTL() != 0 || result.RecordCount() <= 0 {
 			return false
 		}
-		return result.RecordCount() > 1 && len(result.records) == 0 || result.RecordCount() == 1 && len(result.records) == 1
+		return result.RecordCount() > 1 && len(result.records) == 0 ||
+			result.RecordCount() <= hardMaxTXTRecords && len(result.records) == result.RecordCount()
 	case LookupStatusAbsent:
 		return result.Absence().Known() && result.RecordCount() == 0 && len(result.records) == 0 && result.PositiveTTL() == 0
 	default:

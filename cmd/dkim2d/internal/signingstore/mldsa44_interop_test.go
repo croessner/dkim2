@@ -107,7 +107,7 @@ func TestOpendkimManageMLDSA44CredentialSignsAndVerifies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDNSPublicKeyProvider() error = %v", err)
 	}
-	signer, err := dkim2.NewSigner(keys, dkim2.NewRequestRouteAuthority(), signingStoreAuthorizer{}, registry)
+	signer, err := dkim2.NewSigner(keys, dkim2.NewRequestRouteAuthority(), signingStoreAuthorizer{}, registry, dkim2.WithoutSignerSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)
 	}
@@ -141,7 +141,7 @@ func TestOpendkimManageMLDSA44CredentialSignsAndVerifies(t *testing.T) {
 	if !ok || !bytes.Contains(signed.Bytes(), []byte(interopSelector+":mldsa44:")) {
 		t.Fatal("signed output lacks the mldsa44 set")
 	}
-	verifier, err := dkim2.NewVerifier(keys)
+	verifier, err := dkim2.NewVerifier(keys, dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}

@@ -8,8 +8,8 @@ import (
 	"github.com/croessner/dkim2/internal/recipe"
 )
 
-// TestCanonicalHeaderRelevanceAlignsWithDraft08 proves the production seam and complete exclusion surface.
-func TestCanonicalHeaderRelevanceAlignsWithDraft08(t *testing.T) {
+// TestCanonicalHeaderRelevanceAlignsWithDraft09 proves the production seam and complete exclusion surface.
+func TestCanonicalHeaderRelevanceAlignsWithDraft09(t *testing.T) {
 	relevance := canonical.NewHeaderRelevance()
 	var contract recipe.HeaderRelevance = relevance
 	if err := contract.Validate(); err != nil {
@@ -25,7 +25,7 @@ func TestCanonicalHeaderRelevanceAlignsWithDraft08(t *testing.T) {
 	} {
 		relevant, err := contract.IsRelevantHeader(name)
 		if err != nil || relevant {
-			t.Fatalf("excluded Draft-08 classification: name=%s relevant=%t error=%t", name, relevant, err != nil)
+			t.Fatalf("excluded Draft-09 classification: name=%s relevant=%t error=%t", name, relevant, err != nil)
 		}
 	}
 	// Draft-08 Section 4 removed Auto-Submitted and VBR-Info from the unsigned
@@ -33,7 +33,7 @@ func TestCanonicalHeaderRelevanceAlignsWithDraft08(t *testing.T) {
 	for _, name := range []string{"from", "subject", "resent-from", "arcade", "x", "message-id", "auto-submitted", "vbr-info"} {
 		relevant, err := contract.IsRelevantHeader(name)
 		if err != nil || !relevant {
-			t.Fatalf("signed Draft-08 classification: name=%s relevant=%t error=%t", name, relevant, err != nil)
+			t.Fatalf("signed Draft-09 classification: name=%s relevant=%t error=%t", name, relevant, err != nil)
 		}
 	}
 	for _, name := range []string{"", "Subject", "bad name", "café"} {
@@ -68,10 +68,10 @@ func TestCanonicalHeaderRelevanceIsConcurrentSafe(t *testing.T) {
 }
 
 // TestProductionRelevanceRecipesCoverAutoSubmittedAndVBRInfo proves the
-// Draft-08 Section 4 consequence for recipes: a hop that adds Auto-Submitted
+// Draft-09 Section 4 consequence for recipes: a hop that adds Auto-Submitted
 // or VBR-Info changes the signed header hash, so the generator must describe
 // both additions, the strict parser must accept that recipe, and applying it
-// must restore the previous Section 6.2 header hash. A Draft-08 unsigned
+// must restore the previous Section 6.2 header hash. A Draft-09 unsigned
 // field added in the same hop stays outside the recipe.
 func TestProductionRelevanceRecipesCoverAutoSubmittedAndVBRInfo(t *testing.T) {
 	previous := mustExternalState(t, []byte("From: sender@example.test\r\nSubject: same\r\n\r\nbody\r\n"))
@@ -115,6 +115,6 @@ func TestProductionRelevanceRecipesCoverAutoSubmittedAndVBRInfo(t *testing.T) {
 	assertCanonicalResultEqual(t, "header", want, got)
 
 	if _, _, err := mustExternalParser(t, recipe.Limits{}).Parse([]byte(`{"h":{"x400-trace":[]}}`)); !recipe.IsErrorCode(err, recipe.ErrorCodeUnsignedHeaderRecipe) {
-		t.Fatal("recipe for a Draft-08 unsigned field was not rejected")
+		t.Fatal("recipe for a Draft-09 unsigned field was not rejected")
 	}
 }

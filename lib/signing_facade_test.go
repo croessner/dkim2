@@ -29,7 +29,7 @@ import (
 	internalsigning "github.com/croessner/dkim2/internal/signing"
 )
 
-const publicSigningRSAFixture = "testdata/vectors/draft-ietf-dkim-dkim2-spec-08/signing-test-rsa.pem"
+const publicSigningRSAFixture = "testdata/vectors/draft-ietf-dkim-dkim2-spec-09/signing-test-rsa.pem"
 
 type publicRouteMemoryAuthority struct {
 	value *routeplan.MemoryAuthority
@@ -206,7 +206,7 @@ func newPublicSigningFixture(t *testing.T) publicSigningFixture {
 			value: routeplan.NewMemoryAuthority(),
 			calls: routeCalls,
 		},
-		authorizer, provider, WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+		authorizer, provider, WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }), WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)
@@ -300,7 +300,7 @@ func (f publicSigningFixture) signOrigin(t *testing.T, raw []byte, disclosure Ro
 // assertPublicChainPass proves the normal verification facade authenticates every instance.
 func (f publicSigningFixture) assertPublicChainPass(t *testing.T, raw, reversePath []byte, forwardPaths [][]byte, instances uint64) {
 	t.Helper()
-	verifier, err := NewVerifier(f.provider, WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }))
+	verifier, err := NewVerifier(f.provider, WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -316,7 +316,7 @@ func (f publicSigningFixture) assertPublicChainPass(t *testing.T, raw, reversePa
 // assertPublicChainRejected proves one current-signature-valid historical fraud cannot aggregate to PASS.
 func (f publicSigningFixture) assertPublicChainRejected(t *testing.T, raw, reversePath []byte, forwardPaths [][]byte) {
 	t.Helper()
-	verifier, err := NewVerifier(f.provider, WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }))
+	verifier, err := NewVerifier(f.provider, WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -649,7 +649,7 @@ func assertPublicOriginatorSigning(
 	authorizer := &authorizeOrdinary{}
 	facade, err := NewSigner(
 		provider, publicRouteMemoryAuthority{value: routeplan.NewMemoryAuthority()},
-		authorizer, provider, WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+		authorizer, provider, WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }), WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)
@@ -711,7 +711,7 @@ func assertPublicOriginatorSigning(
 	if got := provider.signs.Load(); got != int64(len(algorithms)) {
 		t.Fatalf("private signing calls = %d", got)
 	}
-	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }))
+	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -749,7 +749,7 @@ func TestPublicInvalidTransportFailsBeforeCallbacksAndRestrictedAPIHasNoBytes(t 
 			value: routeplan.NewMemoryAuthority(),
 			calls: &routeCalls,
 		},
-		authorizer, provider,
+		authorizer, provider, WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)
@@ -992,7 +992,7 @@ func TestPublicContextPrecedesParsingAndTypedNilConstruction(t *testing.T) {
 	var nilSigner *publicSigningProvider
 	if facade, err := NewSigner(
 		fixture.provider, publicRouteMemoryAuthority{value: routeplan.NewMemoryAuthority()},
-		fixture.authorizer, nilSigner,
+		fixture.authorizer, nilSigner, WithoutSignerSubdomainFromAuthorization(),
 	); err == nil || facade != nil {
 		t.Fatalf("typed-nil NewSigner() facade=%v error=%v", facade, err)
 	}
@@ -1522,7 +1522,7 @@ func TestPublicRecoveryCopiesAreConcurrencySafeAndOneShot(t *testing.T) {
 	failing := &temporaryPrivateSigner{}
 	facade, err := NewSigner(
 		fixture.provider, publicRouteMemoryAuthority{value: routeplan.NewMemoryAuthority()},
-		fixture.authorizer, failing,
+		fixture.authorizer, failing, WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)
@@ -1602,7 +1602,7 @@ func TestPublicCallbackBridgesRejectInvalidAndTypedNilState(t *testing.T) {
 	fixture := newPublicSigningFixture(t)
 	facade, err := NewSigner(
 		fixture.provider, publicRouteMemoryAuthority{value: routeplan.NewMemoryAuthority()},
-		fixture.authorizer, typedNilErrorPrivateSigner{},
+		fixture.authorizer, typedNilErrorPrivateSigner{}, WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)
@@ -1692,7 +1692,7 @@ func TestPublicBccFanoutKeepsCopiesIsolated(t *testing.T) {
 			t.Fatalf("SignOriginator(%d) recovery=%v error=%v", index, recovery.Valid(), signErr)
 		}
 		signed, ok := result.Unrestricted()
-		// Draft-08 Section 12.5: an originator Bcc fanout is i=1 and never
+		// Draft-09 Section 12.5: an originator Bcc fanout is i=1 and never
 		// carries exploded.
 		if !ok || signed.Facts().Multiplicity() != 2 ||
 			slices.Contains(signed.Facts().Flags(), SignedMessageFlagExploded) {

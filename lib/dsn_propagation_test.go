@@ -112,7 +112,7 @@ type propagationFixture struct {
 func newPropagationFixture(t *testing.T, provider *propagationProvider) propagationFixture {
 	t.Helper()
 	signer, err := NewSigner(provider, NewRequestRouteAuthority(), &authorizeOrdinary{}, provider,
-		WithSigningClock(func() time.Time { return time.Unix(propagationSigningClock, 0) }))
+		WithSigningClock(func() time.Time { return time.Unix(propagationSigningClock, 0) }), WithoutSignerSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewSigner() error=%v", err)
 	}
@@ -346,7 +346,7 @@ func TestRebuildDSNForPropagationDerivesAuthorityFromCompletionSignature(t *test
 	member.Instance = 2
 	completion := receivedDSNHop(receivedDSNForwardDomain, receivedDSNForwardMailFrom, receivedDSNDestination)
 	completion.Instance = 2
-	// Draft-08 Sections 16.2 and 16.3: the previous hop's rt= sits under the
+	// Draft-09 Sections 16.2 and 16.3: the previous hop's rt= sits under the
 	// completion d= that signs the propagated report.
 	nextDomainRun.Hops = []dsntest.Hop{alignedPropagationPrevious(nextDomainRun.Hops[0]), member, completion}
 	forwardFixture := newPropagationFixture(t, newPropagationProvider(receivedDSNLocalDomain, receivedDSNForwardDomain))
@@ -357,7 +357,7 @@ func TestRebuildDSNForPropagationDerivesAuthorityFromCompletionSignature(t *test
 }
 
 // TestRebuildDSNForPropagationRefusesMisalignedSigningIdentity reproduces
-// Draft-08 Sections 16.2 and 16.3 for propagation: the completion d=
+// Draft-09 Sections 16.2 and 16.3 for propagation: the completion d=
 // (forward.local.example) would sign the propagated report, but the rebuilt
 // highest signature's rt= is user@local.example, a parent the completion
 // domain cannot relaxed-match. Propagation is refused before any rebuild.
@@ -591,7 +591,7 @@ func TestPropagatedDSNRoundTrip(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			propagated := fixture.mustSign(t, fixture.mustRebuild(t, testCase.spec))
-			verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(propagationSigningClock+60, 0) }))
+			verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(propagationSigningClock+60, 0) }), WithoutSubdomainFromAuthorization())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -620,7 +620,7 @@ func TestPropagatedDSNRoundTrip(t *testing.T) {
 }
 
 // TestPropagatedDSNHashesAutoSubmitted proves that the propagated report
-// writes Auto-Submitted before its Message-Instance is hashed: Draft-08
+// writes Auto-Submitted before its Message-Instance is hashed: Draft-09
 // Section 4 signs the field, so the untouched report verifies, while a
 // changed or removed Auto-Submitted field breaks the m=1 header hash.
 func TestPropagatedDSNHashesAutoSubmitted(t *testing.T) {
@@ -631,7 +631,7 @@ func TestPropagatedDSNHashesAutoSubmitted(t *testing.T) {
 	if strings.Count(string(propagated.Bytes()), field) != 1 {
 		t.Fatal("propagated DSN does not carry exactly one Auto-Submitted field")
 	}
-	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(propagationSigningClock+60, 0) }))
+	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(propagationSigningClock+60, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -762,7 +762,7 @@ func TestRebuildDSNForPropagationNarrowsParserByFixedPartsAndSignatureAllowance(
 	limits := SigningLimits{MaxMessageBytes: 64 << 10, MaxHeaderBytes: 32 << 10, MaxFieldBytes: 16 << 10, MaxDecodedRecipeBytes: 8 << 10}
 	provider := newPropagationProvider(receivedDSNLocalDomain)
 	signer, err := NewSigner(provider, NewRequestRouteAuthority(), &authorizeOrdinary{}, provider,
-		WithSigningClock(func() time.Time { return time.Unix(propagationSigningClock, 0) }), WithSigningLimits(limits))
+		WithSigningClock(func() time.Time { return time.Unix(propagationSigningClock, 0) }), WithSigningLimits(limits), WithoutSignerSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewSigner() error=%v", err)
 	}
@@ -777,7 +777,7 @@ func TestRebuildDSNForPropagationNarrowsParserByFixedPartsAndSignatureAllowance(
 		t.Fatalf("over-ceiling outcome=%q structure=%q error=%v", over.Outcome(), over.Evaluation().Structure(), err)
 	}
 	narrow := SigningLimits{MaxMessageBytes: 36 << 10, MaxHeaderBytes: 32 << 10, MaxFieldBytes: 16 << 10, MaxDecodedRecipeBytes: 8 << 10}
-	narrowSigner, err := NewSigner(provider, NewRequestRouteAuthority(), &authorizeOrdinary{}, provider, WithSigningLimits(narrow))
+	narrowSigner, err := NewSigner(provider, NewRequestRouteAuthority(), &authorizeOrdinary{}, provider, WithSigningLimits(narrow), WithoutSignerSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewSigner(narrow) error=%v", err)
 	}

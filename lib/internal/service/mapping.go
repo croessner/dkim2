@@ -506,7 +506,7 @@ func (a *mappingAccumulator) mapSignatureSet(set verify.SignatureSetResult) {
 
 // signatureSetFact projects one validated set result onto its bounded
 // per-set fact: PASS, FAIL, TEMPERROR, or PERMERROR with its specific
-// reason. An unknown algorithm is the Draft-08 Section 14.6 step 4 PERMERROR
+// reason. An unknown algorithm is the Draft-09 Section 14.6 step 4 PERMERROR
 // intermediate unsupported_algorithm, exactly like a locally disabled one.
 // Every non-passing fact names the parsed selector (Section 14.6 step 8).
 func signatureSetFact(algorithm Algorithm, set verify.SignatureSetResult) SignatureSetFact {
@@ -700,7 +700,7 @@ func (a *mappingAccumulator) add(severity outcomeSeverity, reason Reason) {
 }
 
 // severityFor returns the aggregate precedence of one reason from its single
-// Draft-08 Section 14.1 state owner, so a check fact can never carry a
+// Draft-09 Section 14.1 state owner, so a check fact can never carry a
 // severity that disagrees with the state its reason reports.
 func severityFor(reason Reason) outcomeSeverity {
 	switch StateForReason(reason) {
@@ -715,7 +715,7 @@ func severityFor(reason Reason) outcomeSeverity {
 	}
 }
 
-// StateForReason returns the Draft-08 Section 14.1 state that a result with
+// StateForReason returns the Draft-09 Section 14.1 state that a result with
 // this primary reason reports. The policy package owns the classification;
 // an unknown or request-only reason is PERMERROR, which fails closed.
 func StateForReason(reason Reason) State {
@@ -808,7 +808,7 @@ func knownAlgorithm(algorithm verify.Algorithm) bool {
 	return known
 }
 
-// supportedAlgorithm reports whether a check names one of the Draft-08
+// supportedAlgorithm reports whether a check names one of the Draft-09
 // Section 3 verifier-mandatory algorithms.
 func supportedAlgorithm(algorithm verify.Algorithm) bool {
 	return algorithm == verify.AlgorithmRSASHA256 || algorithm == verify.AlgorithmEd25519SHA256 ||
@@ -896,7 +896,7 @@ func classForReason(reason Reason) CheckClass {
 
 // reasonRank makes equal-precedence primary reasons independent of input order.
 func reasonRank(reason Reason) int {
-	for index, candidate := range []Reason{ReasonInternalContract, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonInvalidRecipe, ReasonFromNotAuthentic, ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonMissingKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonCustodyMismatch, ReasonOutOfBandRequired, ReasonBodyHistoryUnavailable, ReasonHashMismatch, ReasonSignatureMismatch, ReasonProviderTemporary, ReasonNone} {
+	for index, candidate := range []Reason{ReasonInternalContract, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonInvalidRecipe, ReasonFromNotAuthentic, ReasonDomainPolicyAmbiguous, ReasonDomainPolicyInvalid, ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonMissingKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonInvalidKey, ReasonAmbiguousKey, ReasonProviderPermanent, ReasonProviderContract, ReasonFromSubdomainForbidden, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonCustodyMismatch, ReasonOutOfBandRequired, ReasonBodyHistoryUnavailable, ReasonHashMismatch, ReasonSignatureMismatch, ReasonProviderTemporary, ReasonDomainPolicyTemporary, ReasonNone} {
 		if reason == candidate {
 			return index
 		}

@@ -22,7 +22,7 @@ func TestVerifierDiagnosticsDoNotExposeSecretMarkers(t *testing.T) {
 	fixture := newDeterministicRSAVerificationFixture(t)
 	verifier, err := NewVerifier(providerFunc(func(context.Context, KeyQuery) (PublicKey, error) {
 		return publicKeyResult(AlgorithmRSASHA256, nil, KeyStatusProviderError), providerError(AlgorithmRSASHA256, errors.New(strings.Join(syntheticSecretMarkers, " ")))
-	}), testClockOption())
+	}), testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}

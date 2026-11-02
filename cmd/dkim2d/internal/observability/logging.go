@@ -150,7 +150,7 @@ var allowedLogValues = map[string][]string{
 	keyStage:                 closedStageUnion(),
 	keyStatusClass:           {valueStatus2XX, valueStatus3XX, valueStatus4XX, valueStatus5XX},
 	"tracing_exporter":       {valueNone, "otlp_http"},
-	keyVerdict:               {valuePass, valueFail, valueNeutral, valueTemperror, valuePermerror},
+	keyVerdict:               {valuePass, valueFail, valueNeutral, valueTemperror, valuePermerror, valueNone},
 	"duration_bucket":        {"lt_1ms", "lt_5ms", "lt_10ms", "lt_25ms", "lt_50ms", "lt_100ms", "lt_250ms", "lt_500ms", "lt_1s", "lt_2_5s", "lt_5s", "lt_10s", "lt_30s", "lt_60s", "gte_60s"},
 	"message_size_bucket":    {"lt_1k", "lt_10k", "lt_100k", "lt_1m", "lt_10m", "gte_10m"},
 	"recipient_count_bucket": {"0", "1", "2_10", "11_100", "101_1000", "gte_1001"},

@@ -11,6 +11,9 @@ limitations without creating a second protocol model.
   configuration, and module compatibility window.
 - [Known limitations](known-limitations.md) states incomplete or unavailable
   capabilities without converting them into passing evidence.
+- [Draft-09 migration](../operator/draft-09-migration.md) lists the
+  configuration, Domain Policy Record, REST, signal, replay, and rollback
+  changes of the Draft-08 to Draft-09 upgrade.
 - [Draft-08 migration](../operator/draft-08-migration.md) lists the
   configuration, REST, signal, mail-flow, replay, and rollback changes of the
   Draft-07 to Draft-08 upgrade.

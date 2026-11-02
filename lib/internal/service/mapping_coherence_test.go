@@ -19,7 +19,7 @@ func TestSignatureKeyStatusCoherenceMatrix(t *testing.T) {
 		{verify.SignatureSetStatusNotChecked, verify.KeyStatusNotChecked, SignaturePERMERROR, ReasonUnsupportedAlgorithm, severityPermanent},
 		{verify.SignatureSetStatusPass, verify.KeyStatusFound, SignaturePASS, ReasonNone, severityPass},
 		{verify.SignatureSetStatusFail, verify.KeyStatusFound, SignatureFAIL, ReasonSignatureMismatch, severityFailure},
-		// Draft-08 Section 14.6 step 4: an unknown algorithm is a PERMERROR
+		// Draft-09 Section 14.6 step 4: an unknown algorithm is a PERMERROR
 		// intermediate, reported per set exactly like a disabled algorithm.
 		{verify.SignatureSetStatusUnsupportedAlgorithm, verify.KeyStatusUnsupportedAlgorithm, SignaturePERMERROR, ReasonUnsupportedAlgorithm, severityPermanent},
 		{verify.SignatureSetStatusDisabledAlgorithm, verify.KeyStatusDisabledAlgorithm, SignaturePERMERROR, ReasonUnsupportedAlgorithm, severityPermanent},

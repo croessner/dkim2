@@ -71,7 +71,7 @@ func FuzzDNSPublicProvider(f *testing.F) {
 
 // FuzzDNSPublicVerifier verifies hostile DNS states remain structured through the public verifier.
 func FuzzDNSPublicVerifier(f *testing.F) {
-	corpusBytes, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-08/public-golden.json")
+	corpusBytes, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json")
 	if err != nil {
 		f.Fatal("public verifier fuzz corpus unavailable")
 	}
@@ -125,7 +125,7 @@ func FuzzDNSPublicVerifier(f *testing.F) {
 		if constructErr != nil {
 			t.Fatal("public verifier fuzz provider construction failed")
 		}
-		verifier, constructErr := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+		verifier, constructErr := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 		if constructErr != nil {
 			t.Fatal("public verifier fuzz construction failed")
 		}

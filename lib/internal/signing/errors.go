@@ -99,7 +99,7 @@ type Algorithm = signature.Algorithm
 const (
 	AlgorithmRSASHA256     = signature.AlgorithmRSASHA256
 	AlgorithmEd25519SHA256 = signature.AlgorithmEd25519SHA256
-	// AlgorithmMLDSA44 is the Draft-08 Section 3.4 pure ML-DSA-44 algorithm.
+	// AlgorithmMLDSA44 is the Draft-09 Section 3.4 pure ML-DSA-44 algorithm.
 	AlgorithmMLDSA44 = signature.AlgorithmMLDSA44
 )
 

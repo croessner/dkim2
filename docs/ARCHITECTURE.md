@@ -12,9 +12,9 @@
 | Owner | Christian Roessner / Codex |
 | Language | English |
 | Classification | Public living design document |
-| Baseline specification | `draft-ietf-dkim-dkim2-spec-08`, dated 2026-10-18 |
-| Related specification | `draft-ietf-dkim-dkim2-dns-02`, dated 2026-10-18 |
-| Baseline status check | IETF archive sources checked 2026-10-19. Message baseline: `draft-ietf-dkim-dkim2-spec-08`; DNS baseline: `draft-ietf-dkim-dkim2-dns-02`. See `docs/specs/companion-conformance.md` for companion coverage and reporting exceptions. |
+| Baseline specification | `draft-ietf-dkim-dkim2-spec-09`, dated 2026-11-01 |
+| Related specification | `draft-ietf-dkim-dkim2-dns-02`, dated 2026-10-21 |
+| Baseline status check | IETF archive sources checked 2026-11-02. Message baseline: `draft-ietf-dkim-dkim2-spec-09`; DNS baseline: `draft-ietf-dkim-dkim2-dns-02`. See `docs/specs/companion-conformance.md` for companion coverage and reporting exceptions. |
 | Change control | While this document is still `0.1.0-draft`, startup decisions may be added without a version bump; after the first committed planning baseline, material architecture changes require a revision-history entry and may require a new version |
 | Supersedes | None |
 | Next planned revision | When the DKIM2 draft or a material architecture decision changes |
@@ -91,6 +91,7 @@
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Moved library completed-message placement to the top of the header block through the single owner `rawmsg.PrependValidatedFields`. The signing completion proof identifies this hop's fields by `m=` and `i=` instead of the last physical `DKIM2-Signature` and still rejects forged, altered, or reordered protocol fields. `/v1/revise/batch` `insertion_offset` is always 0 and its fields are top-down. Propagated DSNs are top-placed and pinned by the Postfix profile. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Completed the Draft-08/DNS-02 migration: the Postfix not_local fixture reports a foreign-addressed message as Section 16.2 requires, the datasource hard limits follow the one-handle-per-credential derivation (393216 handles, 1179648 records), `VerifierHop.signature_algorithms` lists only the verified Section 3 algorithms (no `rsa-sha512` or `ed25519-sha512`, at most three), the Rspamd Policy E2E projection bindings follow the producer for Draft-08, `make guardrails` also runs the tools-module runner tests and the Rspamd projection binding lock, the reviewed library API baseline moved to the Draft-08 surface, and the operator guide `docs/operator/draft-08-migration.md` records the upgrade and rollback. |
 | 0.1.0-draft | 2026-10-29 | Christian Roessner / Claude | Replaced the standalone-only `valkey` replay backend (valkey-go, auditor principal, operator attestation, revalidation loop) with the `redis` backend (`cmd/dkim2d/internal/replay/redisstore`, go-redis v9.22.0) for standalone, Sentinel, and cluster Redis 7.0+ or Valkey 7.2+, configured under `replay.redis`. Writes carry a per-operation nonce (`v2:<nonce>`, `pending:<expiry-ms>:<nonce>`) so client retries, failover, and redirects recognize their own commit; the lease takeover is a single-key Lua compare-and-set; legacy `v1` and `pending:<expiry-ms>` values stay readable and key derivation is unchanged. Startup checks the version floor and `noeviction`, a `PING` health probe drives readiness, and `replay.valkey.*`, `replay.revalidate_interval`, and backend `valkey` fail with `config_removed_field` pointing to `docs/operator/replay-redis-migration.md`. Breaking configuration change for release v0.2.0. |
+| 0.1.0-draft | 2026-11-02 | Christian Roessner / Claude | Advanced the message baseline to `draft-ietf-dkim-dkim2-spec-09` (DNS stays `draft-ietf-dkim-dkim2-dns-02`). Verification gains the fifth state NONE (`/v1/process` HTTP 200 with `dkim2=none`), the Section 3.8 Domain Policy Record (`lib/internal/keyresolver` owns parsing and selection, `lib/internal/verify` the two-way Authentic From match and its result algebra, evaluated after every signature proof and before the replay projection), the reasons `from_subdomain_forbidden`, `domain_policy_temporary`, `domain_policy_ambiguous`, and `domain_policy_invalid`, the Section 3.7 version filter before key-record uniqueness with a carry bound of eight TXT records, PERMERROR for a null body Recipe, and the Section 2.14 base64string grammar without leading or trailing FWS. Library verifiers and signers require an explicit subdomain-From choice; `dkim2d` adds `verification.domain_policy.allow_subdomain_from` (default true) and `--domain-policy-strict` on the DNS export. Signers stay downward only. `X-DKIM2-Info` `date=` becomes the behavior date. See `docs/specs/draft-09-migration-disposition.md` and `docs/operator/draft-09-migration.md`. |
 
 ## 1. Purpose
 
@@ -101,10 +102,10 @@ is written.
 
 The design uses these reviewed behavior baselines as its source of truth:
 
-- `draft-ietf-dkim-dkim2-spec-08`
+- `draft-ietf-dkim-dkim2-spec-09`
 - `draft-ietf-dkim-dkim2-dns-02` for the implemented DNS behavior and vectors.
 
-The Draft-08 and DNS-02 migration disposition, including every behavior change and
+The Draft-09 and DNS-02 migration disposition, including every behavior change and
 local interpretation, is recorded in
 `docs/specs/draft-08-migration-disposition.md`; the migration is complete.
 The preceding Draft-07 and DNS-01 disposition remains in
@@ -189,7 +190,7 @@ The core must preserve:
   expected to receive.
 - CRLF handling decisions.
 - Line indexes for recipe generation and application.
-- EAI/SMTPUTF8-relevant message values as bytes. Draft-08 Section 18 defines
+- EAI/SMTPUTF8-relevant message values as bytes. Draft-09 Section 18 defines
   the only EAI transformation: SMTP and From domains are mapped from U-labels
   to A-labels before recording and comparison, owned by
   `lib/internal/domainname`; local parts are never changed.
@@ -527,7 +528,7 @@ The facade should expose protocol results in a structured way. It should not
 force callers to parse human-readable messages.
 
 Current verification algorithm vocabulary: `AlgorithmRSASHA256`,
-`AlgorithmEd25519SHA256`, `AlgorithmMLDSA44` (pure ML-DSA-44, Draft-08
+`AlgorithmEd25519SHA256`, `AlgorithmMLDSA44` (pure ML-DSA-44, Draft-09
 Section 3.4), and the bounded `AlgorithmUnknown`. The
 `mldsa44-ed25519-sha512` composite was a Draft-07 construct that Draft-08
 replaced with pure `mldsa44`; it has been removed and is now an unknown
@@ -589,14 +590,14 @@ Responsibilities:
 - Body hash input generation.
 - Header hash input generation.
 - Signature input generation over Message-Instance and DKIM2-Signature fields.
-- Strict coverage of the Draft-08 Section 4 excluded-header set, including
+- Strict coverage of the Draft-09 Section 4 excluded-header set, including
   exact ARC exclusions, the `Received-*` class, and future ARC near misses.
   The inventory rationale follows the
   [header-field maintenance survey](https://datatracker.ietf.org/doc/draft-gondwana-email-header-maintenance/)
   and treats `Received-SPF` as the
   [RFC 7208](https://www.rfc-editor.org/rfc/rfc7208) example.
 - Stable sorting and duplicate-header ordering rules.
-- An immutable Draft-08 Section 4 plus Section 6.2 signed-header relevance
+- An immutable Draft-09 Section 4 plus Section 6.2 signed-header relevance
   classifier exposed through a validated fallible method set for recipe
   generation without duplicating the exclusion table.
 
@@ -632,7 +633,7 @@ Important invariants:
   octets respectively, algorithm names are case-sensitive textstrings that are
   unique by exact spelling (`SHA256` is an unknown name, not `sha256`), unknown
   extension names remain forward-compatible, and verification combines the
-  hash-sets with the Draft-08 Section 14.7 algebra (`hash-all` with `,`,
+  hash-sets with the Draft-09 Section 14.7 algebra (`hash-all` with `,`,
   `hash-any` with `|`) through one owner, `verify.evaluateInstanceHashes`,
   used for the current target, every history Message-Instance, the run
   descent, and the headers-only DSN check (where a hash-set passes on its
@@ -672,8 +673,8 @@ Design notes:
   verification semantics or the public model.
 - The `b:null` body member must be represented explicitly because body
   unavailability has policy meaning; a null whole recipe is not a valid form.
-  Under Draft-08 Section 13 a message whose history contains `b:null` is not
-  Fully Verified: verification reports FAIL `body_history_unavailable` and
+  Under Draft-09 Section 13 a message whose history contains `b:null` is not
+  Fully Verified: verification reports PERMERROR `body_history_unavailable` (Section 14.2) and
   transit or revision signing refuses it, while a signer may still emit
   `b:null` for its own hop (Section 12.1 MAY, `AllowUnavailableBody`).
 - Every decoded JSON object key is lowercase, including unknown top-level
@@ -692,7 +693,7 @@ Design notes:
   base64-encode or validate them, because `encoding/json` silently replaces
   invalid UTF-8 with U+FFFD.
 - The parser requires a header relevance classifier and rejects recipes for
-  header fields that are never signed (Draft-08 Sections 4 and 5.1).
+  header fields that are never signed (Draft-09 Sections 4 and 5.1).
 
 ### 5.6 `lib/internal/signature`
 
@@ -703,9 +704,9 @@ Responsibilities:
 
 - Parse required tags: `i=`, `m=`, `t=`, `d=`, `s=`.
 - Require exactly one chain-of-custody form: `nd=`, or both `mf=` and `rt=`.
-- Parse optional tags: `n=`, `f=`, extension tags, including the Draft-08
+- Parse optional tags: `n=`, `f=`, extension tags, including the Draft-09
   `feedhere` flag. Tag names must be lowercase and the final semicolon is
-  optional (Draft-08 Sections 8 and 10); algorithm and flag names are
+  optional (Draft-09 Sections 8 and 10); algorithm and flag names are
   case-sensitive textstrings.
 - Validate signature sequence numbers and gaps.
 - Build incomplete signature fields with empty signature values for signing.
@@ -722,7 +723,7 @@ Important invariants:
 - The highest `i=` signature must match the current SMTP envelope when it uses
   `mf=` and `rt=`. A highest signature using `nd=` requires explicit
   out-of-band trust and cannot produce a default verification pass.
-- Adjacent custody follows Draft-08 Section 7.1 with the asymmetric relaxed
+- Adjacent custody follows Draft-09 Section 7.1 with the asymmetric relaxed
   match of Section 7.2 (labels are stripped only from Parameter1): an ordinary
   hop matches its `mf=` (Parameter1) against a previous `rt=` (Parameter2); a
   null `mf=` hop and an `nd=` hop match a previous `rt=` (Parameter1) against
@@ -1048,7 +1049,7 @@ type Envelope struct {
 
 The current envelope is mandatory for normal inbound DKIM2 verification
 because the latest `DKIM2-Signature` must match the actual `MAIL FROM` and
-`RCPT TO` values. Draft-08 permits a highest signature with `nd=` only when
+`RCPT TO` values. Draft-09 permits a highest signature with `nd=` only when
 out-of-band arrangements exist; the secure default is non-success unless that
 trust is explicitly modeled.
 
@@ -1083,12 +1084,17 @@ GET  /healthz
 GET  /readyz
 ```
 
-`POST /v1/process` returns HTTP 204 with no body when the parsed message has
-neither DKIM2 protocol field family. That response means verification was not
-applicable: no DNS lookup, local DKIM2 policy projection, replay check,
-Authentication-Results action, or terminal MTA decision occurred. Applicable
-messages retain the HTTP 200 response with the exact four-state verification,
-policy, replay, disposition, and action plan.
+`POST /v1/process` returns HTTP 200 with the Draft-09 Section 14.1 `NONE`
+state when the parsed message has neither DKIM2 protocol field family. That
+response means verification was not applicable: no DNS lookup, policy
+evaluation, replay check, or terminal MTA decision occurred. Its policy is the
+fixed `continue`/`none` object, replay is `not_checked`, and the only possible
+action is the reasonless `dkim2=none` Authentication-Results report when a
+reporting authority is configured. `NONE` is a transport-boundary projection
+of the library's pre-verification applicability classification; the library
+result states and the policy evaluator never see it. Applicable messages
+retain the HTTP 200 response with the exact four-state verification, policy,
+replay, disposition, and action plan.
 
 For a multi-instance PASS, the HTTP 200 policy object preserves the sealed
 full-chain compliance and feedback-history states produced by verification.
@@ -1107,7 +1113,7 @@ Request sketch:
 {
   "api_version": "v1",
   "operation": "process",
-  "draft": "draft-ietf-dkim-dkim2-spec-08",
+  "draft": "draft-ietf-dkim-dkim2-spec-09",
   "smtp": {
     "mail_from": "<bounce@example.org>",
     "rcpt_to": ["<user@example.net>"],
@@ -1213,7 +1219,7 @@ Generation rules:
   review, generated-code review, and regression tests.
 
 The active `DraftVersion` enum contains only
-`draft-ietf-dkim-dkim2-spec-08`. Since Draft-06 the public verification reasons
+`draft-ietf-dkim-dkim2-spec-09`. Since Draft-06 the public verification reasons
 include `duplicate_hash_algorithm`, `invalid_recipe_json`, and
 `duplicate_selector`; Draft-08 Section 10.9 removed the per-algorithm cap, so
 the Draft-06/07 `too_many_signatures` reason no longer exists. The OpenAPI
@@ -1944,7 +1950,7 @@ Replay storage requirements:
   misconfigured, and other closed error outcomes, with degradation represented
   separately as store state.
 
-Replay detection is local delivery policy (Draft-08 Section 15.1), layered
+Replay detection is local delivery policy (Draft-09 Section 15.1), layered
 over the stateless DKIM2 validity result: a detected replay makes the
 `AuthenticationResult` `FAIL` with `duplicate_message_without_exploded` while
 the underlying `VerifyResult` stays `PASS`. Only messages carrying more than
@@ -2056,9 +2062,9 @@ Redis provider design notes:
 The daemon may append one `X-DKIM2-Info` field to successful sign, ordinary
 revision, and locally generated DSN action plans when
 `signing.interop_info.enabled` is true (default false). This local policy
-uses the newly generated signature's domain, algorithms, and UTC signing date;
-fixed metadata identifies Draft-08, `github.com/croessner/dkim2`, and `dkim2d`.
-The existing Draft-08 Section 4 exclusion of `X-` fields applies unchanged.
+uses the newly generated signature's domain and algorithms; fixed metadata
+stamps the behavior date (draft-gondwana-dkim2-debug-header-02) and identifies Draft-09, `github.com/croessner/dkim2`, and `dkim2d`.
+The existing Draft-09 Section 4 exclusion of `X-` fields applies unchanged.
 Metadata never becomes authentication evidence or a protocol input. Prior
 informational fields remain byte-preserved. The API and adapters accept at
 most one trailing info action, only on successful outgoing plans. Batch and
@@ -2176,9 +2182,9 @@ used as optional smoke targets, but they do not define the default support floor
 unless a release plan names them explicitly.
 
 The historical five-row evidence is Draft-04 evidence and cannot qualify the
-Draft-08 candidate. Until a fresh separately authorized five-row Linux run is
-bound to unchanged Draft-08 candidate bytes, the active capability token is
-`unqualified_draft08`; portable and otherwise-full conformance run without
+Draft-09 candidate. Until a fresh separately authorized five-row Linux run is
+bound to unchanged Draft-09 candidate bytes, the active capability token is
+`unqualified_draft09`; portable and otherwise-full conformance run without
 imported Exim evidence and reject any stale qualification claim.
 
 ## 10. Verification Flow
@@ -2208,7 +2214,7 @@ Inbound verification should follow the draft order closely:
 17. Produce an action plan.
 
 A non-origin Message-Instance with no Recipe is a valid unchanged-state
-transition under Draft-08. Verification compares the unchanged canonical state
+transition under Draft-09. Verification compares the unchanged canonical state
 against every supported tuple in the preceding instance and continues only on
 complete agreement; an invalid or present malformed Recipe remains a distinct
 PERMERROR.
@@ -2296,7 +2302,7 @@ final closeout review remains separate. The architecture decisions are:
 
 1. A DKIM2-signed inbound null-sender `multipart/report` is first verified as
    an ordinary message. Only then does `/v1/process` evaluate it as a DSN
-   under Draft-08 Section 16.4: RFC 6522 structure, embedded-original
+   under Draft-09 Section 16.4: RFC 6522 structure, embedded-original
    verification, local-hop identity, outer-signer alignment with the local
    hop's `rt=`, RFC 3464 recipient linkage, and failure class. The result is
    a closed read-only `delivery_status` projection. It can never authorize
@@ -2367,7 +2373,7 @@ Rules:
 - Implement SHA-256 and SHA-512 for Message-Instance body and header hashes.
   RSA-SHA256 and Ed25519-SHA256 signature inputs continue to use SHA-256;
   pure ML-DSA-44 signs the Section 12.8 input itself (no HashML-DSA).
-- Verifiers and signers implement the three Draft-08 Section 3 algorithms
+- Verifiers and signers implement the three Draft-09 Section 3 algorithms
   `rsa-sha256`, `ed25519-sha256`, and `mldsa44`. The Draft-07 composite
   `mldsa44-ed25519-sha512` that Draft-08 replaced stays an unknown algorithm
   (`DKIM2-ISSUE-0019`, superseded by the baseline).
@@ -2881,7 +2887,7 @@ interpretation choices in code.
    `Authentication-Results` style output, or policy. This decision must be
    revisited if later drafts add DNSSEC guidance, especially when the currently
    open Security Considerations section is completed.
-6. EAI handling under Draft-08 Section 18:
+6. EAI handling under Draft-09 Section 18:
    envelope and From domains are mapped from U-labels to lowercase A-labels
    with a strict IDNA2008 registration profile (no compatibility mapping, NFC
    required, Bidi and joiner rules). Signers record A-labels in `mf=` and

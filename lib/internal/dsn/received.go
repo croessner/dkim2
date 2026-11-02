@@ -111,7 +111,7 @@ type ReceivedEvaluatorConfig struct {
 	RunLimits verify.LocalHopRunLimits
 }
 
-// ReceivedEvaluator owns the read-only Draft-08 Section 16.4 evaluation of
+// ReceivedEvaluator owns the read-only Draft-09 Section 16.4 evaluation of
 // an inbound DKIM2-signed delivery-status notification. It never authorizes
 // signing and never rebuilds a report.
 type ReceivedEvaluator struct {
@@ -644,7 +644,7 @@ func classifyPreviousHop(state *receivedState, run verify.LocalHopRun, completio
 	return PropagationEligible
 }
 
-// propagatedIdentityAligned applies Draft-08 Section 16.2 to a propagated
+// propagatedIdentityAligned applies Draft-09 Section 16.2 to a propagated
 // report (Section 16.3): the rebuilt report's highest signature is the
 // previous hop, so the propagating signing domain must relaxed-match (rt=
 // address as Parameter1, d= as Parameter2) that hop's rt= address. An rt=
@@ -656,7 +656,7 @@ func propagatedIdentityAligned(signingDomain string, previousRecipient []byte) b
 
 // historicalInstancesSupported reports whether every extracted Message-Instance
 // from the previous hop's instance upwards carries at least one hash-set of
-// an implemented algorithm. Without one, every Draft-08 Section 14.7
+// an implemented algorithm. Without one, every Draft-09 Section 14.7
 // intermediate is PERMERROR, so the descent could never re-prove that state;
 // otherwise the descent evaluates the full combination, where a mismatching
 // set makes the result FAIL even beside an unimplemented one.
@@ -676,7 +676,7 @@ func historicalInstancesSupported(instances []instance.MessageInstance, previous
 }
 
 // outerSignatureRoles returns the two outer report signatures the inbound
-// evaluation relies on. Draft-08 Section 16.4 item 1 takes returned-recipient
+// evaluation relies on. Draft-09 Section 16.4 item 1 takes returned-recipient
 // authority from the d= of the DSN's i=1 signature, its originator, even when
 // the DSN was itself forwarded; the highest signature's t= stays the
 // reference instant for the embedded completion signature. An empty,

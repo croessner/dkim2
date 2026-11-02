@@ -9,18 +9,24 @@ import (
 	dkim2 "github.com/croessner/dkim2"
 )
 
+// noneValue is both the reasonless sentinel and the Draft-09 NONE result.
+const noneValue = "none"
+
 // Report is an immutable, validated local report without message identifiers.
 type Report struct{ authority, result, reason string }
 
-// New admits a canonical authority, four-state result, and optional closed reason.
+// New admits a canonical authority, a closed result, and an optional closed
+// reason. The result none reports the Draft-09 Section 14.1 NONE state of a
+// message without any DKIM2 header field (draft-gondwana-dkim2-authres
+// Section 3.1); like pass it never carries a diagnostic reason.
 func New(authority, result, reason string) (Report, bool) {
-	if !validDomain(authority) || (result != "pass" && result != "fail" && result != "permerror" && result != "temperror") {
+	if !validDomain(authority) || !knownResult(result) {
 		return Report{}, false
 	}
-	if reason == "none" {
+	if reason == noneValue {
 		reason = ""
 	}
-	if reason != "" && (result == "pass" || !knownReason(reason)) {
+	if reason != "" && (result == "pass" || result == noneValue || !knownReason(reason)) {
 		return Report{}, false
 	}
 	return Report{authority: authority, result: result, reason: reason}, true
@@ -74,6 +80,17 @@ func (r Report) MatchesReason(reason string) bool {
 
 // Authority returns the validated administrative identity for wire validation.
 func (r Report) Authority() string { return r.authority }
+
+// knownResult admits the closed local result vocabulary: the four verified
+// states and none for a message carrying no DKIM2 header field at all.
+func knownResult(result string) bool {
+	switch result {
+	case "pass", "fail", "permerror", "temperror", noneValue:
+		return true
+	default:
+		return false
+	}
+}
 
 // knownReason admits protocol reasons and the final replay coordinator reasons.
 func knownReason(reason string) bool {

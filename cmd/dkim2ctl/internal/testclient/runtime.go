@@ -572,12 +572,13 @@ func validNoContentResponseMetadata(
 }
 
 // validNoContentMetadata accepts only the OpenAPI operations with an explicit
-// bodyless applicability result (process, sign, and the delivery-status
-// "not DKIM2 signed" outcome) and rejects representation metadata. The
+// bodyless applicability result (sign and the delivery-status "not DKIM2
+// signed" outcome) and rejects representation metadata. Process reports the
+// Draft-09 NONE state as a 200 document and has no bodyless variant. The
 // delivery-status variant must carry exactly one closed
 // X-DKIM2-Unsigned-Reason; every other variant must carry none.
 func validNoContentMetadata(operation Operation, header http.Header, body []byte) bool {
-	if operation != OperationProcess && operation != OperationSign && operation != OperationDSNSign {
+	if operation != OperationSign && operation != OperationDSNSign {
 		return false
 	}
 	if len(body) != 0 || headerPresent(header, "X-Content-Type-Options") ||
@@ -771,21 +772,21 @@ func hasRequiredResponseMembers(data []byte, destination any) bool {
 // validHealth validates the complete health representation.
 func validHealth(value generated.HealthResponse) bool {
 	return value.ApiVersion == generated.V1 &&
-		value.Draft == generated.DraftIetfDkimDkim2Spec08 &&
+		value.Draft == generated.DraftIetfDkimDkim2Spec09 &&
 		value.Status == generated.Alive
 }
 
 // validReadiness validates the complete readiness representation.
 func validReadiness(value generated.ReadinessResponse) bool {
 	return value.ApiVersion == generated.V1 &&
-		value.Draft == generated.DraftIetfDkimDkim2Spec08 &&
+		value.Draft == generated.DraftIetfDkimDkim2Spec09 &&
 		value.Status == generated.Ready
 }
 
 // validProcess validates the closed top-level process projection.
 func validProcess(value generated.ProcessResponse) bool {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		!value.Disposition.Valid() || !value.Verification.State.Valid() ||
 		!value.Authentication.State.Valid() || !value.Authentication.PrimaryReason.Valid() ||
 		!value.Policy.Verdict.Valid() || !value.Replay.Class.Valid() ||
@@ -793,10 +794,55 @@ func validProcess(value generated.ProcessResponse) bool {
 		!validVerifierProjection(value.VerifierProjection, value.Verification) ||
 		!validPolicyProjection(value.Policy) ||
 		!validDeliveryStatusProjection(value.DeliveryStatus) ||
-		!validProcessActions(value) {
+		!validProcessActions(value) || !validNoneProcess(value) {
 		return false
 	}
 	return validProcessOutcome(value)
+}
+
+// validNoneProcess admits the Draft-09 Section 14.1 NONE state (no DKIM2
+// field of either family) only in its exact closed shape: no verification
+// evidence, a non-terminal continue policy with reason none, replay
+// not_checked, and no projection. Any member that claims NONE without the
+// complete shape is contract drift; validProcessActions binds the report.
+func validNoneProcess(value generated.ProcessResponse) bool {
+	marked := value.Verification.State == generated.NONE || value.Authentication.State == generated.NONE ||
+		value.Policy.PrimaryReason == generated.PolicyReasonNone
+	for _, finding := range value.Policy.Findings {
+		marked = marked || finding.Reason == generated.PolicyReasonNone
+	}
+	if !marked {
+		return true
+	}
+	return noneVerificationShape(value.Verification) && nonePolicyShape(value.Policy) &&
+		value.Authentication.State == generated.NONE &&
+		value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonNone &&
+		value.Replay.Class == generated.NotChecked && value.Disposition == generated.DispositionContinue &&
+		value.VerifierProjection == nil && value.DeliveryStatus == nil
+}
+
+// noneVerificationShape reports whether a verification object carries no
+// evidence beyond the single protocol classification fact of the NONE state.
+func noneVerificationShape(verification generated.VerificationResult) bool {
+	return verification.State == generated.NONE && verification.PrimaryReason == generated.VerificationReasonNone &&
+		verification.Scope == generated.Current &&
+		verification.HistoricalContent == generated.VerificationResultHistoricalContentNotEvaluated &&
+		verification.HistoricalSignatures == generated.VerificationResultHistoricalSignaturesNotEvaluated &&
+		verification.CustodyStructure == generated.VerificationResultCustodyStructureNotEvaluated &&
+		len(verification.Checks) == 1 && verification.Checks[0].Class == generated.VerificationCheckClassProtocol &&
+		verification.Checks[0].Reason == generated.VerificationReasonNone &&
+		len(verification.SignatureSets) == 0 && verification.Target == nil
+}
+
+// nonePolicyShape reports whether a policy object is the fixed non-terminal
+// continue/none object of the NONE state, which is never policy-evaluated.
+func nonePolicyShape(policy generated.PolicyResult) bool {
+	return policy.Mode.Valid() && policy.Verdict == generated.PolicyResultVerdictContinue &&
+		policy.PrimaryReason == generated.PolicyReasonNone &&
+		!policy.Feedback.Requested && !policy.Feedback.RelayRequired && policy.Feedback.RelaySequence == nil &&
+		policy.Feedback.HistoryCoverage == generated.PolicyFeedbackHistoryCoverageNotEvaluated &&
+		len(policy.Findings) == 1 && policy.Findings[0].Reason == generated.PolicyReasonNone &&
+		policy.Findings[0].Severity == generated.Info && policy.Findings[0].Sequence == nil
 }
 
 // validVerifierProjection validates the optional complete-chain evidence shape.
@@ -809,7 +855,7 @@ func validVerifierProjection(projection *generated.VerifierProjection, verificat
 	if projection == nil {
 		return true
 	}
-	if projection.Schema != generated.Dkim2VerifierProjectionV1 || projection.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+	if projection.Schema != generated.Dkim2VerifierProjectionV1 || projection.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		projection.BindingAlgorithm != generated.Sha256 || len(projection.Binding) != 32 ||
 		len(projection.Hops) == 0 || len(projection.Hops) > 128 || verification.Target == nil ||
 		strconv.Itoa(len(projection.Hops)) != verification.Target.Sequence {
@@ -937,9 +983,10 @@ func validProcessOutcome(value generated.ProcessResponse) bool {
 	}
 }
 
-// validProcessActions validates the optional exact RFC 8601 report action.
+// validProcessActions validates the optional exact RFC 8601 report action,
+// admitted for accept and for the non-terminal Draft-09 NONE continue.
 func validProcessActions(value generated.ProcessResponse) bool {
-	if value.Disposition != generated.DispositionAccept {
+	if value.Disposition != generated.DispositionAccept && value.Authentication.State != generated.NONE {
 		return len(value.Actions) == 0
 	}
 	if len(value.Actions) == 0 {
@@ -959,6 +1006,8 @@ func validProcessActions(value generated.ProcessResponse) bool {
 		suffix = "; dkim2=permerror"
 	case generated.TEMPERROR:
 		suffix = "; dkim2=temperror"
+	case generated.NONE:
+		suffix = "; dkim2=none"
 	default:
 		return false
 	}
@@ -974,7 +1023,7 @@ func validProcessActions(value generated.ProcessResponse) bool {
 // validOperation validates one complete generated signing or revision response.
 func validOperation(value generated.OperationResponse, operation Operation) bool {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		!value.Operation.Valid() || !value.Result.Valid() ||
 		!value.Disposition.Valid() ||
 		operation == OperationSign && value.Operation != generated.Sign ||
@@ -1067,7 +1116,7 @@ func validVerificationProjection(value generated.VerificationResult) bool {
 }
 
 // validDiagnosticSelector admits a bounded selector exactly for every
-// non-passing set except an internal-contract fact (Draft-08 Section 14.6
+// non-passing set except an internal-contract fact (Draft-09 Section 14.6
 // step 8).
 func validDiagnosticSelector(status generated.SignatureSetResultStatus, reason generated.VerificationReason, selector *string) bool {
 	if status == generated.SignatureSetResultStatusPass || reason == generated.VerificationReasonInternalContract {
@@ -1094,7 +1143,7 @@ func validPolicyProjection(value generated.PolicyResult) bool {
 // validError validates one closed structured error representation.
 func validError(value generated.ErrorResponse) bool {
 	return value.ApiVersion == generated.V1 &&
-		value.Draft == generated.DraftIetfDkimDkim2Spec08 &&
+		value.Draft == generated.DraftIetfDkimDkim2Spec09 &&
 		value.Code.Valid() && value.Category.Valid()
 }
 

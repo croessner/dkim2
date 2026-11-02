@@ -18,7 +18,7 @@ import (
 // TestPolicyFormattingOmitsMessageIdentityKeyAndRouteMaterial proves all formatting surfaces remain bounded.
 func TestPolicyFormattingOmitsMessageIdentityKeyAndRouteMaterial(t *testing.T) {
 	raw, key := signedPublicFlaggedPolicyMessage(t, publicVectorClock)
-	verifier, err := NewVerifier(publicGoldenProvider{mode: goldenProviderKeys, rsa: key}, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	verifier, err := NewVerifier(publicGoldenProvider{mode: goldenProviderKeys, rsa: key}, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -47,7 +47,7 @@ func TestPolicyFormattingOmitsMessageIdentityKeyAndRouteMaterial(t *testing.T) {
 	}
 	providerVerifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return PublicKeyResult{}, errors.New("TOXIC-PROVIDER")
-	}), WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	}), WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier(toxic provider) error = %v", err)
 	}

@@ -33,6 +33,14 @@
 // unsupported-key-type, algorithm-mismatch, temporary, permanent, and contract
 // matrix. All material and result accessors return detached copies.
 //
+// ResolveDomainPolicy resolves the Draft-09 Section 3.8 Domain Policy Record
+// at _domainkey.<domain>. through the same transport, cache, single-flight, and
+// limits. The owner kind is typed once (OwnerKind): selector and policy owners
+// have disjoint grammars and therefore disjoint cache key spaces. Records not
+// beginning with v=DKIM1 are ignored, more than one remaining record is
+// ambiguous, an invalid record or a permanent failure is invalid, absence is
+// authorized, and a temporary failure is temporary and never cached.
+//
 // Resolver caches only TTL-backed stable outcomes under configured caps. Cache
 // keys include absolute owner and requested algorithm; deterministic LRU,
 // bounded concurrency, and bounded same-key waiters prevent hidden queues.

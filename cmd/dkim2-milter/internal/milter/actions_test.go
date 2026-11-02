@@ -124,6 +124,62 @@ func TestValidResultEnforcesModeDispositionAndActionMatrix(t *testing.T) {
 			valid: true,
 		},
 		{
+			name: "inbound none exact report", mode: modeInbound, authservID: testAuthservID,
+			result: Result{
+				Operation: operationProcess, Result: resultNone, Outcome: DispositionContinue,
+				Actions: []Action{{Kind: ActionAddHeader, Name: headerAuthResults, Value: testAuthservID + "; dkim2=none"}},
+			},
+			valid: true,
+		},
+		{
+			name: "inbound none without reporting", mode: modeInbound,
+			result: Result{Operation: operationProcess, Result: resultNone, Outcome: DispositionContinue},
+			valid:  true,
+		},
+		{
+			name: "inbound none missing report", mode: modeInbound, authservID: testAuthservID,
+			result: Result{Operation: operationProcess, Result: resultNone, Outcome: DispositionContinue},
+		},
+		{
+			name: "inbound none report without reporting", mode: modeInbound,
+			result: Result{
+				Operation: operationProcess, Result: resultNone, Outcome: DispositionContinue,
+				Actions: []Action{{Kind: ActionAddHeader, Name: headerAuthResults, Value: testAuthservID + "; dkim2=none"}},
+			},
+		},
+		{
+			name: "inbound none foreign authority", mode: modeInbound, authservID: testAuthservID,
+			result: Result{
+				Operation: operationProcess, Result: resultNone, Outcome: DispositionContinue,
+				Actions: []Action{{Kind: ActionAddHeader, Name: headerAuthResults, Value: "attacker.example; dkim2=none"}},
+			},
+		},
+		{
+			name: "inbound none mismatched report", mode: modeInbound, authservID: testAuthservID,
+			result: Result{
+				Operation: operationProcess, Result: resultNone, Outcome: DispositionContinue,
+				Actions: []Action{{Kind: ActionAddHeader, Name: headerAuthResults, Value: testAuthservID + "; dkim2=pass"}},
+			},
+		},
+		{
+			name: "inbound none accept", mode: modeInbound, authservID: testAuthservID,
+			result: Result{
+				Operation: operationProcess, Result: resultNone, Outcome: DispositionAccept,
+				Actions: []Action{{Kind: ActionAddHeader, Name: headerAuthResults, Value: testAuthservID + "; dkim2=none"}},
+			},
+		},
+		{
+			name: "inbound none reject", mode: modeInbound,
+			result: Result{Operation: operationProcess, Result: resultNone, Outcome: DispositionReject},
+		},
+		{
+			name: "inbound none signing action", mode: modeInbound, authservID: testAuthservID,
+			result: Result{
+				Operation: operationProcess, Result: resultNone, Outcome: DispositionContinue,
+				Actions: []Action{{Kind: ActionAddHeader, Name: headerDKIM2, Value: testActionValue}},
+			},
+		},
+		{
 			name: "inbound invented report", mode: modeInbound, authservID: testAuthservID,
 			result: Result{
 				Operation: operationProcess, Result: resultPass, Outcome: DispositionAccept,
@@ -454,7 +510,7 @@ func TestLongSignatureFieldIsRefoldedForPostfix(t *testing.T) {
 	}
 }
 
-// TestTraceFieldsArePrependedAsOneTopBlock proves Draft-08 Sections 9 and 10
+// TestTraceFieldsArePrependedAsOneTopBlock proves Draft-09 Sections 9 and 10
 // trace placement: this hop's fields are inserted with SMFIR_INSHEADER at
 // index 0 in reverse plan order, so the queued top of the header block reads
 // Message-Instance, DKIM2-Signature, X-DKIM2-Info in plan order directly above

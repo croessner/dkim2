@@ -75,7 +75,7 @@ observability:
 			}
 			t.Cleanup(func() { _ = runtime.Shutdown(context.Background()) })
 			provider := &countingNoLookupProvider{}
-			verifier, err := dkim2.NewVerifier(provider)
+			verifier, err := dkim2.NewVerifier(provider, dkim2.WithoutSubdomainFromAuthorization())
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}
@@ -106,6 +106,10 @@ observability:
 			if verification.Valid() || policy.Valid() || !IsDomainError(verificationErr) || !IsDomainError(policyErr) {
 				t.Fatal("non-applicable domain result exposed absent verification or policy values")
 			}
+			wantMode, _ := mapPolicyMode(mode)
+			if configured, ok := domainResult.NotApplicableMode(); !ok || configured != wantMode {
+				t.Fatalf("NotApplicableMode() = %q/%t, want configured %q", configured, ok, wantMode)
+			}
 			replayResult, err := result.Replay()
 			if err != nil || replayResult.Class() != ReplayResultNotChecked || replayResult.Disposition() != FinalDispositionContinue {
 				t.Fatalf("Replay() = %q/%q err=%v", replayResult.Class(), replayResult.Disposition(), err)
@@ -114,7 +118,7 @@ observability:
 			if err != nil {
 				t.Fatalf("Metrics().Gather() error = %v", err)
 			}
-			if !bytes.Contains(metrics, []byte(`dkim2d_process_total{disposition="continue",replay_state="not_checked",result="success",verdict="neutral"} 1`)) {
+			if !bytes.Contains(metrics, []byte(`dkim2d_process_total{disposition="continue",replay_state="not_checked",result="success",verdict="none"} 1`)) {
 				t.Fatal("unsigned inbound processing omitted the process outcome metric")
 			}
 			if bytes.Contains(metrics, []byte("dkim2d_replay_coordinates_total")) ||
@@ -138,7 +142,7 @@ func TestPartialInboundProtocolRemainsApplicableInEveryMode(t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(string(testCase.mode), func(t *testing.T) {
 			provider := &countingNoLookupProvider{}
-			verifier, err := dkim2.NewVerifier(provider)
+			verifier, err := dkim2.NewVerifier(provider, dkim2.WithoutSubdomainFromAuthorization())
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}
@@ -164,7 +168,7 @@ func TestPartialInboundProtocolRemainsApplicableInEveryMode(t *testing.T) {
 // TestDomainProcessorMapsServerOwnedPolicyModes proves request data cannot select policy.
 func TestDomainProcessorMapsServerOwnedPolicyModes(t *testing.T) {
 	t.Parallel()
-	verifier, err := dkim2.NewVerifier(noLookupProvider{})
+	verifier, err := dkim2.NewVerifier(noLookupProvider{}, dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -316,20 +320,23 @@ replay:
 	if providerConfig.Parent != ctx || providerConfig.Clock == nil || providerConfig.Limits != wantLimits {
 		t.Fatal("DNS provider configuration changed a non-overridable default")
 	}
-	verifier, err := NewDNSVerifier(ctx, snapshot.DNS())
-	if err != nil || verifier == nil {
+	verifier, err := NewDNSVerifier(ctx, snapshot.DNS(), snapshot.Verification())
+	if err != nil || verifier == nil || !verifier.AllowSubdomainFrom() {
 		t.Fatalf("NewDNSVerifier() = %v, %v", verifier, err)
+	}
+	if _, err := NewDNSVerifier(ctx, snapshot.DNS(), config.VerificationConfig{}); !IsDomainError(err) {
+		t.Fatalf("zero verification config error = %v", err)
 	}
 	cancel()
 	var nilParent context.Context
-	if _, err := NewDNSVerifier(nilParent, snapshot.DNS()); !IsDomainError(err) {
+	if _, err := NewDNSVerifier(nilParent, snapshot.DNS(), snapshot.Verification()); !IsDomainError(err) {
 		t.Fatalf("nil parent error = %v", err)
 	}
-	if _, err := NewDNSVerifier(context.Background(), config.DNSConfig{}); !IsDomainError(err) {
+	if _, err := NewDNSVerifier(context.Background(), config.DNSConfig{}, snapshot.Verification()); !IsDomainError(err) {
 		t.Fatalf("zero config error = %v", err)
 	}
 	var typedNil *nilContext
-	if _, err := NewDNSVerifier(typedNil, snapshot.DNS()); !IsDomainError(err) {
+	if _, err := NewDNSVerifier(typedNil, snapshot.DNS(), snapshot.Verification()); !IsDomainError(err) {
 		t.Fatalf("typed-nil parent error = %v", err)
 	}
 }
@@ -360,7 +367,7 @@ replay:
 	if err != nil || providerConfig.Parent != parent {
 		t.Fatal("DNS provider config rejected the protected parent")
 	}
-	verifier, err := NewDNSVerifier(parent, snapshot.DNS())
+	verifier, err := NewDNSVerifier(parent, snapshot.DNS(), snapshot.Verification())
 	if err != nil || verifier == nil {
 		t.Fatal("DNS verifier rejected the protected parent")
 	}
@@ -386,7 +393,7 @@ replay:
 		fmt.Sprint(configErr) != domainErrorText {
 		t.Fatal("DNS provider config did not collapse parent failure")
 	}
-	if _, constructErr := NewDNSVerifier(canceledParent, snapshot.DNS()); !IsDomainError(constructErr) ||
+	if _, constructErr := NewDNSVerifier(canceledParent, snapshot.DNS(), snapshot.Verification()); !IsDomainError(constructErr) ||
 		fmt.Sprint(constructErr) != domainErrorText {
 		t.Fatal("DNS verifier did not collapse parent failure")
 	}
@@ -427,7 +434,7 @@ func (p appGoldenProvider) LookupPublicKey(_ context.Context, query dkim2.Public
 // TestDomainOwnersHideAuthenticSelectedStateAndDependencies proves structural opacity at the app boundary.
 func TestDomainOwnersHideAuthenticSelectedStateAndDependencies(t *testing.T) {
 	const ownershipMarker = "TOXIC-DOMAIN-PROCESSOR-OWNER"
-	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/public-golden.json")
+	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json")
 	if err != nil {
 		t.Fatal("golden app fixture unavailable")
 	}
@@ -442,7 +449,7 @@ func TestDomainOwnersHideAuthenticSelectedStateAndDependencies(t *testing.T) {
 	modulus := decodeAppGolden(t, corpus.RSAModulus)
 	verifier, err := dkim2.NewVerifier(
 		appGoldenProvider{key: &rsa.PublicKey{N: new(big.Int).SetBytes(modulus), E: corpus.RSAExponent}},
-		dkim2.WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+		dkim2.WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }), dkim2.WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("golden app verifier construction failed")
@@ -525,7 +532,7 @@ func TestMapPolicyModeRejectsUnknownValues(t *testing.T) {
 // TestDomainProcessorConcurrentReuse proves immutable service state is race-safe.
 func TestDomainProcessorConcurrentReuse(t *testing.T) {
 	t.Parallel()
-	verifier, err := dkim2.NewVerifier(noLookupProvider{})
+	verifier, err := dkim2.NewVerifier(noLookupProvider{}, dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -553,7 +560,7 @@ func TestDomainProcessorConcurrentReuse(t *testing.T) {
 // TestDomainProcessorStopsAtCancellationBoundary proves policy cannot run after visible cancellation.
 func TestDomainProcessorStopsAtCancellationBoundary(t *testing.T) {
 	t.Parallel()
-	verifier, err := dkim2.NewVerifier(noLookupProvider{})
+	verifier, err := dkim2.NewVerifier(noLookupProvider{}, dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -587,3 +594,58 @@ func TestDomainProcessorCollapsesToxicDependencyErrors(t *testing.T) {
 		t.Fatal("dependency error escaped")
 	}
 }
+
+// TestDNSVerifierAppliesSubdomainFromChoice proves that
+// verification.domain_policy.allow_subdomain_from reaches the verifier and
+// every signer built over it: true resolves Domain Policy Records through the
+// same DNS provider, false selects the downward-only local policy.
+func TestDNSVerifierAppliesSubdomainFromChoice(t *testing.T) {
+	t.Parallel()
+	for _, allow := range []bool{true, false} {
+		document := `
+config:
+  version: dkim2d-config-v1
+protected:
+  generation: 0123456789abcdef0123456789abcdef
+server:
+  capability_file: /protected/0123456789abcdef0123456789abcdef/capability
+policy:
+  mode: strict
+replay:
+  backend: disabled
+verification:
+  domain_policy:
+    allow_subdomain_from: ` + fmt.Sprint(allow) + "\n"
+		snapshot, err := config.Load([]byte(document), config.FlagValues{})
+		if err != nil {
+			t.Fatalf("config.Load() error = %v", err)
+		}
+		verifier, err := NewDNSVerifier(context.Background(), snapshot.DNS(), snapshot.Verification())
+		if err != nil || verifier.AllowSubdomainFrom() != allow {
+			t.Fatalf("allow=%t: NewDNSVerifier() = %v, %v", allow, verifier, err)
+		}
+		var keys dkim2.PublicKeyProvider = verifier
+		if _, ok := keys.(dkim2.DomainPolicyProvider); !ok {
+			t.Fatal("DNS verifier is not a Domain Policy Record provider for its signers")
+		}
+		signer, err := newOperationSigner(verifier, dkim2.NewRequestRouteAuthority(), exactSigningAuthorizer{}, deliveryStatusEvidencePrivateKeySigner{}, time.Unix(1_700_000_000, 0))
+		if err != nil || signer == nil {
+			t.Fatalf("allow=%t: newOperationSigner() = %v, %v", allow, signer, err)
+		}
+	}
+}
+
+// AllowSubdomainFrom selects the explicit downward-only Draft-09 Section
+// 11.1 choice for signers built over this fixture key source, which
+// publishes no Domain Policy Records.
+func (p noLookupProvider) AllowSubdomainFrom() bool { return false }
+
+// AllowSubdomainFrom selects the explicit downward-only Draft-09 Section
+// 11.1 choice for signers built over this fixture key source, which
+// publishes no Domain Policy Records.
+func (p *countingNoLookupProvider) AllowSubdomainFrom() bool { return false }
+
+// AllowSubdomainFrom selects the explicit downward-only Draft-09 Section
+// 11.1 choice for signers built over this fixture key source, which
+// publishes no Domain Policy Records.
+func (p appGoldenProvider) AllowSubdomainFrom() bool { return false }

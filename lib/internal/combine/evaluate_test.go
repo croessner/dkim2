@@ -9,7 +9,7 @@ const (
 	perm = ResultPermError
 )
 
-// TestSignaturesFollowSection14_6 pins every Draft-08 Section 14.6 step 6
+// TestSignaturesFollowSection14_6 pins every Draft-09 Section 14.6 step 6
 // and 7 combination rule, including the TEMPERROR precedence cases.
 func TestSignaturesFollowSection14_6(t *testing.T) {
 	tests := []struct {
@@ -62,7 +62,7 @@ func TestSignaturesFollowSection14_6(t *testing.T) {
 	}
 }
 
-// TestHashesFollowSection14_7 pins every Draft-08 Section 14.7 step 3 to 5
+// TestHashesFollowSection14_7 pins every Draft-09 Section 14.7 step 3 to 5
 // combination rule.
 func TestHashesFollowSection14_7(t *testing.T) {
 	tests := []struct {

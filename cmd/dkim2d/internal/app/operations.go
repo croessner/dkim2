@@ -358,10 +358,10 @@ const (
 	DeliveryStatusUnsignedOriginal DeliveryStatusUnsignedReason = "unsigned_original"
 	// DeliveryStatusIdentityUnavailable reports that no local delivery_status
 	// profile domain relaxed-matches an rt= address of the reported
-	// message's highest DKIM2-Signature (Draft-08 Section 16.2).
+	// message's highest DKIM2-Signature (Draft-09 Section 16.2).
 	DeliveryStatusIdentityUnavailable DeliveryStatusUnsignedReason = "delivery_status_identity_unavailable"
 	// DeliveryStatusFromNotAuthentic reports that matching profile domains
-	// exist but none makes the report From Authentic (Draft-08 Sections 11
+	// exist but none makes the report From Authentic (Draft-09 Sections 11
 	// and 12.4).
 	DeliveryStatusFromNotAuthentic DeliveryStatusUnsignedReason = "delivery_status_from_not_authentic"
 )
@@ -378,7 +378,7 @@ func (r DeliveryStatusUnsignedReason) Known() bool {
 
 // SigningAssessment separates signing applicability from an applicable
 // signing result so authoritative absence, an explicitly configured
-// compatibility no-op, or a report that Draft-08 forbids signing never
+// compatibility no-op, or a report that Draft-09 forbids signing never
 // becomes protocol failure. Only originator and delivery-status signing have
 // a not-applicable variant; revision never does. A not-applicable
 // delivery-status assessment always carries its closed unsigned reason.
@@ -397,7 +397,7 @@ func NewNotApplicableSigningAssessment() SigningAssessment {
 
 // NewUnsignedDeliveryStatusAssessment constructs the mutation-free
 // delivery-status outcome "not DKIM2 signed" for one closed reason: the
-// unsigned-original compatibility policy, or a report for which Draft-08
+// unsigned-original compatibility policy, or a report for which Draft-09
 // Section 16.2 or Sections 11 and 12.4 leave no signing identity. An unknown
 // reason yields the invalid zero assessment.
 func NewUnsignedDeliveryStatusAssessment(reason DeliveryStatusUnsignedReason) SigningAssessment {

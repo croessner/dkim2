@@ -183,11 +183,11 @@ func runRealLDAPOnboarding(
 		t.Fatalf("real LDAP idempotent prepare failed: code=%s state=%s", CodeOf(err), result.State)
 	}
 	exportPath := protectedOnboardingPath(t, "dns.txt")
-	result, err = onboarding.DNSExport(t.Context(), store, exportPath)
+	result, err = onboarding.DNSExport(t.Context(), store, exportPath, DNSExportOptions{})
 	if err != nil || result.State != StateDNSExported {
 		t.Fatalf("real LDAP DNS export failed: code=%s state=%s", CodeOf(err), result.State)
 	}
-	result, err = onboarding.DNSExport(t.Context(), store, exportPath)
+	result, err = onboarding.DNSExport(t.Context(), store, exportPath, DNSExportOptions{})
 	if err != nil || result.State != StateDNSExported {
 		t.Fatalf("real LDAP idempotent DNS export failed: code=%s state=%s", CodeOf(err), result.State)
 	}

@@ -7,6 +7,8 @@ import (
 	"io"
 	"slices"
 	"unicode/utf8"
+
+	"github.com/croessner/dkim2/authresults"
 )
 
 const (
@@ -575,12 +577,14 @@ func validPlanActions(
 	disposition Disposition,
 	actions []Action,
 ) bool {
+	if result == ResultNone && operation == OperationProcess {
+		return disposition == DispositionContinue && validNoneProcessActions(actions)
+	}
 	if !validPlanActionFraming(disposition, actions) {
 		return false
 	}
 	if result == ResultNone {
-		return (operation == OperationProcess || operation == OperationSign) &&
-			disposition == DispositionContinue && len(actions) == 0
+		return operation == OperationSign && disposition == DispositionContinue && len(actions) == 0
 	}
 	if operation == OperationProcess {
 		return validProcessPlanActions(actions)
@@ -632,6 +636,22 @@ func validPlanActionFraming(disposition Disposition, actions []Action) bool {
 	return true
 }
 
+// validNoneProcessActions admits the Draft-09 NONE process outcome (no DKIM2
+// field of either family) with no action or exactly the reasonless
+// dkim2=none Authentication-Results report. The daemon admission binds its
+// authority to the configured authserv-id before a plan is built.
+func validNoneProcessActions(actions []Action) bool {
+	if len(actions) == 0 {
+		return true
+	}
+	if len(actions) != 1 || actions[0].kind != ActionAddHeader ||
+		actions[0].name != headerAuthenticationResults || stringsContainFraming(actions[0].value) {
+		return false
+	}
+	report, ok := authresults.Parse(actions[0].value)
+	return ok && report.Matches(report.Authority(), "none")
+}
+
 // validProcessPlanActions preserves receive-time policy ownership separately from filter outcomes.
 func validProcessPlanActions(actions []Action) bool {
 	return len(actions) == 0 || len(actions) == 1 &&
@@ -662,7 +682,7 @@ func (p Plan) Result() Result { return p.result }
 func (p Plan) Disposition() Disposition { return p.disposition }
 
 // WithTemporaryKey marks a process TEMPERROR tempfail as caused by a
-// temporary public-key lookup failure, which Draft-08 Section 13 answers with
+// temporary public-key lookup failure, which Draft-09 Section 13 answers with
 // 451 4.7.5. Any other plan shape is a contract failure.
 func (p Plan) WithTemporaryKey() (Plan, error) {
 	if p.operation != OperationProcess || p.result != ResultTemperror || p.disposition != DispositionTempfail {
@@ -817,7 +837,7 @@ func validScalar(value []byte) bool {
 
 // ValidEnvelopeScalar accepts one Exim envelope scalar as valid UTF-8 without
 // NUL or CR/LF framing bytes. SMTPUTF8 local parts and U-label domains are
-// signable (Draft-08 Section 18); the daemon and library own the path grammar
+// signable (Draft-09 Section 18); the daemon and library own the path grammar
 // and record domains as A-labels. It is the single Exim-side scalar rule for
 // outgoing envelopes and daemon request mapping.
 func ValidEnvelopeScalar(value []byte) bool {

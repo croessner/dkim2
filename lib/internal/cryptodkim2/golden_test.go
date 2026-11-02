@@ -53,7 +53,7 @@ type rsaBoundaryVector struct {
 // loadCryptoGolden reads the closed cryptographic conformance corpus.
 func loadCryptoGolden(t *testing.T) cryptoGoldenFile {
 	t.Helper()
-	data, err := os.ReadFile("../../testdata/vectors/draft-ietf-dkim-dkim2-spec-08/custody-crypto-golden.json")
+	data, err := os.ReadFile("../../testdata/vectors/draft-ietf-dkim-dkim2-spec-09/custody-crypto-golden.json")
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
@@ -61,7 +61,7 @@ func loadCryptoGolden(t *testing.T) cryptoGoldenFile {
 	if err := json.Unmarshal(data, &golden); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	if golden.Draft != "draft-ietf-dkim-dkim2-spec-08" || len(golden.RSABoundaries) == 0 {
+	if golden.Draft != "draft-ietf-dkim-dkim2-spec-09" || len(golden.RSABoundaries) == 0 {
 		t.Fatal("crypto golden file has wrong or empty draft contract")
 	}
 	return golden
@@ -80,8 +80,8 @@ func TestCryptoPublicKeyPolicyBoundaryGoldenVectors(t *testing.T) {
 	}
 }
 
-// TestDraft08CryptoVerificationGoldenVectors locks RSA and Ed25519 verification bytes.
-func TestDraft08CryptoVerificationGoldenVectors(t *testing.T) {
+// TestDraft09CryptoVerificationGoldenVectors locks RSA and Ed25519 verification bytes.
+func TestDraft09CryptoVerificationGoldenVectors(t *testing.T) {
 	golden := loadCryptoGolden(t)
 	publicDER, err := base64.StdEncoding.DecodeString(golden.RSA8192Verify.PublicDER)
 	if err != nil {

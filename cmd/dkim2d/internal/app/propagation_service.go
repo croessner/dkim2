@@ -150,10 +150,7 @@ func NewPropagationCoordinator(deps PropagationDependencies) (*PropagationCoordi
 	}
 	publicKeys := deps.PublicKeys
 	factory := func(lease SigningLease, authorizer dkim2.SigningAuthorizer, at time.Time) (propagationSigner, error) {
-		signer, err := dkim2.NewSigner(
-			publicKeys, dkim2.NewRequestRouteAuthority(), authorizer, lease,
-			dkim2.WithSigningClock(func() time.Time { return at }),
-		)
+		signer, err := newOperationSigner(publicKeys, dkim2.NewRequestRouteAuthority(), authorizer, lease, at)
 		if err != nil {
 			return nil, &DomainError{}
 		}
@@ -283,7 +280,7 @@ func (c *PropagationCoordinator) Propagate(
 // notification itself and classifies the assessment into the three states the
 // coherence matrix distinguishes. A notification without a DKIM2 field family
 // is not applicable and is a permanent refusal on this route, because the
-// adapter socket is reserved for our own return-path addresses and Draft-08
+// adapter socket is reserved for our own return-path addresses and Draft-09
 // Section 16.4 has nothing to propagate from it. An assessment that is
 // unusable for any other reason stays temporary and never borrows the
 // permanent verdict.

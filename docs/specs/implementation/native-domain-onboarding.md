@@ -1,7 +1,7 @@
 # Native Domain Onboarding
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 
 Status: implementation closeout candidate. Prompt 01-10 implementation and

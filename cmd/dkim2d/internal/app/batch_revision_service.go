@@ -42,9 +42,8 @@ func (s *SigningService) ReviseBatch(ctx context.Context, request BatchRevisionR
 	if err != nil {
 		return BatchRevisionResult{}, &DomainError{}
 	}
-	signer, err := dkim2.NewSigner(s.publicKeys, dkim2.NewRequestRouteAuthority(),
-		batchRevisionAuthorizer{copies: request.state.copies}, lease,
-		dkim2.WithSigningClock(func() time.Time { return at }))
+	signer, err := newOperationSigner(s.publicKeys, dkim2.NewRequestRouteAuthority(),
+		batchRevisionAuthorizer{copies: request.state.copies}, lease, at)
 	if err != nil {
 		return batchRevisionError(request, err)
 	}
@@ -212,7 +211,7 @@ func insertBatchFields(raw []byte, offset int, fields []CompletedField) []byte {
 }
 
 // completeBatchRevision extracts only a public unrestricted result and verifies its exact insertion delta.
-// The library prepends this hop's trace block (Draft-08 Sections 9 and 10,
+// The library prepends this hop's trace block (Draft-09 Sections 9 and 10,
 // RFC 5322 Section 3.6), so the proved insertion offset is the start of the
 // current message.
 func completeBatchRevision(ctx context.Context, signer *dkim2.Signer, capability dkim2.VerifiedRevisionInput,

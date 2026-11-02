@@ -1,7 +1,7 @@
 # DKIM2 Policy Engine
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 
 ## Draft-07 Flag Removal
@@ -568,13 +568,13 @@ flag violation overrides a passing result:
 | `PERMERROR` | `reject` | `accept` | `continue` |
 | `TEMPERROR` | `tempfail` | `tempfail` | `continue` |
 
-`FAIL` and `PERMERROR` have identical verdicts in every mode. Draft-08 Section
+`FAIL` and `PERMERROR` have identical verdicts in every mode. Draft-09 Section
 14.1 moved timestamp, envelope, alignment, `nd=`, custody, out-of-band, and
 From-authenticity failures from `PERMERROR` to `FAIL`; their verdicts and
 actions are unchanged and only the strict primary reason moves from
 `protocol_permerror` to `protocol_fail`. The one deliberate verdict change is
 `body_history_unavailable`: a history with a null body Recipe was a `PASS` with
-partial history and is now a `FAIL` (Draft-08 Section 13), so strict mode
+partial history and is now a `FAIL` (Draft-09 Section 13), so strict mode
 rejects it. `lib/verification_disposition_test.go` pins the complete reason by
 mode table.
 
@@ -899,7 +899,7 @@ reason, compliance enums, booleans, and counts.
 
 ### Flag Evaluation
 
-- Historical Draft-04 plan; Draft-08 tests instead prove that `donotmodify`
+- Historical Draft-04 plan; Draft-09 tests instead prove that `donotmodify`
   and `donotexplode` parse as inert unknown flags and never affect policy.
 - `donotmodify` followed by body change, header removal/change, both, unchanged,
   header-addition-only, indeterminate, and incomplete history.

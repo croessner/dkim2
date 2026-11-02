@@ -107,14 +107,14 @@ func TestVerifierNegativeVectors(t *testing.T) {
 				fixture := newDeterministicRSAVerificationFixture(t)
 				verifier, err := NewVerifier(providerFunc(func(context.Context, KeyQuery) (PublicKey, error) {
 					return PublicKey{Algorithm: AlgorithmRSASHA256, Material: tinyRSAPublicKey(), Metadata: KeyMetadata{Status: KeyStatusFound}}, nil
-				}), testClockOption())
+				}), testClockOption(), testFromChoice)
 				if err != nil {
 					t.Fatalf("NewVerifier() error = %v", err)
 				}
 
 				return verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
 			},
-			// A rejected key is a PERMERROR intermediate (Draft-08 Section 14.6 step 3).
+			// A rejected key is a PERMERROR intermediate (Draft-09 Section 14.6 step 3).
 			want: negativeVectorWant{targetStatus: TargetStatusUnsupported, signatureStatus: SignatureSetStatusKeyPolicyRejected, algorithm: AlgorithmRSASHA256},
 		},
 		{
@@ -166,7 +166,7 @@ func TestVerifierNegativeVectors(t *testing.T) {
 				}
 				verifier, err := NewVerifier(provider, testClockOption(), WithAlgorithmPolicy(AlgorithmPolicy{
 					AllowedAlgorithms: []Algorithm{AlgorithmEd25519SHA256}, MinRSABits: 1024, MaxRSABits: 8192,
-				}))
+				}), testFromChoice)
 				if err != nil {
 					t.Fatalf("NewVerifier() error = %v", err)
 				}
@@ -186,7 +186,7 @@ func TestVerifierNegativeVectors(t *testing.T) {
 
 				return mustVerifierWithKeys(t, keys).Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
 			},
-			// Draft-08 Section 14.6 step 6: one FAIL in the sig-all group is FAIL.
+			// Draft-09 Section 14.6 step 6: one FAIL in the sig-all group is FAIL.
 			want: negativeVectorWant{targetStatus: TargetStatusFail, signatureStatus: SignatureSetStatusFail, algorithm: AlgorithmEd25519SHA256},
 		},
 	}

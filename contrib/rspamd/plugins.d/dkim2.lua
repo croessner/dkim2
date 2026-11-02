@@ -297,9 +297,7 @@ local function verifier_callback(task)
       return
     end
     local submitted = verifier.submit_request(task, prepared, function(response, response_body)
-      if response == false then
-        apply_not_applicable(task)
-      elseif response == nil then
+      if response == nil then
         verifier.apply_failure(task)
       elseif not cache_eligible(response) then
         remember_response(task, prepared, response, nil)

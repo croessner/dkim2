@@ -22,7 +22,7 @@ func TestServiceRequiresAuthenticatedHistory(t *testing.T) {
 	raw, key := signedMalformedHistoryMessage(t, timestamp)
 	config := DefaultConfig()
 	config.Clock = func() time.Time { return time.Unix(int64(timestamp), 0) }
-	coordinator, err := NewVerifier(passingPolicyProvider{key: key}, config)
+	coordinator, err := NewVerifier(passingPolicyProvider{key: key}, verify.DownwardOnlyFromAuthorization(), config)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}

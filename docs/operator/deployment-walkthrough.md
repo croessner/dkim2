@@ -9,7 +9,7 @@ state layout, lifecycle, backup, and rollback are in
 [`postfix-compose.md`](postfix-compose.md); this page links there instead of
 repeating it.
 
-Protocol behavior is pinned to `draft-ietf-dkim-dkim2-spec-08` with the
+Protocol behavior is pinned to `draft-ietf-dkim-dkim2-spec-09` with the
 tested `draft-ietf-dkim-dkim2-dns-02` DNS behavior. Where the draft leaves a
 choice to local policy, this page says so. Where this implementation makes a
 recorded interpretation, it is named as one. The authoritative HTTP contract
@@ -28,7 +28,7 @@ forwards to. Nothing here names a real host, address, or operator.
 
 DKIM2 signs a message at every hop, not only at the origin. Each system that
 handles the message adds its own `DKIM2-Signature` with a sequence number
-`i=`, and the sequence forms a chain of custody (Draft-08 Sections 10 and 12.2).
+`i=`, and the sequence forms a chain of custody (Draft-09 Sections 10 and 12.2).
 Three properties of that chain matter for a deployment:
 
 - **The signature binds the SMTP envelope.** A signature records the `MAIL
@@ -112,7 +112,7 @@ flowchart LR
 | `dkim2-milter` in mode `postfix_dsn` | Milter on `non_smtpd_milters` for locally generated bounces; calls `POST /v1/dsn/sign` only after the exact `{postfix_internal_origin}=bounce` macro | The DSN signing capability | Any other capability; it must not be shared with any other adapter or client |
 | `dkim2-dsn-propagator` | MTA-neutral LMTP adapter; calls `POST /v1/dsn/propagate` and `/commit`, re-injects the rebuilt notification | The propagation capability | The process, sign, revise, or DSN signing capability |
 | Rspamd module (`contrib/rspamd`) | Alternative inbound consumer of `POST /v1/process` from inside Rspamd | The process capability | Any signing capability; it cannot sign bounces because Rspamd does not expose the origin macro |
-| `dkim2-exim` | Source-linked Exim `local_scan()` inbound service plus one-shot originator and ordinary-transit transport filters; capability `unqualified_draft08` | The capability of its configured operation | Draft-08 qualification evidence |
+| `dkim2-exim` | Source-linked Exim `local_scan()` inbound service plus one-shot originator and ordinary-transit transport filters; capability `unqualified_draft09` | The capability of its configured operation | Draft-09 qualification evidence |
 | `dkim2ctl` | Generated-client smoke and fixture runner for a test deployment | Whichever route capabilities the operator hands it for that test | Operator mutation commands |
 | Signing datasource | Flat-file, LDAP, PostgreSQL, MySQL, or MariaDB source of signing profiles, policies, and native keys | Immutable committed generations | A signing capability of its own |
 | Replay store | Redis or Valkey (standalone, Sentinel, or cluster), process-local memory, or explicitly disabled; first-seen coordinates and propagation coordinates | Privacy-preserving HMAC-derived keys | Message content, addresses |
@@ -151,7 +151,7 @@ sequenceDiagram
     MTA->>Adapter: Milter callbacks
     Adapter->>Daemon: POST /v1/process with X-DKIM2-Capability
     alt no DKIM2 fields
-        Daemon-->>Adapter: 204 not applicable
+        Daemon-->>Adapter: 200 NONE, optional dkim2=none
     else DKIM2 fields present
         Daemon->>DNS: key lookup by d= and s=
         DNS-->>Daemon: key record, NXDOMAIN, or timeout
@@ -174,8 +174,11 @@ sequenceDiagram
    It sends exactly one request at end of message, authenticated by the
    process capability.
 3. If the message carries neither `Message-Instance` nor `DKIM2-Signature`,
-   the daemon answers `204`: no DNS, policy, or replay work happens and the
-   Milter continues without a DKIM2 result. There is no domain-wide
+   the daemon answers HTTP 200 with the Draft-09 state NONE: no DNS, policy,
+   or replay work happens, the Milter continues, and the only possible action
+   is an `Authentication-Results` field with `dkim2=none` when a reporting
+   authority is configured. A `204` from `/v1/process` is a contract failure
+   that the adapters fail closed on. There is no domain-wide
    participation probe, because the selector and domain needed for a key
    lookup come only from a present signature.
 4. Otherwise the daemon runs the verification order of
@@ -213,7 +216,7 @@ controlling delivery. The state itself is identical in all three modes.
 ```mermaid
 flowchart TD
     eom["Message at end of data"] --> fields{"DKIM2 fields present"}
-    fields -->|no| na["204, continue unsigned"]
+    fields -->|no| na["NONE, continue with dkim2=none"]
     fields -->|yes| verify["Verify latest signature and hashes"]
     verify --> vstate{"Verification state"}
     vstate -->|TEMPERROR| tf["tempfail 451"]
@@ -275,7 +278,7 @@ sequenceDiagram
    signed with `mf=<>` and the From domain (Section 3.4, item 3).
 3. The adapter accepts exactly one recipient per transaction in the signing
    modes and fails a second `RCPT TO` closed. The reason is the Bcc rule:
-   Draft-08 Section 10.6 permits several `RCPT TO` values in one `rt=`, but
+   Draft-09 Section 10.6 permits several `RCPT TO` values in one `rt=`, but
    requires that no Bcc recipient be revealed to any other recipient. Milter
    callbacks cannot prove which recipients were blind, so the library's safe
    default is one `rt=` value per message copy and the Milter's
@@ -392,7 +395,7 @@ its own out-of-band authorization and has no Milter mode; see
 ### 3.4 Signing a locally generated bounce
 
 Postfix `bounce(8)` generates a notification for a message `example.test`
-could not deliver. Draft-08 Section 16.2 requires that notification to carry
+could not deliver. Draft-09 Section 16.2 requires that notification to carry
 its own `Message-Instance` and `DKIM2-Signature`, signed with a null `mf=`.
 The difficulty is authority: a null sender is trivial to forge, so something
 must prove that this MTA, and not an SMTP client, generated the message.
@@ -465,7 +468,7 @@ sequenceDiagram
    listener shared with auto-replies; the daemon refuses such a request too.
    The signing domain is then the domain of the single RFC 5322 From mailbox,
    which the daemon and the library check again, and the signature carries
-   `mf=<>` and the actual recipient in `rt=`; Draft-08 Section 10.5 admits
+   `mf=<>` and the actual recipient in `rt=`; Draft-09 Section 10.5 admits
    `mf=<>` and Section 10.8 requires no `d=` match for it. A domain without an
    active `originator` profile stays unsigned. This opt-in must never be
    enabled on an inbound or MX-facing Milter, and the daemon opt-in is only
@@ -484,7 +487,7 @@ sequenceDiagram
    an authenticated `rt=`. The Postfix bounce wire form is admitted only on
    this capability-authenticated route.
 5. Only after verification does the daemon choose the signing domain under
-   Draft-08 Section 16.2: a tenant `delivery_status` profile domain that
+   Draft-09 Section 16.2: a tenant `delivery_status` profile domain that
    relaxed-matches an `rt=` address of the original's highest DKIM2-Signature
    and makes the bounce From (`MAILER-DAEMON@$myorigin`) Authentic. Without
    such a domain the bounce leaves unsigned (HTTP 204 with
@@ -507,7 +510,7 @@ qualification of the exact deployed image.
 The reverse direction: `example.test` forwarded a message from `origin.test`
 to `destination.test` with its own local return path, and `destination.test`
 could not deliver it. Its notification comes back to the local return path.
-Draft-08 Section 16.4 says the receiver should authenticate it, and
+Draft-09 Section 16.4 says the receiver should authenticate it, and
 Section 16.3 says a forwarder may rebuild it for the previous hop, with the
 forwarder's own signatures and modifications removed.
 
@@ -624,7 +627,7 @@ above `dsn_propagation.pending_lease` is what stops that last window from
 wasting attempts. The outcomes `terminal_origin` (we originated it),
 `not_failure`, `forbidden_null_previous_sender`,
 `forbidden_identity_misaligned` (the completion `d=` does not relaxed-match
-the previous hop's `rt=`, Draft-08 Section 16.2), `unsupported_chain`, and
+the previous hop's `rt=`, Draft-09 Section 16.2), `unsupported_chain`, and
 `not_reconstructable` are `discard`, each counted under its own class; a
 verification failure or a notification that is not ours is `reject`, which the
 adapter answers `550` or, under its single policy knob
@@ -724,7 +727,7 @@ verification states, the 14-day timestamp rule, the addressing of a
 notification to the highest `mf=`, the three-part notification structure, the
 propagation rebuild that removes the forwarder's fields and degrades to
 headers-only, and the single-instance, single-signature shape of a propagated
-notification all come from Draft-08.
+notification all come from Draft-09.
 
 **Recorded interpretation or local policy.** The policy modes; replay
 detection and the propagation coordinate; single-recipient signing; the
@@ -750,8 +753,8 @@ qualification claim for any MTA other than Postfix.
 - A Milter-reconstructed message is `milter_reconstructed_crlf` evidence,
   not raw wire bytes; Postfix's own `Received` field is outside it. The
   Postfix and Milter qualification is the implemented adapter path.
-- Exim is `unqualified_draft08`: the adapter is implemented, but its five-row
-  evidence is historical Draft-04 evidence and does not qualify the Draft-08
+- Exim is `unqualified_draft09`: the adapter is implemented, but its five-row
+  evidence is historical Draft-04 evidence and does not qualify the Draft-09
   candidate.
 - `postfix_dsn` requires upstream provenance and real-Postfix qualification of
   the exact deployed image; socket fixtures alone do not qualify production.

@@ -1,7 +1,7 @@
 # DNS Key Resolver
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 >
 > Current behavior: `draft-ietf-dkim-dkim2-dns-02` Section 3.4.1 retires the
@@ -294,7 +294,7 @@ transports may enable caching.
 - Optional; omission means `rsa`.
 - `rsa`, `ed25519`, and `mldsa44` are recognized case-sensitive values.
   DNS-02 defines no key type for pure ML-DSA-44; `mldsa44` is the local
-  interpretation that equals the Draft-08 sig-name (`DKIM2-ISSUE-0020`).
+  interpretation that equals the Draft-09 sig-name (`DKIM2-ISSUE-0020`).
   Both composite spellings, `mldsa44-ed25519` and `mldsa44-ed25519-sha512`,
   are unsupported key types (`DKIM2-ISSUE-0022`).
 - An unrecognized key type is a typed unsupported-key record. It is not
@@ -384,7 +384,7 @@ error, Base64 text, or private material.
 ### ML-DSA-44
 
 - `k=mldsa44` requires `p=` to decode to exactly 1312 octets, the raw FIPS
-  204 ML-DSA-44 public-key encoding (1752 base64 characters, Draft-08
+  204 ML-DSA-44 public-key encoding (1752 base64 characters, Draft-09
   Section 14.5). Every other length, an SPKI wrapper, and an encoding
   `crypto/mldsa` rejects are invalid keys. `h=` is ignored (DNS-02 retired
   it).

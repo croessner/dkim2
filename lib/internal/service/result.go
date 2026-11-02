@@ -26,7 +26,7 @@ type SignatureSetFact struct {
 }
 
 // SignatureSelectorCoherent is the single rule for per-set selector
-// presence (Draft-08 Section 14.6 step 8): a passing set carries no
+// presence (Draft-09 Section 14.6 step 8): a passing set carries no
 // selector, an internal-contract fact that names no parsed set carries none,
 // and every other non-passing set (fail, permerror including key and
 // unknown or disabled algorithm errors, temperror) carries its bounded

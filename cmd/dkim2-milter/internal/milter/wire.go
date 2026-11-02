@@ -718,7 +718,7 @@ func (s *Session) serializeResult(
 
 // serializeAcceptance emits trust-boundary scrubbing before approved actions
 // and the terminal acceptance frame. Every approved field is a trace or
-// trust-boundary field that belongs at the top of the header block (Draft-08
+// trust-boundary field that belongs at the top of the header block (Draft-09
 // Sections 9 and 10, RFC 5322 Section 3.6, RFC 8601 Section 5), so each one is
 // inserted with SMFIR_INSHEADER at index 0. The actions are emitted in reverse
 // plan order, which leaves the hop's fields as one top block in plan order:

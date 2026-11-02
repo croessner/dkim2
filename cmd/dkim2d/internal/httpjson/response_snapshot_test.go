@@ -318,7 +318,7 @@ type selectedGoldenCorpus struct {
 func loadSelectedGoldenCorpus(t *testing.T) selectedGoldenCorpus {
 	t.Helper()
 
-	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/public-golden.json")
+	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json")
 	if err != nil {
 		t.Fatal("golden verification corpus unavailable")
 	}
@@ -403,7 +403,7 @@ func TestMapDomainResultMapsAuthenticSelectedSignatureWithRetiredTag(t *testing.
 	}
 	verifier, err := dkim2.NewVerifier(provider, dkim2.WithVerificationClock(func() time.Time {
 		return time.Unix(1_700_000_000, 0)
-	}))
+	}), dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("verifier construction failed")
 	}
@@ -472,7 +472,7 @@ func authenticSelectedMatrixResult(t *testing.T, corpus selectedGoldenCorpus, ke
 	}
 	verifier, err := dkim2.NewVerifier(
 		selectedMatrixProvider{key: key, outcome: testCase.outcome},
-		dkim2.WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+		dkim2.WithVerificationClock(func() time.Time { return time.Unix(1_700_000_000, 0) }), dkim2.WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("matrix verifier construction failed")
@@ -550,7 +550,7 @@ func decodeSelectedGolden(t *testing.T, value string) []byte {
 // currentMissingProtocolResult returns one authentic zero-target current result and its strict decision.
 func currentMissingProtocolResult(t testing.TB) (dkim2.VerifyResult, dkim2.PolicyDecision) {
 	t.Helper()
-	verifier, err := dkim2.NewVerifier(unusedPublicKeyProvider{})
+	verifier, err := dkim2.NewVerifier(unusedPublicKeyProvider{}, dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal(err)
 	}

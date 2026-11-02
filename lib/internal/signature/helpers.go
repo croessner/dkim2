@@ -55,6 +55,16 @@ func trimWSP(input []byte) ([]byte, int) {
 	return input[start:end], start
 }
 
+// trimTrailingWSP removes the separator or terminator white space that may
+// follow the last component of one sig-set.
+func trimTrailingWSP(input []byte) []byte {
+	end := len(input)
+	for end > 0 && isWSP(input[end-1]) {
+		end--
+	}
+	return input[:end]
+}
+
 // isWSP reports whether b is RFC 5322 white space allowed around components.
 func isWSP(b byte) bool {
 	return b == ' ' || b == '\t'

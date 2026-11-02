@@ -37,7 +37,7 @@ func TestPublicExtractionHardLimits(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			provider := &abuseCountingProvider{}
-			verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+			verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 			if err != nil {
 				t.Fatal("extraction-limit verifier construction failed")
 			}
@@ -98,7 +98,7 @@ func TestPublicHardLimitBoundaries(t *testing.T) {
 	}
 
 	provider := &abuseCountingProvider{}
-	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("hard-limit verifier construction failed")
 	}
@@ -162,7 +162,7 @@ func publicResultHasCheck(result VerifyResult, class CheckClass, reason ReasonCo
 func TestPublicPermanentProviderFailureIsStructured(t *testing.T) {
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return PublicKeyResult{}, NewPermanentProviderError()
-	}), WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	}), WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("provider verifier construction failed")
 	}
@@ -176,7 +176,7 @@ func TestPublicPermanentProviderFailureIsStructured(t *testing.T) {
 func TestPublicUnclassifiedProviderFailureIsStructured(t *testing.T) {
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return PublicKeyResult{}, errors.New("opaque provider failure")
-	}), WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	}), WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("unclassified provider verifier construction failed")
 	}
@@ -190,7 +190,7 @@ func TestPublicUnclassifiedProviderFailureIsStructured(t *testing.T) {
 func TestPublicCallerContextErrorsRemainDisjoint(t *testing.T) {
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return MissingPublicKey(AlgorithmRSASHA256), nil
-	}))
+	}), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("context verifier construction failed")
 	}
@@ -216,7 +216,7 @@ func TestPublicProviderTriggeredCallerCancellationRemainsGoControlFlow(t *testin
 		cancel()
 		return PublicKeyResult{}, context.Canceled
 	})
-	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("in-flight cancellation verifier construction failed")
 	}
@@ -247,7 +247,7 @@ func TestPublicProviderClassificationIgnoresErrorText(t *testing.T) {
 	for index, providerErr := range errorsByText {
 		verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 			return PublicKeyResult{}, providerErr
-		}), WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+		}), WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 		if err != nil {
 			t.Fatal("text-independent provider verifier construction failed")
 		}

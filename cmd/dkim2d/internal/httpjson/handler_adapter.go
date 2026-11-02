@@ -151,7 +151,7 @@ func (a *strictAdapter) GetHealth(
 	date, datePresent := responseDate(ctx)
 	response, err := newStatusResponse(generated.HealthResponse{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec08,
+		Draft:      generated.DraftIetfDkimDkim2Spec09,
 		Status:     generated.Alive,
 	}, false, date, datePresent)
 	return response, err
@@ -165,7 +165,7 @@ func (a *strictAdapter) HeadHealth(
 	date, datePresent := responseDate(ctx)
 	response, err := newStatusResponse(generated.HealthResponse{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec08,
+		Draft:      generated.DraftIetfDkimDkim2Spec09,
 		Status:     generated.Alive,
 	}, true, date, datePresent)
 	return response, err
@@ -240,13 +240,6 @@ func (a *strictAdapter) ProcessMessage(
 	}
 	if !result.Valid() {
 		return nil, &strictAdapterError{class: strictFailureInternal}
-	}
-	if !result.Applicable() {
-		return generated.ProcessMessage204Response{Headers: generated.ProcessMessage204ResponseHeaders{
-			CacheControl: cacheControlNoStore,
-			Connection:   connectionCloseValue,
-			Date:         optionalResponseDate(ctx),
-		}}, nil
 	}
 	response, err := MapInboundResult(result, domainRequest.AuthservID())
 	if err != nil {
@@ -483,7 +476,7 @@ func (a *strictAdapter) readinessResponse(
 	}
 	return newStatusResponse(generated.ReadinessResponse{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec08,
+		Draft:      generated.DraftIetfDkimDkim2Spec09,
 		Status:     generated.Ready,
 	}, head, date, datePresent)
 }

@@ -1,6 +1,6 @@
 // Package tagvalue owns shared DKIM2 tag-list scanning rules.
 //
-// Both scanners implement the draft-ietf-dkim-dkim2-spec-08 Section 8
+// Both scanners implement the draft-ietf-dkim-dkim2-spec-09 Section 8
 // tag-list grammar: at least one tag-spec, an optional final semicolon,
 // case-sensitive names and values, and no duplicated tags. Scan is the DNS key
 // record mode and unfolds valid CRLF WSP FWS. ScanHeader is the

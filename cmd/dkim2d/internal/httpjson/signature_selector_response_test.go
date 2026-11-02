@@ -21,7 +21,7 @@ func (p selectorTestProvider) LookupPublicKey(context.Context, dkim2.PublicKeyQu
 }
 
 // TestSignatureSetJSONNamesSelectorForEveryNonPassingSet pins the REST
-// shape of Draft-08 Section 14.6 step 8: the selector member is present for
+// shape of Draft-09 Section 14.6 step 8: the selector member is present for
 // fail, permerror, and temperror sets and absent for pass.
 func TestSignatureSetJSONNamesSelectorForEveryNonPassingSet(t *testing.T) {
 	const timestamp = int64(1700000000)
@@ -40,7 +40,7 @@ func TestSignatureSetJSONNamesSelectorForEveryNonPassingSet(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			verifier, err := dkim2.NewVerifier(test.provider, dkim2.WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }))
+			verifier, err := dkim2.NewVerifier(test.provider, dkim2.WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }), dkim2.WithoutSubdomainFromAuthorization())
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}

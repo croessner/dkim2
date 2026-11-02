@@ -16,7 +16,7 @@ import (
 const (
 	// MinSigningRSABits is the local signing floor: new signing credentials
 	// and loaded signing profiles require RSA moduli of at least 2048 bits
-	// (Draft-08 Section 3.2 SHOULD made a local MUST). Verification keeps the
+	// (Draft-09 Section 3.2 SHOULD made a local MUST). Verification keeps the
 	// 1024 to 8192 bit bounds of Limits.
 	MinSigningRSABits   = 2048
 	hardMinRSABits      = 1024

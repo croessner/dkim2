@@ -190,7 +190,7 @@ func newNextDomainRegressionFixture(t *testing.T) *nextDomainRegressionFixture {
 		publicRouteMemoryAuthority{value: routeplan.NewMemoryAuthority()},
 		authorizer,
 		provider,
-		WithSigningClock(func() time.Time { return time.Unix(clock.Load(), 0) }),
+		WithSigningClock(func() time.Time { return time.Unix(clock.Load(), 0) }), WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)
@@ -221,7 +221,7 @@ func newNextDomainRegressionFixtureWithClock(
 		publicRouteMemoryAuthority{value: routeplan.NewMemoryAuthority()},
 		authorizer,
 		provider,
-		WithSigningClock(clock),
+		WithSigningClock(clock), WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)
@@ -258,7 +258,7 @@ func newNextDomainDriftFixture(t *testing.T, selector string) (*nextDomainRegres
 		publicRouteMemoryAuthority{value: routeplan.NewMemoryAuthority()},
 		authorizer,
 		provider,
-		WithSigningClock(func() time.Time { return time.Unix(clock.Load(), 0) }),
+		WithSigningClock(func() time.Time { return time.Unix(clock.Load(), 0) }), WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)

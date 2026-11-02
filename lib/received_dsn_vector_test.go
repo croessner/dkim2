@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	receivedDSNVectorPath      = "testdata/vectors/draft-ietf-dkim-dkim2-spec-08/received-dsn-golden.json"
+	receivedDSNVectorPath      = "testdata/vectors/draft-ietf-dkim-dkim2-spec-09/received-dsn-golden.json"
 	receivedDSNVectorWriteFlag = "DKIM2_WRITE_RECEIVED_DSN_VECTORS"
 )
 
@@ -109,7 +109,7 @@ func receivedDSNVectorSpecs() []receivedDSNVectorSpec {
 		{name: "unlinked_recipient", spec: receivedDSNSpec{deliveryStatus: dsntest.FailedDeliveryStatus(receivedDSNDestinationDomain, "other@destination.example", "5.1.1")}, tenant: true, local: local},
 		{name: "not_failure_delayed", spec: receivedDSNSpec{deliveryStatus: delayed}, tenant: true, local: local},
 		{name: "terminal_origin", spec: receivedDSNSpec{hops: []dsntest.Hop{receivedDSNHop(receivedDSNLocalDomain, receivedDSNLocalMailFrom, receivedDSNDestination)}}, tenant: true, local: local},
-		// Draft-08 Sections 16.2 and 16.3: the completion d= signs the
+		// Draft-09 Sections 16.2 and 16.3: the completion d= signs the
 		// propagated report, so the previous hop's rt= sits under it.
 		{name: "next_domain_run_eligible", spec: receivedDSNSpec{hops: []dsntest.Hop{
 			receivedDSNHop(receivedDSNRemoteDomain, "<sender@remote.example>", receivedDSNForwardRecipient),
@@ -209,11 +209,11 @@ func TestReceivedDSNGoldenVectorsRegenerate(t *testing.T) {
 	}
 }
 
-// TestReceivedDSNDraft08GoldenVectors proves the frozen corpus evaluates to
+// TestReceivedDSNDraft09GoldenVectors proves the frozen corpus evaluates to
 // its recorded projection using only the keys and inputs the corpus publishes.
-func TestReceivedDSNDraft08GoldenVectors(t *testing.T) {
+func TestReceivedDSNDraft09GoldenVectors(t *testing.T) {
 	corpus := loadReceivedDSNVectorCorpus(t)
-	evaluator, err := NewVerifier(receivedDSNVectorProvider{keys: corpus.Keys}, receivedDSNClockOption())
+	evaluator, err := NewVerifier(receivedDSNVectorProvider{keys: corpus.Keys}, receivedDSNClockOption(), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal(err)
 	}

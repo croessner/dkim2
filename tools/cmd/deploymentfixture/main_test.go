@@ -233,7 +233,7 @@ func TestPublicVerifierRejectsUnsignedFixtureMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifier, err := dkim2.NewVerifier(provider)
+	verifier, err := dkim2.NewVerifier(provider, dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -98,7 +98,7 @@
   "additionalProperties": false,
   "properties": {
     "schema": {"const": "dkim2.draft-issues.v1"},
-    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-08"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-09"},
     "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-02"},
     "issues": {
       "items": {"$ref": "#/$defs/issue"},

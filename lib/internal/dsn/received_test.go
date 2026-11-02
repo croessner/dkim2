@@ -135,7 +135,7 @@ func mustReceivedVerifierAt(t *testing.T, temporaryDomain string, now time.Time)
 		t.Fatalf("NewStaticKeyProvider() error=%v", err)
 	}
 	provider := &receivedKeyProvider{static: static, temporaryDomain: temporaryDomain}
-	verifier, err := verify.NewVerifier(provider, verify.WithClock(func() time.Time { return now }))
+	verifier, err := verify.NewVerifier(provider, verify.WithClock(func() time.Time { return now }), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()))
 	if err != nil {
 		t.Fatalf("NewVerifier() error=%v", err)
 	}
@@ -493,7 +493,7 @@ func TestReceivedEvaluationLocalHopIdentity(t *testing.T) {
 	}
 }
 
-// TestReceivedEvaluationTakesAuthorityFromOuterOriginator reproduces Draft-08
+// TestReceivedEvaluationTakesAuthorityFromOuterOriginator reproduces Draft-09
 // Section 16.4 item 1: authority comes from the d= of the DSN's i=1 signature,
 // so a forwarded DSN keeps its originator's authority, and a forged
 // originator is not rescued by a later forwarder that happens to match.
@@ -635,7 +635,7 @@ func TestReceivedEvaluationPreviousHopClassification(t *testing.T) {
 	}{
 		{name: "terminal origin", hops: []dsntest.Hop{receivedHop(receivedLocalDomain, receivedLocalMailFrom, receivedDestination)},
 			local: []string{receivedLocalDomain}, want: PropagationTerminalOrigin, wantLowest: 1},
-		// Draft-08 Sections 16.2 and 16.3: the propagated report is signed by
+		// Draft-09 Sections 16.2 and 16.3: the propagated report is signed by
 		// the completion d= (forward.local.example), so the previous hop's
 		// rt= must sit under that domain for a run to stay eligible.
 		{name: "nd run", hops: []dsntest.Hop{

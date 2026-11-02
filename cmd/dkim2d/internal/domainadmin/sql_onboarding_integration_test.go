@@ -287,10 +287,10 @@ func runDisposableJournaledOnboarding(
 	})
 	exportPath := protectedOnboardingPath(t, "dns.txt")
 	assertDisposableOnboardingCommand(t, StateDNSExported, func() (OnboardingResult, error) {
-		return onboarding.DNSExport(t.Context(), store, exportPath)
+		return onboarding.DNSExport(t.Context(), store, exportPath, DNSExportOptions{})
 	})
 	assertDisposableOnboardingCommand(t, StateDNSExported, func() (OnboardingResult, error) {
-		return onboarding.DNSExport(t.Context(), store, exportPath)
+		return onboarding.DNSExport(t.Context(), store, exportPath, DNSExportOptions{})
 	})
 	assertDisposableOnboardingCommand(t, StateDNSProven, func() (OnboardingResult, error) {
 		return onboarding.Prove(t.Context(), store)
@@ -486,7 +486,7 @@ func proveDisposableActivatedRuntimeSigning(
 		publicKeys,
 		dkim2.NewRequestRouteAuthority(),
 		disposableSigningAuthorizer{recipients: recipients},
-		lease,
+		lease, dkim2.WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("construct activated datasource signer")
@@ -525,7 +525,7 @@ func proveDisposableActivatedRuntimeSigning(
 	if err != nil || recovery.Valid() || !ok || !signed.Valid() {
 		t.Fatal("activated datasource signing failed")
 	}
-	verifier, err := dkim2.NewVerifier(publicKeys)
+	verifier, err := dkim2.NewVerifier(publicKeys, dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("construct activated datasource verifier")
 	}

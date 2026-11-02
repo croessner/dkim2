@@ -1,7 +1,7 @@
 # DKIM2 Signing And Revision
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 
 Status: implemented; independently reviewed.
@@ -24,7 +24,7 @@ unrecognized flags have no effect. The current implementation therefore:
   documentation for the migration error).
 
 The former `local_only` restriction, its `LocalOnlySignedMessage` result
-variant, and its in-control release path were removed because no Draft-08
+variant, and its in-control release path were removed because no Draft-09
 protocol fact produced them. In-control routes remain a route class and sign
 unrestricted output. Sections below that describe `donotmodify` or `donotexplode` restrictions are
 the historical Draft-04 record.
@@ -297,7 +297,7 @@ invented. The capability still proves every existing signature over protocol
 fields, the current/highest message hashes, sequence/reference integrity, and
 the complete custody structure relevant to appending a hop.
 
-Every existing signature field must reach a Draft-08 Section 14.6 PASS under
+Every existing signature field must reach a Draft-09 Section 14.6 PASS under
 its `sig-any`/`sig-all` layout, combined by the shared
 `verify.CombineSignatureSets` owner. Unknown and locally disabled algorithms
 are PERMERROR intermediates decided without a key lookup; a field with no
@@ -639,7 +639,7 @@ When present, generated flags use the fixed order `feedback`, `feedhere`, then
 `exploded`.
 
 Inherited `donotmodify` or `donotexplode` spellings are inert unknown flags
-under Draft-08 and never restrict the result. The sealed policy authorization
+under Draft-09 and never restrict the result. The sealed policy authorization
 binds the exact capability, sealed parent and copy ticket, derived
 multiplicity, modification facts, intended route scope, and the resulting
 `unrestricted` restriction.
@@ -1176,7 +1176,7 @@ incidental diagnostics.
   explicit fresh reissuance after rejection, provider-observation drift,
   selector/key mismatch, and
   intended-envelope/receiver/route replay.
-- `exploded` derivation and the Draft-08 inertness of inherited `donotmodify`
+- `exploded` derivation and the Draft-09 inertness of inherited `donotmodify`
   and `donotexplode` spellings are covered; the historical Draft-04
   `donotmodify`/`donotexplode` restricted and external denial matrices were
   removed with the flags.

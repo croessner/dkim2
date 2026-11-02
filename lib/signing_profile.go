@@ -161,7 +161,7 @@ func (c MLDSA44SigningCredential) signingCredential() signing.Credential { retur
 // credential for each of up to three signable algorithms. The emitted s= tag
 // joins the classical credentials (rsa-sha256, ed25519-sha256) as one
 // sig-all group and puts an mldsa44 credential in a separate sig-any
-// alternative after "|" (Draft-08 Section 10.9 phased deployment).
+// alternative after "|" (Draft-09 Section 10.9 phased deployment).
 type SigningProfile struct{ value signing.Profile }
 
 // NewProjectedSigningProfile seals one already validated internal datasource

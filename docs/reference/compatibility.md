@@ -1,6 +1,6 @@
 # Compatibility Statement
 
-The preview baseline implements `draft-ietf-dkim-dkim2-spec-08` with the
+The preview baseline implements `draft-ietf-dkim-dkim2-spec-09` with the
 `draft-ietf-dkim-dkim2-dns-02` DNS behavior identifier. A later draft
 is a reviewed behavior migration, not an automatic compatibility update.
 
@@ -39,9 +39,9 @@ is a reviewed behavior migration, not an automatic compatibility update.
   propagator module introduces the frozen configuration root
   `dkim2-dsn-propagator-config-v1` documented in
   [`cmd/dkim2-dsn-propagator/README.md`](../../cmd/dkim2-dsn-propagator/README.md).
-- Exim compatibility is `unqualified_draft08`. The exact five source-linked
+- Exim compatibility is `unqualified_draft09`. The exact five source-linked
   rows in the dated compatibility report are historical Draft-04 evidence and
-  do not qualify Draft-08. There is no portable Exim report, universal
+  do not qualify Draft-09. There is no portable Exim report, universal
   local-scan ABI binary, binary package, or container image.
 
 ## Root library API delta
@@ -49,7 +49,7 @@ is a reviewed behavior migration, not an automatic compatibility update.
 `make check-reference` compares the deterministic manifest of the exported
 root package (`go -C tools run ./cmd/reference -root .. api`) with
 `testdata/reference/go-api-base.json`. The reviewed base moved from
-`f7099dbd47ff3bd79e30f7801814c87eb0914b4c` to the Draft-08 surface of the
+`f7099dbd47ff3bd79e30f7801814c87eb0914b4c` to the Draft-09 surface of the
 `v0.1.48` release. A changed declaration keeps its name but changes its
 signature, type, or value. Doc-comment-only changes are not listed.
 
@@ -133,6 +133,64 @@ declarations):
   `RecordedHop.RecipeMode`, `RecordedHop.Sequence`,
   `RecordedHop.SignerDomain`, `RecordedHop.String`, `RecordedHop.Valid`.
 
+Draft-09 Domain Policy Record and two-way Authentic From (disposition
+`docs/specs/draft-09-migration-disposition.md` C1 to C3, C6, C14; D1 to D3,
+D8, D9):
+
+- Added: `DNSPublicKeyProvider.LookupDomainPolicy`, `DomainPolicyAmbiguous`,
+  `DomainPolicyAuthorized`, `DomainPolicyInvalid`, `DomainPolicyProvider`,
+  `DomainPolicyQuery`, `DomainPolicyQuery.Domain`, `DomainPolicyQuery.Format`,
+  `DomainPolicyQuery.GoString`, `DomainPolicyQuery.MarshalJSON`,
+  `DomainPolicyQuery.MarshalText`, `DomainPolicyQuery.String`,
+  `DomainPolicyStatus`, `DomainPolicyStatus.Known`, `DomainPolicyStrict`,
+  `NewDomainPolicyQuery`, `ReasonDomainPolicyAmbiguous`,
+  `ReasonDomainPolicyInvalid`, `ReasonDomainPolicyTemporary`,
+  `ReasonFromSubdomainForbidden`, `WithDomainPolicyProvider`,
+  `WithSignerDomainPolicyProvider`, `WithoutSignerSubdomainFromAuthorization`,
+  `WithoutSubdomainFromAuthorization`.
+- Changed behavior without a signature change: `NewVerifier` and `NewSigner`.
+
+Draft-09 Sections 7.1 item 3 and 11.1 make a From header field Authentic also
+when the Signing Domain is a subdomain of the From domain, unless the From
+domain publishes a Domain Policy Record with `f=strict` at
+`_domainkey.<domain>` (Section 3.8). `NewVerifier` and `NewSigner` (whose
+`VerifyForRevision` builds a verifier) therefore require an explicit choice
+and fail with `invalid_option` (`SigningErrorInvalidOptions` for the signer)
+without one:
+
+- the key provider also implements `DomainPolicyProvider`, as
+  `DNSPublicKeyProvider` does, so existing DNS-backed callers keep compiling
+  and gain the conforming behavior;
+- `WithDomainPolicyProvider` / `WithSignerDomainPolicyProvider` names a
+  provider explicitly; or
+- `WithoutSubdomainFromAuthorization` /
+  `WithoutSignerSubdomainFromAuthorization` selects the documented local
+  downward-only policy, which never queries a Domain Policy Record and reports
+  such messages as FAIL `from_not_authentic`.
+
+Callers with a custom `PublicKeyProvider` must add one of the options; giving
+both a provider and the downward-only option is rejected as conflicting. A
+temporary Domain Policy Record failure is TEMPERROR `domain_policy_temporary`;
+a strict record is FAIL `from_subdomain_forbidden`; more than one record or an
+invalid record is PERMERROR `domain_policy_ambiguous` or
+`domain_policy_invalid`. Lookups happen only after every signature proof
+passed and are counted as provider calls. Signers and the DSN identity
+resolver stay downward only (D8) and never query a Domain Policy Record.
+
+Draft-09 baseline (disposition C4, C5, C7, C9):
+
+- Added: `MaxCarriedTXTRecords`.
+- Changed: `DraftIdentifier` (`draft-ietf-dkim-dkim2-spec-09`).
+- Changed behavior without a signature change: `NewFoundTXTLookupResult`
+  and `TXTLookupResult.Records` carry up to `MaxCarriedTXTRecords()` payloads
+  instead of one, so the resolver can ignore records whose `v=` is not
+  `DKIM1` before the uniqueness check (Section 3.7); more payloads are
+  ambiguous. `authresults.New` admits the result `none` without a reason. A
+  null body Recipe maps `ReasonBodyHistoryUnavailable` to PERMERROR. Hash and
+  signature values with leading FWS, and strict base64 values with leading or
+  trailing FWS, are rejected (Section 2.14); FWS after an `rt=` comma stays
+  accepted (`DKIM2-ISSUE-0024`), FWS before one is rejected.
+
 `DescribeRecordedChain` parses the CRLF header section with the verifier's
 extraction and collection rules under the default limits and returns what each
 hop recorded, ordered by `i=`: signer domain, Message-Instance, and a
@@ -144,16 +202,16 @@ A Recipe is attributed only to the hop that introduced its Message-Instance
 (`RecordedHop.IntroducesInstance`), whereas `VerifierHop.RecipeMode` reports
 `applied` for every signer of a Recipe-carrying instance and the verifier
 projection keeps header-occurrence order. A body mode of `unavailable` can be
-described but never accompanies a PASS (Draft-08 Section 13), and a verifier
+described but never accompanies a PASS (Draft-09 Section 13), and a verifier
 configured with larger limits may pass a message this function rejects.
 
 `SignatureStatusIgnored` leaves the `SignatureStatus` constant block: an
 unknown algorithm is reported as `SignatureStatusPERMERROR` with
-`ReasonUnsupportedAlgorithm` (Draft-08 Section 14.6 step 4); the declaration
+`ReasonUnsupportedAlgorithm` (Draft-09 Section 14.6 step 4); the declaration
 count is unchanged because the manifest counts the constant block as one
 declaration.
 
-`DraftIdentifier` is `draft-ietf-dkim-dkim2-spec-08`.
+`DraftIdentifier` is `draft-ietf-dkim-dkim2-spec-09`.
 `NewDSNSigningEvidenceRequest` no longer takes a `DSNIdentity`; the Section
 16.2 resolver chooses it (see
 [Delivery-status signing identity](#delivery-status-signing-identity)).
@@ -214,7 +272,7 @@ digest-pinned set. The commit route answers
 cannot resolve, which is the caller's instruction to defer rather than to
 retry immediately.
 
-The `POST /v1/process` schema is the one canonical Draft-08 contract for both
+The `POST /v1/process` schema is the one canonical Draft-09 contract for both
 current-only and authenticated multi-instance results. Its closed policy enums
 contain only states produced by the current verifier and policy projection;
 there are no deprecated aliases, version fallbacks, or alternate legacy
@@ -223,7 +281,7 @@ closed verification reasons `duplicate_hash_algorithm`,
 `invalid_recipe_json`, and `duplicate_selector`; Draft-08 removed the
 Draft-06/07 `too_many_signatures` reason together with the per-algorithm cap,
 and adds `custody_mismatch`, `body_history_unavailable`, and `invalid_recipe`.
-Draft-08 Section 14.1 also moves `timestamp_invalid`, `envelope_mismatch`,
+Draft-09 Section 14.1 also moves `timestamp_invalid`, `envelope_mismatch`,
 `domain_alignment_mismatch`, `next_domain_mismatch`, `out_of_band_required`,
 and `from_not_authentic` from PERMERROR to FAIL; Chain of Custody adjacency
 failures formerly reported as PERMERROR `malformed_protocol` are FAIL
@@ -240,7 +298,7 @@ dashboards, the Nauthilus projection) must expect the new values.
 Signature-set result rows are positional and are not keyed or merged by
 algorithm. The per-set status `ignored` is removed from
 `SignatureSetResult.status` and from the root library
-(`SignatureStatusIgnored`): Draft-08 Section 14.6 step 4 makes an unknown
+(`SignatureStatusIgnored`): Draft-09 Section 14.6 step 4 makes an unknown
 algorithm a PERMERROR intermediate, so its set now reports `permerror` with
 reason `unsupported_algorithm` and its selector, exactly like a locally
 disabled algorithm. The combined state and primary reason do not change.
@@ -258,7 +316,7 @@ documented in the
 
 ### ML-DSA-44 (`mldsa44`)
 
-Draft-08 Section 3.4 makes pure ML-DSA-44 a verifier MUST. The library,
+Draft-09 Section 3.4 makes pure ML-DSA-44 a verifier MUST. The library,
 `dkim2d`, the generated clients, and the Rspamd contrib add it together.
 
 Breaking changes to the exported root Go API (`github.com/croessner/dkim2`):
@@ -289,7 +347,7 @@ Breaking changes to the exported root Go API (`github.com/croessner/dkim2`):
   built against the FIPS 140-3 Go Cryptographic Module v1.0.0, which has no
   ML-DSA; `MLDSA44Available` reports the condition.
 
-RSA signing floor (Draft-08 Section 3.2 SHOULD made a local MUST):
+RSA signing floor (Draft-09 Section 3.2 SHOULD made a local MUST):
 `NewRSASigningCredential`, every internal signing credential, the
 datasource-to-signing projection, and `dkim2d` custody keys reject RSA
 moduli below 2048 bits (`MinSigningRSABits`) with `key_mismatch` and the
@@ -315,7 +373,7 @@ modules): `signing.PrivateKeySignRequest.Digest` is replaced by
 HTTP wire `v1`: `SignatureSetResult.algorithm` and
 `VerifierHop.signature_algorithms` gain `mldsa44`.
 `VerifierHop.signature_algorithms` drops `rsa-sha512` and `ed25519-sha512`
-and its `maxItems` becomes 3: only verified Draft-08 Section 3 algorithms are
+and its `maxItems` becomes 3: only verified Draft-09 Section 3 algorithms are
 listed, so the daemon never produced those values. Generated clients reject
 values outside their enum, so every generated artifact and the Rspamd
 vocabulary are deployed with the daemon as one digest-pinned set. `dkim2d
@@ -323,7 +381,7 @@ serve` and `dkim2d validate` refuse to start without ML-DSA support.
 
 ### Delivery-status signing identity
 
-Draft-08 Section 16.2 binds the DSN signing domain to an `rt=` address of the
+Draft-09 Section 16.2 binds the DSN signing domain to an `rt=` address of the
 reported message's highest DKIM2-Signature. Breaking changes to the exported
 root Go API:
 
@@ -355,7 +413,7 @@ changed from "signing identity" to "preferred candidate when matching" (see
 
 ### Header field placement
 
-Draft-08 Sections 9 and 10 make Message-Instance and DKIM2-Signature trace
+Draft-09 Sections 9 and 10 make Message-Instance and DKIM2-Signature trace
 header fields. RFC 5322 Section 3.6 says trace fields SHOULD be kept in
 blocks prepended to the message. This is a visible behavior change of the
 adapters:

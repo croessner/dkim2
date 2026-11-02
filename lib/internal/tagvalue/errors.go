@@ -32,6 +32,9 @@ const (
 	ErrorCodeInvalidBase64Length ErrorCode = "invalid_base64_length"
 	// ErrorCodeInvalidBase64PadBits reports non-zero RFC 4648 pad bits.
 	ErrorCodeInvalidBase64PadBits ErrorCode = "invalid_base64_pad_bits"
+	// ErrorCodeInvalidBase64Whitespace reports FWS before the first or after
+	// the last base64string character (Draft-09 Section 2.14).
+	ErrorCodeInvalidBase64Whitespace ErrorCode = "invalid_base64_whitespace"
 )
 
 // Known reports whether code belongs to the closed tag-value vocabulary.
@@ -40,7 +43,8 @@ func (c ErrorCode) Known() bool {
 	case ErrorCodeEmptyTagSpec, ErrorCodeMissingEquals,
 		ErrorCodeInvalidTagName, ErrorCodeInvalidTagValue, ErrorCodeDuplicateTag,
 		ErrorCodeLimitExceeded, ErrorCodeInvalidOptions, ErrorCodeInvalidBase64Alphabet,
-		ErrorCodeInvalidBase64Padding, ErrorCodeInvalidBase64Length, ErrorCodeInvalidBase64PadBits:
+		ErrorCodeInvalidBase64Padding, ErrorCodeInvalidBase64Length, ErrorCodeInvalidBase64PadBits,
+		ErrorCodeInvalidBase64Whitespace:
 		return true
 	default:
 		return false

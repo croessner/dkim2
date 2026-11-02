@@ -50,7 +50,7 @@ const (
 	inboundDaemonEndpoint = "http://127.0.0.1:8081"
 	signingDomain         = "origin.example.test"
 	// localFailedDomain is a recipient domain under the local delivery_status
-	// profile domain whose deliveries fail, so its bounce satisfies Draft-08
+	// profile domain whose deliveries fail, so its bounce satisfies Draft-09
 	// Section 16.2 (rt= under d=) and Postfix's MAILER-DAEMON@$myorigin From
 	// is Authentic for d=origin.example.test.
 	localFailedDomain = "failed." + signingDomain
@@ -70,7 +70,7 @@ const (
 	// forwardedRecipient is the final recipient the destination refused.
 	forwardedRecipient = "<final@" + signingDomain + ">"
 	// foreignRecipient is the recipient of the message the foreign previous
-	// hop originated and its own delivery-status system bounced. Draft-08
+	// hop originated and its own delivery-status system bounced. Draft-09
 	// Section 16.2 lets a notification signer use only a d= that
 	// relaxed-matches an rt= recipient of the reported message, so the
 	// recipient sits under the foreign delivery-status profile domain.
@@ -1551,7 +1551,7 @@ func reviseViaDaemon(
 func signDSNViaDaemon(tenant string, outer smtpEnvelope, message []byte) ([]byte, error) {
 	request := map[string]any{
 		"api_version": "v1",
-		"draft":       "draft-ietf-dkim-dkim2-spec-08",
+		"draft":       "draft-ietf-dkim-dkim2-spec-09",
 		"message": map[string]any{
 			"raw_rfc5322_base64": base64.StdEncoding.EncodeToString(message),
 		},
@@ -1571,7 +1571,7 @@ func callSigningRoute(
 ) ([]byte, error) {
 	request := map[string]any{
 		"api_version": "v1",
-		"draft":       "draft-ietf-dkim-dkim2-spec-08",
+		"draft":       "draft-ietf-dkim-dkim2-spec-09",
 		"message": map[string]any{
 			"raw_rfc5322_base64": base64.StdEncoding.EncodeToString(message),
 			"fidelity":           "raw_rfc5322",
@@ -2029,7 +2029,7 @@ func provePropagationNotLocal() error {
 // foreignNotification mints one delivery-status notification about a message
 // the foreign previous hop originated for a foreign recipient and that this
 // system never signed. The foreign tenant signs the notification through the
-// daemon's delivery-status route under its own domain, which Draft-08 Section
+// daemon's delivery-status route under its own domain, which Draft-09 Section
 // 16.2 admits because the reported message's rt= recipient is under that
 // domain, so the outer signature verifies and aligns while the embedded
 // completion signature is foreign. The
@@ -2104,7 +2104,7 @@ func classifyReceivedNotification(
 	defer clear(capability)
 	request := map[string]any{
 		"api_version": "v1",
-		"draft":       "draft-ietf-dkim-dkim2-spec-08",
+		"draft":       "draft-ietf-dkim-dkim2-spec-09",
 		"message": map[string]any{
 			"raw_rfc5322_base64": base64.StdEncoding.EncodeToString(notice),
 			"fidelity":           "raw_rfc5322",
@@ -2456,7 +2456,7 @@ func parseHeaderFields(raw []byte) ([]parsedHeader, error) {
 // The Milter inserts this hop's trace fields with SMFIR_INSHEADER index 0, so
 // Postfix places them above its own Received field, which Milters never see.
 // These are the exact top-of-header field names each queued message must
-// start with (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6).
+// start with (Draft-09 Sections 9 and 10, RFC 5322 Section 3.6).
 var (
 	// milterSignedTraceOrder is a Milter-signed SMTP or local submission:
 	// this hop's Message-Instance and DKIM2-Signature, then Postfix's own

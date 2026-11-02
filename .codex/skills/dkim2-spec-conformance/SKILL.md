@@ -8,7 +8,7 @@ description: Enforce DKIM2 draft and RFC fidelity for protocol design, implement
 ## First Moves
 
 Read `AGENTS.md`, `POLICY.md`, and `docs/ARCHITECTURE.md` before changing
-behavior. Treat `draft-ietf-dkim-dkim2-spec-08` and
+behavior. Treat `draft-ietf-dkim-dkim2-spec-09` and
 `draft-ietf-dkim-dkim2-dns-02` as the active baseline until the architecture says
 otherwise.
 
@@ -43,14 +43,14 @@ Prefer draft-versioned golden vectors and negative vectors. Tests must prove:
 - Current-envelope matching for the highest DKIM2 signature.
 - Message-Instance hash behavior.
 - SHA-256 and SHA-512 Message-Instance verification, including duplicate-name
-  rejection and the Draft-08 Section 14.7 `hash-all` (`,`) and `hash-any`
+  rejection and the Draft-09 Section 14.7 `hash-all` (`,`) and `hash-any`
   (`|`) group evaluation.
-- Draft-08 Section 14.6 `sig-all` and `sig-any` signature-group evaluation,
+- Draft-09 Section 14.6 `sig-all` and `sig-any` signature-group evaluation,
   distinct selectors, and the `rsa-sha256`, `ed25519-sha256`, and `mldsa44`
   algorithms; an unimplemented algorithm is a PERMERROR intermediate.
-- Draft-08 unsigned-header, lowercase Recipe-key, and unchanged
+- Draft-09 unsigned-header, lowercase Recipe-key, and unchanged
   Message-Instance transition behavior.
-- Draft-08 Section 14.1 states: PASS means a Fully Verified DKIM2 Message,
+- Draft-09 Section 14.1 states: PASS means a Fully Verified DKIM2 Message,
   FAIL means verification completed and the message is not Fully Verified.
 - Recipe parse, apply, generate, null-recipe, and resource-limit behavior.
 - DNS key-record state distinctions.

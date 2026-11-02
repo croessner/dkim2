@@ -95,7 +95,7 @@ func TestHistoricalTargetVerificationRejectsSignatureFailures(t *testing.T) {
 	if err != nil || outcome != HistoricalTargetSignatureUnverified {
 		t.Fatalf("missing key outcome=%q error=%v", outcome, err)
 	}
-	temporary, err := NewVerifier(temporaryKeyProvider{})
+	temporary, err := NewVerifier(temporaryKeyProvider{}, testFromChoice)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestHistoricalTargetVerificationCustodyBelowPreviousHop(t *testing.T) {
 func TestRevisionInstantWithinSkewOf(t *testing.T) {
 	now := time.Unix(int64(historicalCompletionTimestamp), 0)
 	clock := func() time.Time { return now }
-	verifier, err := NewVerifier(temporaryKeyProvider{}, WithClock(clock))
+	verifier, err := NewVerifier(temporaryKeyProvider{}, WithClock(clock), testFromChoice)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +260,7 @@ func TestRevisionInstantWithinSkewOf(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The revision-instant skew is pinned literally; it is independent of the
-	// one-day Draft-08 signature future tolerance.
+	// one-day Draft-09 signature future tolerance.
 	tolerance := 5 * time.Minute
 	for name, offset := range map[string]time.Duration{"same": 0, "earlier within": -tolerance, "later within": tolerance} {
 		now = time.Unix(int64(historicalCompletionTimestamp), 0).Add(offset)
@@ -277,7 +277,7 @@ func TestRevisionInstantWithinSkewOf(t *testing.T) {
 		}
 	}
 	now = time.Unix(int64(historicalCompletionTimestamp), 0)
-	other, err := NewVerifier(temporaryKeyProvider{}, WithClock(clock))
+	other, err := NewVerifier(temporaryKeyProvider{}, WithClock(clock), testFromChoice)
 	if err != nil {
 		t.Fatal(err)
 	}

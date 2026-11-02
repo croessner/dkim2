@@ -20,7 +20,7 @@ func TestVerifierSupportsConcurrentReuse(t *testing.T) {
 	raw := publicProviderFixture(t)
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return MissingPublicKey(AlgorithmRSASHA256), nil
-	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -49,7 +49,7 @@ func TestAssessUnsignedReturnsNoVerificationAndMakesNoProviderCall(t *testing.T)
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		calls++
 		return PublicKeyResult{}, errors.New("unexpected lookup")
-	}))
+	}), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -70,13 +70,13 @@ func TestAssessUnsignedReturnsNoVerificationAndMakesNoProviderCall(t *testing.T)
 func TestNewVerifierRejectsInvalidDependencies(t *testing.T) {
 	var typedNil *pointerPublicProvider
 	for _, provider := range []PublicKeyProvider{nil, typedNil} {
-		verifier, err := NewVerifier(provider)
+		verifier, err := NewVerifier(provider, WithoutSubdomainFromAuthorization())
 		if verifier != nil || !errors.Is(err, newAPIError(APIErrorCodeInvalidProvider)) {
 			t.Fatalf("NewVerifier() = %#v, %v", verifier, err)
 		}
 	}
 	provider := publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) { return PublicKeyResult{}, nil })
-	verifier, err := NewVerifier(provider, WithMaxRecipients(HardMaxRecipients+1))
+	verifier, err := NewVerifier(provider, WithMaxRecipients(HardMaxRecipients+1), WithoutSubdomainFromAuthorization())
 	if verifier != nil || !errors.Is(err, newAPIError(APIErrorCodeInvalidOption)) {
 		t.Fatalf("NewVerifier(invalid option) = %#v, %v", verifier, err)
 	}
@@ -86,7 +86,7 @@ func TestNewVerifierRejectsInvalidDependencies(t *testing.T) {
 func TestVerifyPreservesResultErrorDisjointness(t *testing.T) {
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return PublicKeyResult{}, errors.New("must not be reached")
-	}), WithMaxRawMessageBytes(8))
+	}), WithMaxRawMessageBytes(8), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -122,7 +122,7 @@ func TestVerifyPreflightsConstructorOwnedLengths(t *testing.T) {
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		calls++
 		return MissingPublicKey(AlgorithmRSASHA256), nil
-	}), WithMaxRawMessageBytes(8), WithMaxRecipients(1))
+	}), WithMaxRawMessageBytes(8), WithMaxRecipients(1), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}

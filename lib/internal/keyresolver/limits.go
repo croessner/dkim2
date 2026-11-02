@@ -5,7 +5,7 @@ import "time"
 const (
 	hardMaxNameBytes         = 253
 	hardMaxNameLabels        = 127
-	hardMaxTXTRecords        = 1
+	hardMaxTXTRecords        = 8
 	hardMaxTXTRecordBytes    = 64 << 10
 	hardMaxTags              = 128
 	hardMaxTagNameBytes      = 63
@@ -43,7 +43,7 @@ func DefaultLimits() Limits {
 	return Limits{
 		MaxSelectorBytes: 253, MaxSelectorLabels: 127,
 		MaxSigningDomainBytes: 253, MaxSigningDomainLabels: 127, MaxOwnerBytes: 253,
-		MaxTXTRecords: 1, MaxTXTRecordBytes: 8 << 10, MaxTags: 32,
+		MaxTXTRecords: hardMaxTXTRecords, MaxTXTRecordBytes: 8 << 10, MaxTags: 32,
 		MaxTagNameBytes: 63, MaxTagValueBytes: 8 << 10, MaxDecodedKeyBytes: 8 << 10,
 		MaxCacheEntries: 1_024, MaxPositiveTTL: time.Hour, MaxNegativeTTL: 5 * time.Minute,
 		MaxStableErrorTTL: time.Minute, MaxConcurrentLookups: 64,

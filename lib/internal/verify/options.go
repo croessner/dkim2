@@ -14,7 +14,7 @@ import (
 
 const (
 	// DraftBaseline identifies the active DKIM2 verification draft.
-	DraftBaseline = "draft-ietf-dkim-dkim2-spec-08"
+	DraftBaseline = "draft-ietf-dkim-dkim2-spec-09"
 	// AlgorithmRSASHA256 identifies RSA with SHA-256 and PKCS#1 v1.5 verification.
 	AlgorithmRSASHA256 = signature.AlgorithmRSASHA256
 	// AlgorithmEd25519SHA256 identifies Ed25519 verification over SHA-256 digest bytes.
@@ -30,10 +30,10 @@ const (
 	defaultMaxSignatureSets      = 16
 	defaultMaxEnvelopeRecipients = 2000
 	defaultRSAMinBits            = 1024
-	// signatureMaxAge is the fixed Draft-08 Section 14.3 maximum signature
+	// signatureMaxAge is the fixed Draft-09 Section 14.3 maximum signature
 	// age relative to the delivery instant.
 	signatureMaxAge = 14 * 24 * time.Hour
-	// signatureFutureTolerance is the fixed Draft-08 Section 14.3 limit for
+	// signatureFutureTolerance is the fixed Draft-09 Section 14.3 limit for
 	// signatures dated after the delivery instant.
 	signatureFutureTolerance = 24 * time.Hour
 	// revisionInstantSkew bounds how far a caller-supplied revision, signing,
@@ -59,6 +59,10 @@ type Options struct {
 	RevisionLimits RevisionLimits
 	// Clock supplies deterministic current time for timestamp checks.
 	Clock Clock
+	// FromAuthorization is the explicit Draft-09 Section 11.1 choice. It has
+	// no default: NewVerifier rejects a missing choice (local interpretation
+	// D9).
+	FromAuthorization FromAuthorization
 }
 
 // Option mutates verifier options before validation.
@@ -179,6 +183,8 @@ func WithClock(clock Clock) Option {
 }
 
 // NewVerifier constructs a verifier with validated dependencies and policies.
+// The options must carry an explicit Section 11.1 choice through
+// WithFromAuthorization; construction fails closed without one.
 func NewVerifier(provider KeyProvider, options ...Option) (Verifier, error) {
 	if nilKeyProvider(provider) {
 		return Verifier{}, invalidOptionError("key_provider", 0)
@@ -192,6 +198,9 @@ func NewVerifier(provider KeyProvider, options ...Option) (Verifier, error) {
 	}
 	if err := resolved.Validate(); err != nil {
 		return Verifier{}, err
+	}
+	if !resolved.FromAuthorization.valid() {
+		return Verifier{}, invalidOptionError("from_authorization", 0)
 	}
 	revisionParser, err := newRevisionRecipeParser(resolved.RevisionLimits)
 	if err != nil {
@@ -297,7 +306,7 @@ func (p AlgorithmPolicy) Validate() error {
 		seen[algorithm] = struct{}{}
 		if algorithm == AlgorithmMLDSA44 && cryptodkim2.MLDSA44Available() != nil {
 			// A runtime without ML-DSA (such as the FIPS 140-3 Go
-			// Cryptographic Module v1.0.0) cannot implement the Draft-08
+			// Cryptographic Module v1.0.0) cannot implement the Draft-09
 			// Section 3 verifier-mandatory mldsa44 algorithm, so
 			// construction fails closed instead of silently ignoring it.
 			return unsupportedAlgorithmError(algorithm)

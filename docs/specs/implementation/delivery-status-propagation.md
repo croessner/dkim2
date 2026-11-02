@@ -32,7 +32,7 @@ Recorded limits that are not open items of this specification:
   policy for this verifier must admit the attribute with a string schema whose
   `max_length` is at least 30 before the option is enabled in production.
 
-This specification closes the last two Draft-08 Section 16 gaps of the
+This specification closes the last two Draft-09 Section 16 gaps of the
 reference implementation: evaluation of a received DKIM2-signed delivery-status
 notification (DSN) as a DSN, and propagation of such a DSN backwards along the
 chain of custody by a Forwarder. Both build on the byte-preserving RFC 6522
@@ -53,7 +53,7 @@ This specification is governed by:
 - `POLICY.md`
 - `docs/ARCHITECTURE.md`
 - `docs/specs/openapi/dkim2d.yaml`
-- `draft-ietf-dkim-dkim2-spec-08`, Section 10.5 (`mf=`), Section 10.6 (`rt=`),
+- `draft-ietf-dkim-dkim2-spec-09`, Section 10.5 (`mf=`), Section 10.6 (`rt=`),
   Section 10.7 (`nd=`), Section 12.3 (custody schemes), Section 14.4 (domain
   alignment), and Sections 16 through 16.4
 - `docs/specs/draft-06-migration-disposition.md`, which records that Draft-06
@@ -73,8 +73,8 @@ This specification is governed by:
 - `Makefile`
 
 If these sources disagree, implementation stops until the durable authority is
-reconciled. The active protocol baseline is `draft-ietf-dkim-dkim2-spec-08`.
-Section numbers cited here are Draft-08 numbers unless a citation names
+reconciled. The active protocol baseline is `draft-ietf-dkim-dkim2-spec-09`.
+Section numbers cited here are Draft-09 numbers unless a citation names
 another draft explicitly.
 
 The RFC 3464, RFC 3834, and RFC 2033 statements in this specification were
@@ -87,7 +87,7 @@ message and MUST NOT be supplied otherwise; `Original-Recipient` is included
 only when a sender-specified `ORCPT` was present; `Final-Recipient` reports
 the exact envelope address without angle brackets; `Action` and `Status` are
 independent, so `failed` may carry a `4.X.Y` code; the third part is optional
-in RFC 3464 but required by Draft-08 Section 16.1. RFC 3834 Section 5 states
+in RFC 3464 but required by Draft-09 Section 16.1. RFC 3834 Section 5 states
 that `auto-generated` MUST NOT label a DSN and that `auto-replied` MAY. RFC
 2033 requires `LHLO`, a non-positive reply to `HELO` and `EHLO`, `PIPELINING`,
 `ENHANCEDSTATUSCODES`, one reply per accepted recipient after `DATA`, and
@@ -107,13 +107,13 @@ Three things are missing:
 1. **Received DSN evaluation.** A DKIM2-signed DSN that arrives from another
    system is processed by `/v1/process` as an ordinary message. The outer
    signature is verified, but the RFC 6522 structure, the embedded original,
-   and the Draft-08 Section 16.4 linkage between the DSN and a message this
+   and the Draft-09 Section 16.4 linkage between the DSN and a message this
    system previously signed are not evaluated. No structured DSN fact reaches
    the Milter, Rspamd, or any policy consumer. The Section 16.4 checks exist
    as internal machinery in `lib/internal/dsn/evidence.go` but are reachable
    only through the outgoing signing facade, which evaluates the outer
    recipient against an *outgoing* envelope.
-2. **DSN rebuild.** Draft-08 Section 16.3 requires a Forwarder that
+2. **DSN rebuild.** Draft-09 Section 16.3 requires a Forwarder that
    propagates a DSN to remove the signature and Message-Instance it added,
    undo its own modifications through the authenticated recipe, degrade to
    `text/rfc822-headers` when the body cannot be reconstructed, and neutralize
@@ -143,7 +143,7 @@ After this work the product:
    report-type=delivery-status` message as a DSN inside `/v1/process`, and
    returns a bounded structured `delivery_status` fact next to the existing
    verification, authentication, policy, and replay facts;
-2. evaluates the Draft-08 Section 16.4 checks for such a DSN against the
+2. evaluates the Draft-09 Section 16.4 checks for such a DSN against the
    embedded original message and reports whether the DSN is linked to a
    message this system signed, without ever using that fact as a signing
    authority;
@@ -263,7 +263,7 @@ Out of scope:
 - any Postfix patch; the propagation path needs none;
 - Milter-side DSN generation or envelope mutation;
 - generic Exim integration beyond documenting that Exim can route to the same
-  LMTP endpoint; Exim remains `unqualified_draft08`;
+  LMTP endpoint; Exim remains `unqualified_draft09`;
 - recipient-group signing, Bcc disclosure, and the multi-recipient originator
   path;
 - automatic sender-rewriting for forwarded mail; the deployment must already
@@ -310,14 +310,14 @@ Out of scope:
   Every run member must verify cryptographically over the state it signed;
   a run member that does not verify makes the projection
   `unsupported_chain`, because the keys are local and a non-verifying local
-  signature is either forged or damaged. Draft-08 Section 16.2 requires only
+  signature is either forged or damaged. Draft-09 Section 16.2 requires only
   that the reported message was Provisionally Verified, so verifying every
   local run member is a stricter local rule. The embedded verification of the
-  highest signature and highest Message-Instance hashes follows Draft-08
+  highest signature and highest Message-Instance hashes follows Draft-09
   Section 16.4 items 2 and 3 directly.
   Rule (b) also absorbs a genuine earlier hop between two domains of the
   same tenant; that is intended, because such a hop is indistinguishable
-  from an imaginary one and the tenant controls both ends. Draft-08 Section
+  from an imaginary one and the tenant controls both ends. Draft-09 Section
   10.7 guarantees that an `nd=` run ends in one signature with `mf=` and
   `rt=`. A run therefore has one or more members. Section 16.3 requires
   *every* signature that the Forwarder added to be removed, which is the
@@ -373,7 +373,7 @@ The evaluation proves, in this order, and stops at the first failure:
    outgoing DSN path. For `text/rfc822-headers`, only header evidence is
    available and the result carries the `headers_only` form. An embedded
    original that carries no DKIM2-Signature at all is `embedded = absent`:
-   Draft-08 Section 16.4 applies only when "the included original message
+   Draft-09 Section 16.4 applies only when "the included original message
    is also DKIM2 signed", so evaluation stops with `propagation =
    not_applicable` and every later member `not_evaluated`.
 3. **Local hop identity**: this is Section 16.4 item 2. The completion
@@ -417,7 +417,7 @@ The evaluation proves, in this order, and stops at the first failure:
 6. **Failure class**: among the linked groups, the first in report order with
    `Action: failed` is the propagation group. If no linked group has
    `Action: failed`, the DSN reports a delay, a delivery, a relay, or an
-   expansion, and Draft-08 Section 16 gives no reason to send a failure to the
+   expansion, and Draft-09 Section 16 gives no reason to send a failure to the
    previous hop; the propagation projection is `not_failure`.
 7. **Previous hop**: `i=k-1` is located and classified as defined above.
 
@@ -463,7 +463,7 @@ set passes.
 
 ### Policy mapping for received DSNs
 
-Draft-08 Section 16.4 says a DSN that fails verification MUST NOT be
+Draft-09 Section 16.4 says a DSN that fails verification MUST NOT be
 propagated and SHOULD be rejected with 550/5.7.x when verification happens
 before acceptance. The local policy engine maps the projection as follows.
 These rules are local policy, not draft text, except where noted. Rows are
@@ -539,7 +539,7 @@ follows.
    DSN `not_reconstructable`, which is recorded as a known limit. The Section
    14.4 relaxed domain match between its `d=`
    and its `mf=` domain must pass. Its `mf=` must be non-null; a null `mf=`
-   is `forbidden_null_previous_sender` and Draft-08 Section 16 forbids sending
+   is `forbidden_null_previous_sender` and Draft-09 Section 16 forbids sending
    any DSN. The completion `d=`, which signs the propagated report, must
    relaxed-match (Section 7.1 item 4: `rt=` address as Parameter1, `d=` as
    Parameter2) the previous hop's single `rt=` address, because that hop is
@@ -579,7 +579,7 @@ follows.
    observations for diagnosis. A golden vector with interleaved
    hash-excluded fields above and below `i=k-1` pins the rule so that a
    later change to the Section 4 exclusion list breaks the vector visibly.
-   Signed fields are never pruned by this rule: Draft-08 Section 4 signs
+   Signed fields are never pruned by this rule: Draft-09 Section 4 signs
    `Auto-Submitted` and `VBR-Info`, so a forwarder that added either field
    must have described the addition in its Recipe, and the rebuild removes
    it by applying that Recipe. A Recipe that omits it cannot restore the
@@ -590,7 +590,7 @@ follows.
    `message/rfc822` with the reconstructed message. If the embedded original
    was headers-only, or any transition in the run carried a null or
    body-unavailable recipe, the new third part is `text/rfc822-headers` with
-   the reconstructed header block. Draft-08 requires this degradation instead
+   the reconstructed header block. Draft-09 requires this degradation instead
    of failure. Header-only serialization needs a new writer; the recipe
    state's existing materialization is defined only for body-known states.
 6. **Machine part.** Generate a fresh `message/delivery-status`:
@@ -640,12 +640,12 @@ follows.
    `<reporting_mta>`, `Auto-Submitted: auto-replied`, which RFC 3834 Section
    5 permits for DSNs while forbidding `auto-generated`, and
    `MIME-Version: 1.0`. No `Received` header is generated; the MTA adds its
-   own on submission. `Auto-Submitted` is signed under Draft-08 Section 4,
+   own on submission. `Auto-Submitted` is signed under Draft-09 Section 4,
    so it is written before the `m=1` header hash is computed; a test proves
    that changing or removing it breaks verification.
 9. **DKIM2 fields.** The new DSN carries exactly one Message-Instance `m=1`
    and exactly one DKIM2-Signature `i=1` with `mf=<>` and `rt=` equal to the
-   previous hop's `mf=`. Draft-08 Section 16.3 requires the propagated DSN to
+   previous hop's `mf=`. Draft-09 Section 16.3 requires the propagated DSN to
    be a new message with a single signature.
 
 The rebuild is deterministic for a given input, timestamp, nonce, and
@@ -1188,7 +1188,7 @@ Unit tests, library:
   preserved and invalid status code fallback to `5.0.0`, ENVID copy and
   invalid ENVID drop, conditional `Original-Recipient` copy,
   and byte-exact golden vectors under
-  `lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/`;
+  `lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/`;
 - report generation: closed template output, absence of every forbidden field,
   presence of every RFC 3464 required field, deterministic bytes, CRLF
   discipline, and a test proving the status code and ENVID are the only
@@ -1299,7 +1299,7 @@ Final gate:
 - A signature under a domain the tenant does not control can never be
   classified `local`, regardless of its `mf=`.
 - No received-DSN fact can authorize any signing operation.
-- The propagation route produces a Draft-08 Section 16.3 conformant DSN
+- The propagation route produces a Draft-09 Section 16.3 conformant DSN
   whose signing domain is provably the removed completion signature's domain,
   whose recipient is provably the cryptographically verified previous hop's
   `mf=`, whose local hop run is removed completely across `nd=` and imaginary
@@ -1409,7 +1409,7 @@ Final gate:
   ordinary-transit forwarder, the delivery-status signer, the forwarder's
   reserved return path (`mf=`), and the destination that refuses the message
   all share `origin.example.test`; only the simulated previous hop is
-  foreign. Draft-08 Section 16.4 item 1, the alignment of the outer signer
+  foreign. Draft-09 Section 16.4 item 1, the alignment of the outer signer
   with the completion signature's `rt=` domain, is therefore exercised on
   real Postfix only in the equal-domain case; the directed parent-domain case
   is covered by the golden vectors alone. The same disclosure is stated in
@@ -1447,7 +1447,7 @@ Final gate:
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
 | Scope | Received-DSN evaluation, rebuild, propagation route, adapter, projections, docs | All slices implemented; the qualification lane passes end to end and the documentation set is complete | done | See "Completion Evidence" |
-| Behavior | Draft-08 Sections 10.7, 12.3, 14.4, 16, 16.3, 16.4 and RFC 6522/3464/3834/2033 semantics are explicit and tested | Covered by unit, golden-vector, and fuzz coverage in `lib` and by daemon and adapter tests; the received-report RFC 3464 profile accepts the Postfix field order and is frozen in the golden corpus; the propagation route applies the outer verdict before the evaluation, so an unreadable outer signature is `reject`, never `tempfail`, and `/v1/process` keeps the outer `permerror` without a daemon error | done | The Milter ordinary-transit envelope inheritance is a documented limitation with a documented alternative |
+| Behavior | Draft-09 Sections 10.7, 12.3, 14.4, 16, 16.3, 16.4 and RFC 6522/3464/3834/2033 semantics are explicit and tested | Covered by unit, golden-vector, and fuzz coverage in `lib` and by daemon and adapter tests; the received-report RFC 3464 profile accepts the Postfix field order and is frozen in the golden corpus; the propagation route applies the outer verdict before the evaluation, so an unreadable outer signature is `reject`, never `tempfail`, and `/v1/process` keeps the outer `permerror` without a daemon error | done | The Milter ordinary-transit envelope inheritance is a documented limitation with a documented alternative |
 | Security | Datasource-defined locality, read-only evaluation, verified previous hop, replay gate, fail-closed rebuild, no destination leakage, secret-safe diagnostics | Preserved; the propagation capability is refused together with the disabled replay backend at configuration load and at lifecycle composition, so the route never composes without a stored coordinate; the qualification stack keeps loopback-only transports, owned Unix sockets, distinct protected capabilities, and content-free diagnostics | done | The outer-identity coordinate (one propagated DSN per distinct aligned notification, no amplification) and the imaginary-hop-below-`nd=` one-hop cost are recorded as accepted limits, not open items |
 | Boundaries | Library, daemon, generated client, adapter, Milter, Rspamd stay purpose-separated | Unchanged; the qualification harness reaches production only through public HTTP routes, the LMTP socket, and the public verifier | done | No protocol logic was duplicated into the harness |
 | Tests | Unit, golden, fuzz, race, privacy, daemon, adapter, client, and real-MTA evidence exist | Present. On real Postfix the propagation lane runs the positive path plus spoofed, terminal origin, `not_local` (foreign completion `d=`, classification proven through `/v1/process`), duplicate after commit, re-injection outage, and in-lease retry. Library-only by design: a foreign signature naming a local address in `mf=` and a null previous sender (golden vectors). The real-Valkey gate carries reservation, expired-lease re-serve, and commit cases that run only where the 9.1.0 binary is present | done | The Rspamd enabled-attribute variant is blocked on the external Nauthilus example policy (`403` evidence); the Valkey propagation cases were not executed on the development host (9.1.1) |
@@ -1540,9 +1540,9 @@ Final gate:
   in the response, and the adapter fails closed with `451` when the
   re-injection listener cannot take an `SMTPUTF8` message it needs to send.
 - Settled: every local hop run member must verify; a non-verifying member is
-  `unsupported_chain`. This is stricter than the Draft-08 Section 16.2
+  `unsupported_chain`. This is stricter than the Draft-09 Section 16.2
   provisional-verification requirement. The highest-only embedded verification
-  in the evaluation follows Draft-08 Section 16.4 items 2 and 3.
+  in the evaluation follows Draft-09 Section 16.4 items 2 and 3.
 - Settled: `PropagationDisposition` is a distinct schema so that the shared
   `Disposition` enum and every generated client remain unchanged.
 - Settled: the unsigned-field removal rule in rebuild step 4 is fixed and not

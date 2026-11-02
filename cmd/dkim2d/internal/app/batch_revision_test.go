@@ -26,7 +26,7 @@ func TestBatchRevisionSealsLocalAndPrivateExternalCopies(t *testing.T) {
 	if result.Binding() != strings.Repeat("a", 64) || result.OriginalSHA256() != batchSHA256(original) {
 		t.Fatal("request binding lost")
 	}
-	verifier, err := dkim2.NewVerifier(fixture.publicKeys, dkim2.WithVerificationClock(service.clock))
+	verifier, err := dkim2.NewVerifier(fixture.publicKeys, dkim2.WithVerificationClock(service.clock), dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("verifier construction failed")
 	}
@@ -64,7 +64,7 @@ func inspectBatchRevisionStages(t *testing.T, service *SigningService, request B
 		t.Fatal("diagnostic lease unavailable")
 	}
 	defer func() { _ = lease.Close() }()
-	signer, err := dkim2.NewSigner(service.publicKeys, dkim2.NewRequestRouteAuthority(), batchRevisionAuthorizer{copies: request.state.copies}, lease, dkim2.WithSigningClock(service.clock))
+	signer, err := dkim2.NewSigner(service.publicKeys, dkim2.NewRequestRouteAuthority(), batchRevisionAuthorizer{copies: request.state.copies}, lease, dkim2.WithSigningClock(service.clock), dkim2.WithoutSignerSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("diagnostic signer unavailable")
 	}

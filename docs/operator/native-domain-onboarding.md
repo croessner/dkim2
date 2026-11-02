@@ -163,6 +163,21 @@ All chunks for a key form one TXT RR. RSA uses PKCS#1 public DER in `p=`;
 Ed25519 uses the raw 32-byte public key. The exporter round-trips the record
 through the repository DNS parser and back to the staged SPKI.
 
+Add `--domain-policy-strict` to also export the Draft-09 Section 3.8 Domain
+Policy Record of the onboarded domain after the key records:
+
+```text
+; domain-policy flags=strict
+_domainkey.<domain>. <ttl> IN TXT "v=DKIM1; f=strict"
+```
+
+The record forbids subdomains, such as delegated ESP or tenant subdomains,
+from making From header fields of the domain Authentic (Draft-09 Sections
+11.1 and 20). Without it, every Draft-09 verifier accepts a subdomain `d=` for
+the parent From domain. The flag is per invocation and is not stored; a retry
+against the same output must repeat it. The exporter round-trips the record
+through the repository Domain Policy Record parser.
+
 Publish the records through separately authorized DNS tooling. Confirm the
 authoritative data and wait for positive and negative cache policy before the
 next step. The onboarding command neither mutates DNS nor claims direct

@@ -138,7 +138,7 @@ stable command tree is:
 ```text
 dkim2d datasource domain plan --config /abs/admin.yaml --intent /abs/domain.yaml --operation /abs/op.json
 dkim2d datasource domain prepare --config /abs/admin.yaml --operation /abs/op.json
-dkim2d datasource domain dns export --config /abs/admin.yaml --operation /abs/op.json --output /abs/records.txt
+dkim2d datasource domain dns export --config /abs/admin.yaml --operation /abs/op.json --output /abs/records.txt [--domain-policy-strict]
 dkim2d datasource domain prove --config /abs/admin.yaml --operation /abs/op.json
 dkim2d datasource domain activate --config /abs/admin.yaml --operation /abs/op.json --apply
 dkim2d datasource domain status --config /abs/admin.yaml --operation /abs/op.json
@@ -188,7 +188,16 @@ YAML scalar typing; quoted placeholders remain strings. Missing or malformed
 variables fail closed, map keys are never expanded, and secret bytes remain in
 their protected files.
 
-`dns export` produces DNS-02 records for operator publication. `prove` and
+`dns export` produces DNS-02 records for operator publication. With the
+explicit per-invocation flag `--domain-policy-strict` it also exports, after
+the key records, the Draft-09 Section 3.8 Domain Policy Record
+`_domainkey.<domain>. TXT "v=DKIM1; f=strict"` of the onboarded domain, proven
+through the production policy parser. The record forbids subdomains from
+making From header fields of the domain Authentic (Sections 11.1 and 20); it
+affects every Draft-09 verifier, so publish it only after inventorying the
+third parties that sign with subdomain keys. The flag is not stored in the
+datasource or journal; a retry against the same artifact must repeat the same
+flag, because a different export is a conflict. `prove` and
 `activate` use a fresh configured recursive resolver path and compare exact
 SPKI material. This is not a direct authoritative-server observation and does
 not claim recursive-cache bypass. After activation, whether completed directly
@@ -286,10 +295,37 @@ minutes. The corresponding environment variables are
 `DKIM2D_DNS_CACHE_NEGATIVE_TTL_CAP`, and
 `DKIM2D_DNS_CACHE_STABLE_ERROR_TTL_CAP`.
 
+### Subdomain From authorization
+
+```yaml
+verification:
+  domain_policy:
+    allow_subdomain_from: true
+```
+
+`verification.domain_policy.allow_subdomain_from` is a stable boolean path,
+default `true`, with the environment name
+`DKIM2D_VERIFICATION_DOMAIN_POLICY_ALLOW_SUBDOMAIN_FROM`; `${NAME}`
+placeholders follow the usual scalar rules and a missing variable fails
+closed. With `true` the verifier applies Draft-09 Sections 7.1 item 3 and
+11.1: when `d=` is a subdomain of the From domain, the From header field is
+Authentic unless the From domain publishes a Domain Policy Record with
+`f=strict` at `_domainkey.<domain>` (Section 3.8). The record is looked up
+through the same bounded DNS resolver, cache, and limits as keys, only for
+messages whose every signature already passed. A strict record yields FAIL
+`from_subdomain_forbidden`; more than one or an invalid record yields
+PERMERROR `domain_policy_ambiguous` or `domain_policy_invalid`; a temporary
+DNS failure yields TEMPERROR `domain_policy_temporary`, which the policy
+modes treat like any TEMPERROR. Setting `false` selects the documented local
+downward-only policy: no Domain Policy Record is ever queried and such
+messages are FAIL `from_not_authentic`, which rejects messages that Draft-09
+defines as PASS. Signers built by the daemon verify incoming chains with the
+same choice; their own `d=` choice is always downward only.
+
 ### Inbound policy mode
 
 `policy.mode` defaults to `strict`; omitting it enables enforcement. Operators
-must select a compatibility policy explicitly when the Draft-08 verifier is
+must select a compatibility policy explicitly when the Draft-09 verifier is
 introduced beside an existing inbound path:
 
 - `strict` accepts `PASS`, rejects `FAIL` and `PERMERROR`, and temporarily
@@ -303,11 +339,17 @@ introduced beside an existing inbound path:
 
 These modes apply only when at least one DKIM2 protocol field family is
 present. A syntactically valid message with neither `Message-Instance` nor
-`DKIM2-Signature` is not a failed verification: `/v1/process` returns HTTP 204
-with no body, performs no DNS lookup, policy evaluation, replay check, or
-daemon-requested mutation, and the Milter continues delivery without a DKIM2
-result action. Independently, an enabled Milter trust boundary still removes
-forged local `Authentication-Results` fields as required by RFC 8601. A message
+`DKIM2-Signature` is not a failed verification: it is the Draft-09 Section
+14.1 `NONE` state. `/v1/process` returns HTTP 200 with verification and
+authentication state `NONE`, policy verdict `continue` with reason `none`,
+replay `not_checked`, and disposition `continue`. It performs no DNS lookup,
+policy evaluation, replay check, or signing work in any policy mode, including
+`strict`. The only possible action is the daemon-owned
+`Authentication-Results: <authserv-id>; dkim2=none` report, without a comment,
+when the request carries a reporting authority; otherwise the action plan is
+empty. The process metric and log `verdict` label records `none`.
+Independently, an enabled Milter trust boundary still removes forged local
+`Authentication-Results` fields as required by RFC 8601. A message
 containing only one field family, malformed fields, missing referenced fields, or
 inconsistent sequences remains an applicable `PERMERROR`; `strict` may reject
 it. There is no domain-wide DNS participation probe because the selector and
@@ -338,7 +380,7 @@ Milter callback syntax remains fail-closed. The implementation does not infer
 DSN signing authority from message headers, HELO, recipients, suffixes,
 wildcards, tenant defaults, or caller-selected domains. It verifies the
 embedded DKIM2 object first and then chooses the signing domain under
-draft-ietf-dkim-dkim2-spec-08 Section 16.2: only a local `delivery_status`
+draft-ietf-dkim-dkim2-spec-09 Section 16.2: only a local `delivery_status`
 profile domain that relaxed-matches an `rt=` address of the highest
 DKIM2-Signature of the returned original, and whose domain makes the report
 From Authentic, can sign (see below). Otherwise the report leaves unsigned
@@ -516,7 +558,7 @@ with `signing.backend: disabled`. The environment override is
 
 Behavior change of a stable path (Draft-08 migration): `reporting_domain` used
 to be the signing identity of every Postfix bounce and was signed even when it
-did not match the returned original's `rt=`; Draft-08 Section 16.2 forbids
+did not match the returned original's `rt=`; Draft-09 Section 16.2 forbids
 that. The path, its type, and its validation are unchanged; its meaning is now
 "preferred candidate when matching". Migration: keep the setting only if the
 domain is the recipient domain (or a parent) of the bounced mail you want
@@ -570,21 +612,26 @@ signing:
     enabled: true
 ```
 
-For example, an RSA signing operation on 2026-10-05 produces:
+For example, an RSA signing operation produces:
 
 ```text
-X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-08;
-    repo=github.com/croessner/dkim2; date=2026-10-05; sw=dkim2d;
+X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-09;
+    repo=github.com/croessner/dkim2; date=2026-11-02; sw=dkim2d;
     action=sign d=example.test a=rsa-sha256;
 ```
 
 `sw` identifies the software. `repo` points to this implementation, and `date`
-is the UTC date of the actual signature timestamp, not the software build date.
+is the date the emitted DKIM2 behavior last changed, a code version stamp as
+draft-gondwana-dkim2-debug-header-02 Section 5 defines it, not the signature
+timestamp or the draft date. The field keeps the established hop block order
+(`Message-Instance`, `DKIM2-Signature`, `X-DKIM2-Info`) rather than the
+placement the companion draft suggests, because the companion is
+non-normative and adapters insert the block contiguously.
 `d` and the comma-separated, deduplicated `a` list come from the generated
 signature, including both algorithms for dual signing. `action=sign` describes
 signature creation, including a transit or delivery-status signature.
 
-This is a local diagnostic convention, not a DKIM2 requirement. Draft-08
+This is a local diagnostic convention, not a DKIM2 requirement. Draft-09
 Section 4 excludes `X-` fields from authentication. Never trust this header as
 an authentication result. Existing informational headers are preserved; each
 successful local operation adds its own. Failure, unsigned/no-op, and inbound
@@ -634,7 +681,7 @@ to an inbound or MX-facing listener. Bounces keep their dedicated
 `POST /v1/dsn/sign` route.
 
 Received `donotmodify` or `donotexplode` spellings are inert unknown flags
-under Draft-08: they never restrict revision, fanout, or external release.
+under Draft-09: they never restrict revision, fanout, or external release.
 Existing fail-closed authorization remains authoritative.
 
 ### Received delivery-status evaluation and propagation
@@ -860,7 +907,7 @@ replay:
 Memory replay is bounded but process-local. Restart, multiple daemon instances,
 and failover do not share its state.
 
-By default replay counting follows Draft-08 Section 15.1: a message carrying
+By default replay counting follows Draft-09 Section 15.1: a message carrying
 only the originator's `i=1` DKIM2-Signature is a direct delivery, reports the
 replay class `not_eligible`, and touches no store. A receiver that acts on
 every accepted message, such as a public reflector, may set

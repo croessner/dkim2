@@ -204,7 +204,7 @@ func assertSigningCloseoutProviderFailure(t *testing.T, fixture publicSigningFix
 	signer, err := NewSigner(
 		fixture.provider, publicRouteMemoryAuthority{value: routeplan.NewMemoryAuthority()},
 		&authorizeOrdinary{}, signingCloseoutFailingSigner{},
-		WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+		WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }), WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner(failing) error = %v", err)

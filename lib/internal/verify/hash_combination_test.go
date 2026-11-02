@@ -67,9 +67,9 @@ func hashCombinationMessage(t *testing.T, template, remainder string) (rawmsg.Me
 	return message, instances[0]
 }
 
-// TestDraft08HashCombinationReproducers pins the Section 14.7 algebra on
+// TestDraft09HashCombinationReproducers pins the Section 14.7 algebra on
 // real digests through the target comparison every verification path uses.
-func TestDraft08HashCombinationReproducers(t *testing.T) {
+func TestDraft09HashCombinationReproducers(t *testing.T) {
 	tests := []struct {
 		name       string
 		template   string
@@ -96,10 +96,10 @@ func TestDraft08HashCombinationReproducers(t *testing.T) {
 	}
 }
 
-// TestDraft08HeadersOnlyHashSetPassesOnHeaderHash pins Section 16.4 item 3:
+// TestDraft09HeadersOnlyHashSetPassesOnHeaderHash pins Section 16.4 item 3:
 // without a body, a hash-set passes when its header hash matches, and the
 // Section 14.7 combination still applies.
-func TestDraft08HeadersOnlyHashSetPassesOnHeaderHash(t *testing.T) {
+func TestDraft09HeadersOnlyHashSetPassesOnHeaderHash(t *testing.T) {
 	headersOnly := "Subject:hashes\r\n"
 	tests := []struct {
 		template string
@@ -123,7 +123,7 @@ func TestDraft08HeadersOnlyHashSetPassesOnHeaderHash(t *testing.T) {
 	}
 }
 
-// TestDraft08HistoryEvaluatesLowerInstanceGroups proves Section 13 history
+// TestDraft09HistoryEvaluatesLowerInstanceGroups proves Section 13 history
 // checks evaluate each lower Message-Instance h= with the Section 14.7
 // algebra against the recreated message: a mismatching group beside a
 // passing alternative is accepted, an unknown algorithm inside the only
@@ -131,7 +131,7 @@ func TestDraft08HeadersOnlyHashSetPassesOnHeaderHash(t *testing.T) {
 // implemented set beside an unknown one in the same hash-all group fails as
 // well: Section 14.7 step 4 lets a FAIL intermediate win over a PERMERROR
 // intermediate, exactly as on the current-target path.
-func TestDraft08HistoryEvaluatesLowerInstanceGroups(t *testing.T) {
+func TestDraft09HistoryEvaluatesLowerInstanceGroups(t *testing.T) {
 	current := []byte("Subject:current\r\n\r\nbody\r\n")
 	mismatch := historyHashSets(t, current, []canonical.HashAlgorithm{canonical.HashAlgorithmSHA256}, canonical.HashAlgorithmSHA256)
 	sha512 := historyHashSets(t, current, []canonical.HashAlgorithm{canonical.HashAlgorithmSHA512}, "")

@@ -36,7 +36,7 @@ func TestFacadeVerifiesEd25519WithClonedProviderKey(t *testing.T) {
 		result := FoundEd25519PublicKey(publicKey)
 		publicKey[0] ^= 0xff
 		return result, nil
-	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -76,7 +76,7 @@ func TestFacadeReportsSignatureFailureForWrongProviderKey(t *testing.T) {
 	}
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return FoundEd25519PublicKey(wrongKey), nil
-	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -112,7 +112,7 @@ func TestFacadeMapsDeclaredProviderOutcomes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 				return tt.result, tt.err
-			}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+			}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}

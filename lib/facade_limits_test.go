@@ -26,7 +26,7 @@ func (p *callCountingPublicProvider) LookupPublicKey(_ context.Context, query Pu
 func TestFacadeAcceptsExactPublicLimitBoundaries(t *testing.T) {
 	raw := publicProviderFixture(t)
 	baselineProvider := &callCountingPublicProvider{}
-	baseline, err := NewVerifier(baselineProvider, WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	baseline, err := NewVerifier(baselineProvider, WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -48,7 +48,7 @@ func TestFacadeAcceptsExactPublicLimitBoundaries(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := &callCountingPublicProvider{}
-			verifier, constructErr := NewVerifier(provider, tt.option, WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+			verifier, constructErr := NewVerifier(provider, tt.option, WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 			if constructErr != nil {
 				t.Fatalf("NewVerifier() error = %v", constructErr)
 			}
@@ -78,7 +78,7 @@ func TestFacadeWiresPreProviderLimits(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := &callCountingPublicProvider{}
 			options := append(tt.options, WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
-			verifier, err := NewVerifier(provider, options...)
+			verifier, err := NewVerifier(provider, append([]VerifierOption{WithoutSubdomainFromAuthorization()}, options...)...)
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}
@@ -110,7 +110,7 @@ func TestFacadeEnforcesBodyLineCountBeforeDownstreamWork(t *testing.T) {
 	exactProvider := &callCountingPublicProvider{}
 	exactVerifier, err := NewVerifier(exactProvider, WithVerificationClock(func() time.Time {
 		return time.Unix(1700000000, 0)
-	}))
+	}), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier(exact) error = %v", err)
 	}
@@ -133,7 +133,7 @@ func TestFacadeEnforcesBodyLineCountBeforeDownstreamWork(t *testing.T) {
 	overProvider := &callCountingPublicProvider{}
 	overVerifier, err := NewVerifier(overProvider, WithVerificationClock(func() time.Time {
 		return time.Unix(1700000000, 0)
-	}))
+	}), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier(one-over) error = %v", err)
 	}
@@ -167,7 +167,7 @@ func TestFacadeWiresPublicResultCaps(t *testing.T) {
 	corpus := loadPublicGoldenCorpus(t)
 	bothSupportedRaw := decodeGoldenBytes(t, corpus.Vectors["both_pass"].Raw)
 	probeProvider := &callCountingPublicProvider{}
-	probe, err := NewVerifier(probeProvider, WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	probe, err := NewVerifier(probeProvider, WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier(probe) error = %v", err)
 	}
@@ -189,7 +189,7 @@ func TestFacadeWiresPublicResultCaps(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			provider := &callCountingPublicProvider{}
 			options := append(tt.options, WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
-			verifier, err := NewVerifier(provider, options...)
+			verifier, err := NewVerifier(provider, append([]VerifierOption{WithoutSubdomainFromAuthorization()}, options...)...)
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}

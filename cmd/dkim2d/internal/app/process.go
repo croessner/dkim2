@@ -121,7 +121,7 @@ func (p *InboundProcessor) ProcessInbound(
 		)
 		processVerdictFact, _ := observability.TextSpanFact(
 			"dkim2.verdict",
-			telemetryVerdictNeutral,
+			telemetryVerdictNone,
 		)
 		processReplayFact, _ := observability.TextSpanFact(
 			"dkim2.replay_state",
@@ -264,7 +264,8 @@ func (p *InboundProcessor) observeProcessFailure(started time.Time) {
 	)
 }
 
-// observeProcessSuccess records only closed result, replay, and disposition classes.
+// observeProcessSuccess records only closed result, replay, and disposition
+// classes. A message without any DKIM2 field records the verdict none.
 func (p *InboundProcessor) observeProcessSuccess(
 	result InboundResult,
 	started time.Time,
@@ -273,7 +274,7 @@ func (p *InboundProcessor) observeProcessSuccess(
 	if p == nil || p.runtime == nil {
 		return
 	}
-	resultClass, verdict := telemetryResultSuccess, telemetryVerdictNeutral
+	resultClass, verdict := telemetryResultSuccess, telemetryVerdictNone
 	if result.domain.Applicable() {
 		verification, verificationErr := result.domain.Verification()
 		resultClass, verdict = verificationObservation(verification, verificationErr)

@@ -1,7 +1,7 @@
 # OpenAPI Daemon Foundation
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 
 <!-- mutable-status:start -->
@@ -478,7 +478,7 @@ The exact serializable verification reason enum is:
 `envelope_mismatch`, `domain_alignment_mismatch`, `next_domain_mismatch`,
 `custody_mismatch`, `out_of_band_required`, `body_history_unavailable`,
 `invalid_recipe`, and `internal_contract`. `VerificationState` follows
-Draft-08 Section 14.1: FAIL means the verification completed and the message
+Draft-09 Section 14.1: FAIL means the verification completed and the message
 is not Fully Verified (hash, signature, timestamp, envelope, alignment, `nd=`,
 custody, out-of-band, From authenticity, or null body Recipe), while
 PERMERROR is kept for malformed, missing, duplicate, sequence, algorithm, key,
@@ -497,11 +497,11 @@ of `message`, `protocol`, `body_hash`, `header_hash`, `signature`, `key`,
 `SignatureSetResult` has exactly required `algorithm`, `status`, and `reason`
 plus the `selector`, present exactly for every non-passing set (fail,
 permerror, temperror) except an `internal_contract` fact, and absent
-for pass (Draft-08 Section 14.6 step 8). `algorithm` is `rsa-sha256`,
+for pass (Draft-09 Section 14.6 step 8). `algorithm` is `rsa-sha256`,
 `ed25519-sha256`, `mldsa44`, or `unknown` (an unimplemented algorithm such as
 the removed Draft-07 composite `mldsa44-ed25519-sha512` is reported as
 `unknown`); `status` is `pass`, `fail`, `permerror`, or `temperror`, and an
-unknown algorithm is `permerror` `unsupported_algorithm` (Draft-08 Section
+unknown algorithm is `permerror` `unsupported_algorithm` (Draft-09 Section
 14.6 step 4); `reason` uses the
 verification reason enum. The former `key_policy` object
 (`testing_declared`, `strict_identity_declared`, `strict_identity_applicable`)
@@ -520,7 +520,7 @@ Draft-07 Section 10.10 removed `donotmodify` and `donotexplode`, so the
 former `do_not_modify` and `do_not_explode` compliance properties, the matching
 `VerifierHop` booleans, and the `donotmodify_*`/`donotexplode_*` policy reasons
 were removed from the contract. The `dkim2.verifier-projection.v1` binding is
-draft-bound: it frames the exact draft identifier, and under Draft-08 its hop
+draft-bound: it frames the exact draft identifier, and under Draft-09 its hop
 encoding no longer contains the two booleans, so every hop and projection
 binding value differs from Draft-06. Consumers must recompute bindings with the
 matching draft and never compare bindings across drafts.
@@ -549,8 +549,8 @@ response.
 `PolicyFeedback` requires `requested`, `relay_required`, and
 `history_coverage`. Coverage is `not_evaluated` for current scope, `complete`
 for contiguous authenticated history, or `indeterminate` for explicitly
-partial authenticated history. Under Draft-08 Section 13 a history with a null
-body Recipe is FAIL `body_history_unavailable`, so a PASS never carries
+partial authenticated history. Under Draft-09 Section 13 a history with a null
+body Recipe is PERMERROR `body_history_unavailable`, so a PASS never carries
 partial content history and `indeterminate` (like the `partial`
 `historical_content` value) is retained in the closed vocabulary but not
 produced by verification.

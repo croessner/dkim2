@@ -16,13 +16,13 @@ type scalarMappingCase[Input comparable, Output comparable] struct {
 	want  Output
 }
 
-// TestDraft08VersionAndProtocolReasons proves the generated contract and the
-// domain mapper expose the complete Draft-08 permanent-error vocabulary.
-func TestDraft08VersionAndProtocolReasons(t *testing.T) {
-	if !generated.DraftIetfDkimDkim2Spec08.Valid() ||
+// TestDraft09VersionAndProtocolReasons proves the generated contract and the
+// domain mapper expose the complete Draft-09 permanent-error vocabulary.
+func TestDraft09VersionAndProtocolReasons(t *testing.T) {
+	if !generated.DraftIetfDkimDkim2Spec09.Valid() ||
 		generated.DraftVersion("draft-ietf-dkim-dkim2-spec-04").Valid() ||
 		generated.DraftVersion(futureMappingValue).Valid() {
-		t.Fatal("generated Draft-08 enum is not closed")
+		t.Fatal("generated Draft-09 enum is not closed")
 	}
 	for _, testCase := range []scalarMappingCase[dkim2.ReasonCode, generated.VerificationReason]{
 		{dkim2.ReasonDuplicateHashAlgorithm, generated.VerificationReasonDuplicateHashAlgorithm},
@@ -31,7 +31,7 @@ func TestDraft08VersionAndProtocolReasons(t *testing.T) {
 	} {
 		mapped, ok := mapVerificationReason(testCase.input)
 		if !ok || mapped != testCase.want || !mapped.Valid() {
-			t.Fatalf("Draft-08 reason %q mapped to %q/%t", testCase.input, mapped, ok)
+			t.Fatalf("Draft-09 reason %q mapped to %q/%t", testCase.input, mapped, ok)
 		}
 	}
 	if generated.VerificationReason(futureMappingValue).Valid() {
@@ -179,6 +179,11 @@ func TestVerificationReasonMappingExcludesErrorOnlyValue(t *testing.T) {
 		{dkim2.ReasonDuplicateHashAlgorithm, generated.VerificationReasonDuplicateHashAlgorithm},
 		{dkim2.ReasonInvalidRecipeJSON, generated.VerificationReasonInvalidRecipeJson},
 		{dkim2.ReasonDuplicateSelector, generated.VerificationReasonDuplicateSelector},
+		{dkim2.ReasonFromNotAuthentic, generated.VerificationReasonFromNotAuthentic},
+		{dkim2.ReasonFromSubdomainForbidden, generated.VerificationReasonFromSubdomainForbidden},
+		{dkim2.ReasonDomainPolicyTemporary, generated.VerificationReasonDomainPolicyTemporary},
+		{dkim2.ReasonDomainPolicyAmbiguous, generated.VerificationReasonDomainPolicyAmbiguous},
+		{dkim2.ReasonDomainPolicyInvalid, generated.VerificationReasonDomainPolicyInvalid},
 		{dkim2.ReasonInternalContract, generated.VerificationReasonInternalContract},
 	})
 

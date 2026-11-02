@@ -23,6 +23,9 @@ const (
 	telemetryReplayIndeterminate = "indeterminate"
 	telemetryDispositionReject   = "reject"
 	telemetryVerdictNeutral      = "neutral"
+	// telemetryVerdictNone records the Draft-09 Section 14.1 NONE state of a
+	// message without any DKIM2 field on the existing verdict label.
+	telemetryVerdictNone = "none"
 )
 
 // startAppSpan starts one child span without changing application behavior.

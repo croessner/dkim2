@@ -29,7 +29,7 @@ const (
 	templateRSAAndEd = "{rsa},{ed}"
 )
 
-// combinationFixture holds one Draft-08 grouped s= target signed by real
+// combinationFixture holds one Draft-09 grouped s= target signed by real
 // keys over the Section 12.8 unsigned field that keeps the "," and "|"
 // separators.
 type combinationFixture struct {
@@ -123,7 +123,7 @@ func newCombinationFixture(t *testing.T, template string) combinationFixture {
 
 // foldedBase64 inserts folding white space into a long base64string so the
 // 3228-character mldsa44 value stays within header line limits; FWS inside
-// a base64string is ignored (Draft-08 Section 2).
+// a base64string is ignored (Draft-09 Section 2).
 func foldedBase64(value string) string {
 	const chunk = 64
 	var folded strings.Builder
@@ -184,7 +184,7 @@ func (p *combinationProvider) LookupKey(_ context.Context, query KeyQuery) (Publ
 func verifyCombination(t *testing.T, fixture combinationFixture, keys combinationKeys, options ...Option) (Result, *combinationProvider) {
 	t.Helper()
 	provider := &combinationProvider{fixture: fixture, keys: keys}
-	verifier, err := NewVerifier(provider, append([]Option{testClockOption()}, options...)...)
+	verifier, err := NewVerifier(provider, append([]Option{testClockOption(), testFromChoice}, options...)...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,9 +195,9 @@ func verifyCombination(t *testing.T, fixture combinationFixture, keys combinatio
 	return result, provider
 }
 
-// TestDraft08SignatureCombinationReproducers pins the Section 14.6 algebra on
-// real signed targets. Each case names the Draft-08 rule it proves.
-func TestDraft08SignatureCombinationReproducers(t *testing.T) {
+// TestDraft09SignatureCombinationReproducers pins the Section 14.6 algebra on
+// real signed targets. Each case names the Draft-09 rule it proves.
+func TestDraft09SignatureCombinationReproducers(t *testing.T) {
 	tests := []struct {
 		name     string
 		template string
@@ -235,10 +235,10 @@ func TestDraft08SignatureCombinationReproducers(t *testing.T) {
 	}
 }
 
-// TestDraft08SeparatorIsSignedByteExactly proves the Section 12.8 unsigned
+// TestDraft09SeparatorIsSignedByteExactly proves the Section 12.8 unsigned
 // target carries the "," and "|" separators: a signer-shaped target
 // verifies, and swapping one separator invalidates every signature.
-func TestDraft08SeparatorIsSignedByteExactly(t *testing.T) {
+func TestDraft09SeparatorIsSignedByteExactly(t *testing.T) {
 	for _, swap := range []struct{ template, from, to string }{
 		{"{rsa}|{ed}", "|", ","},
 		{templateRSAAndEd, ",", "|"},
@@ -292,16 +292,16 @@ func TestDisabledAlgorithmIsLocallyRejectedPermerror(t *testing.T) {
 	}
 }
 
-// TestDraft08RevisionProofUsesSignatureAlgebra proves the all-hop revision
+// TestDraft09RevisionProofUsesSignatureAlgebra proves the all-hop revision
 // proof combines inherited sets with the shared Section 14.6 algebra: a key
 // error in a losing "|" group still yields a verified proof with an
 // alternative-not-passed fact, and a key error inside the only sig-all group
 // keeps its specific missing_key reason.
-func TestDraft08RevisionProofUsesSignatureAlgebra(t *testing.T) {
+func TestDraft09RevisionProofUsesSignatureAlgebra(t *testing.T) {
 	verifyProof := func(template string, keys combinationKeys) (RevisionProofOutcome, RevisionProof) {
 		t.Helper()
 		fixture := newCombinationFixture(t, template)
-		verifier, err := NewVerifier(&combinationProvider{fixture: fixture, keys: keys}, testClockOption())
+		verifier, err := NewVerifier(&combinationProvider{fixture: fixture, keys: keys}, testClockOption(), testFromChoice)
 		if err != nil {
 			t.Fatal(err)
 		}

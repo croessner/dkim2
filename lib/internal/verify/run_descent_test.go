@@ -358,7 +358,7 @@ func TestRunDescentCanonicalWorkCeiling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	limitedVerifier, err := NewVerifier(provider, testClockOption(), WithRevisionLimits(limits))
+	limitedVerifier, err := NewVerifier(provider, testClockOption(), WithRevisionLimits(limits), testFromChoice)
 	if err != nil {
 		t.Fatal(err)
 	}

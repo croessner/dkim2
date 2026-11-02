@@ -11,7 +11,7 @@ import (
 
 const templateClassicalOrMLDSA = "{rsa},{ed}|{ml}"
 
-// TestMLDSA44SignatureVerifiesOverCompleteInput proves a Draft-08 Section 3.4
+// TestMLDSA44SignatureVerifiesOverCompleteInput proves a Draft-09 Section 3.4
 // pure ML-DSA-44 set passes with the right key and fails with another key,
 // and that the verifier signs nothing it was not given: the representative
 // is the complete Section 12.8 input with the "DKIM2" context string.

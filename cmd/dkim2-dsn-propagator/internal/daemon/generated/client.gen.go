@@ -265,13 +265,13 @@ func (e DeliveryStatusProjectionStructure) Valid() bool {
 
 // Defines values for DraftVersion.
 const (
-	DraftIetfDkimDkim2Spec08 DraftVersion = "draft-ietf-dkim-dkim2-spec-08"
+	DraftIetfDkimDkim2Spec09 DraftVersion = "draft-ietf-dkim-dkim2-spec-09"
 )
 
 // Valid indicates whether the value is a known member of the DraftVersion enum.
 func (e DraftVersion) Valid() bool {
 	switch e {
-	case DraftIetfDkimDkim2Spec08:
+	case DraftIetfDkimDkim2Spec09:
 		return true
 	default:
 		return false
@@ -603,11 +603,11 @@ type PropagationSMTPInput struct {
 
 // ReplayResult defines model for ReplayResult.
 type ReplayResult struct {
-	// Class Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-08 Section 15.1 replay counting does not apply.
+	// Class Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept, including the NONE state that is never verified. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-09 Section 15.1 replay counting does not apply.
 	Class ReplayResultClass `json:"class"`
 }
 
-// ReplayResultClass Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-08 Section 15.1 replay counting does not apply.
+// ReplayResultClass Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept, including the NONE state that is never verified. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-09 Section 15.1 replay counting does not apply.
 type ReplayResultClass string
 
 // BadRequest defines model for BadRequest.

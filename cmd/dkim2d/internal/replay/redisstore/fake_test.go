@@ -385,7 +385,7 @@ func deriveVerifiedReplayKey(
 // authentic replay identity.
 func verifiedTestIdentity(t testing.TB) dkim2.ReplayIdentity {
 	t.Helper()
-	corpusBytes, err := os.ReadFile("../../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/public-golden.json")
+	corpusBytes, err := os.ReadFile("../../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json")
 	if err != nil {
 		t.Fatal("public replay corpus read failed")
 	}
@@ -419,7 +419,7 @@ func verifiedTestIdentity(t testing.TB) dkim2.ReplayIdentity {
 	}
 	verifier, err := dkim2.NewVerifier(
 		staticKeyProvider{key: &rsa.PublicKey{N: new(big.Int).SetBytes(modulus), E: corpus.RSAExponent}},
-		dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }),
+		dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), dkim2.WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("public verifier construction failed")

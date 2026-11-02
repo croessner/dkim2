@@ -55,6 +55,31 @@ func WalkBase64Chunks(decodedBytes int, visit func(first bool, offset, size int)
 	return encodedBytes, true
 }
 
+// WalkContinuedBase64Chunks is WalkBase64Chunks for a value that continues an
+// already started physical line: the first chunk holds exactly one character
+// and every later chunk restarts the 64-character fold. A fold before the
+// first character would begin the base64string with FWS (Draft-09 Section
+// 2.14).
+func WalkContinuedBase64Chunks(decodedBytes int, visit func(first bool, offset, size int)) (int, bool) {
+	encodedBytes, ok := base64EncodedSize(decodedBytes)
+	if !ok || encodedBytes == 0 {
+		return math.MaxInt, false
+	}
+	if visit == nil {
+		return encodedBytes, true
+	}
+	visit(true, 0, 1)
+	for offset := 1; offset < encodedBytes; {
+		size, next, done := nextBase64Chunk(encodedBytes, offset)
+		visit(false, offset, size)
+		if done {
+			break
+		}
+		offset = next
+	}
+	return encodedBytes, true
+}
+
 // base64EncodedSize returns the checked canonical padded Base64 length.
 func base64EncodedSize(decodedBytes int) (int, bool) {
 	if decodedBytes < 0 || decodedBytes > math.MaxInt-2 {

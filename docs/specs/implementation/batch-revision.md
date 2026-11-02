@@ -31,7 +31,7 @@ replaced by canonical standard base64 of the corresponding complete message.
 ```json
 {
   "api_version": "v1",
-  "draft": "draft-ietf-dkim-dkim2-spec-08",
+  "draft": "draft-ietf-dkim-dkim2-spec-09",
   "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "original": {
     "message": {"raw_rfc5322_base64": "...", "fidelity": "raw_rfc5322"},
@@ -117,7 +117,7 @@ conditional request headers are rejected on the capability route.
 4. Decode `header_fields_base64` in array order. Concatenate the complete fields
    without whitespace changes or an extra empty line; insert at the returned
    `insertion_offset`, which is always 0: the fields are trace fields
-   (Draft-08 Sections 9 and 10) and form one block prepended above the
+   (Draft-09 Sections 9 and 10) and form one block prepended above the
    previous top field (RFC 5322 Section 3.6). The array is in top-down order;
    with a controlled intermediate hop the final hop's DKIM2-Signature comes
    first. Verify that position against the frozen current message.
@@ -144,7 +144,7 @@ envelope, before rewriting an SRS recipient:
 ```json
 {
   "api_version": "v1",
-  "draft": "draft-ietf-dkim-dkim2-spec-08",
+  "draft": "draft-ietf-dkim-dkim2-spec-09",
   "message": {"raw_rfc5322_base64": "...", "fidelity": "raw_rfc5322"},
   "outer_smtp": {"mail_from": "<>", "rcpt_to": ["<issued-token@return.forwarder.example>"]},
   "context": {"tenant": "tenant-a", "reporting_mta": "mx.forwarder.example"}
@@ -293,7 +293,7 @@ header set. Original/current protocol evidence cannot be stripped or replaced to
 restart a chain. Existing public-library fidelity, recipe and body bounds stay
 in force.
 
-Normative baseline: [Draft 08, sections 8.5, 8.6, 8.10, 9 and 11.8](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-spec-08).
+Normative baseline: [Draft 08, sections 8.5, 8.6, 8.10, 9 and 11.8](https://datatracker.ietf.org/doc/html/draft-ietf-dkim-dkim2-spec-09).
 The server returns the baseline version explicitly; it does not claim an RFC or
 a later operational-profile conformance.
 

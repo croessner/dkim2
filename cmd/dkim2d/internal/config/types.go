@@ -48,6 +48,7 @@ const (
 	pathDNSPositiveTTLCap                 = "dns.cache.positive_ttl_cap"
 	pathDNSNegativeTTLCap                 = "dns.cache.negative_ttl_cap"
 	pathDNSStableErrorTTLCap              = "dns.cache.stable_error_ttl_cap"
+	pathVerificationAllowSubdomainFrom    = "verification.domain_policy.allow_subdomain_from"
 	pathReplayBackend                     = "replay.backend"
 	pathReplayHMACFile                    = "replay.hmac_key_file"
 	pathReplayEpoch                       = "replay.epoch"
@@ -335,6 +336,7 @@ func stableFieldSpecs() []fieldSpec {
 		{path: pathDNSPositiveTTLCap, env: "DKIM2D_DNS_CACHE_POSITIVE_TTL_CAP", kind: valueDuration, defaultVal: "1h", hasDefault: true},
 		{path: pathDNSNegativeTTLCap, env: "DKIM2D_DNS_CACHE_NEGATIVE_TTL_CAP", kind: valueDuration, defaultVal: "5m", hasDefault: true},
 		{path: pathDNSStableErrorTTLCap, env: "DKIM2D_DNS_CACHE_STABLE_ERROR_TTL_CAP", kind: valueDuration, defaultVal: "1m", hasDefault: true},
+		{path: pathVerificationAllowSubdomainFrom, env: "DKIM2D_VERIFICATION_DOMAIN_POLICY_ALLOW_SUBDOMAIN_FROM", kind: valueBool, defaultVal: canonicalTrue, hasDefault: true},
 		{path: pathReplayBackend, env: "DKIM2D_REPLAY_BACKEND", flag: flagReplayBackend, kind: valueString, defaultVal: valueBackendRedis, hasDefault: true},
 		{path: pathReplayHMACFile, env: "DKIM2D_REPLAY_HMAC_KEY_FILE", kind: valueString},
 		{path: pathReplayEpoch, env: "DKIM2D_REPLAY_EPOCH", kind: valueUint},

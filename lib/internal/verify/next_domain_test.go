@@ -105,7 +105,7 @@ func TestValidateNextDomainChainRejectsMissingNextSignature(t *testing.T) {
 }
 
 // TestVerifierDoesNotPassHighestNextDomain verifies OOB acceptance is
-// required for a terminal nd= target: without it, Draft-08 Sections 13.2 and
+// required for a terminal nd= target: without it, Draft-09 Sections 13.2 and
 // 14.4 make the completed verification a failure of the target.
 func TestVerifierDoesNotPassHighestNextDomain(t *testing.T) {
 	fixture := newHighestNextDomainFixture(t)

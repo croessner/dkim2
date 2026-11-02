@@ -63,7 +63,7 @@ func TestDescribeRecordedChainAttributesRecipeToIntroducingHop(t *testing.T) {
 }
 
 // TestDescribeRecordedChainReportsUnavailableBody describes a null body Recipe as recorded; a
-// verifier never passes such a chain (Draft-08 Section 13), so trusted consumers do not see it.
+// verifier never passes such a chain (Draft-09 Section 13), so trusted consumers do not see it.
 func TestDescribeRecordedChainReportsUnavailableBody(t *testing.T) {
 	fixture := recordedChainMessage(t, `{"b":null}`)
 	hops, err := DescribeRecordedChain(fixture.message)

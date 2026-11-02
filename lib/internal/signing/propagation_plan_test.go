@@ -82,7 +82,7 @@ func TestHashPlanDeliveryStatusPropagationBoundsSuppliedInstant(t *testing.T) {
 	report := mustParseRevisionMessage(t, []byte("From: Mail Delivery System <MAILER-DAEMON@example.test>\r\nSubject: report\r\n\r\nbody\r\n"))
 	base := time.Unix(int64(revisionTestTimestamp), 0).Add(time.Hour)
 	now := base
-	proof, err := verify.NewVerifier(mustRevisionStaticProvider(t, fixture), verify.WithClock(func() time.Time { return now }))
+	proof, err := verify.NewVerifier(mustRevisionStaticProvider(t, fixture), verify.WithClock(func() time.Time { return now }), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestHashPlanDeliveryStatusPropagationBoundsSuppliedInstant(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The revision-instant skew is pinned literally; it is independent of the
-	// one-day Draft-08 signature future tolerance.
+	// one-day Draft-09 signature future tolerance.
 	tolerance := 5 * time.Minute
 	for name, offset := range map[string]time.Duration{"same instant": 0, "within skew": tolerance} {
 		now = base

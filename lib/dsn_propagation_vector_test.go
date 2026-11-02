@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	dsnPropagationVectorPath      = "testdata/vectors/draft-ietf-dkim-dkim2-spec-08/dsn-propagation-golden.json"
+	dsnPropagationVectorPath      = "testdata/vectors/draft-ietf-dkim-dkim2-spec-09/dsn-propagation-golden.json"
 	dsnPropagationVectorWriteFlag = "DKIM2_WRITE_DSN_PROPAGATION_VECTORS"
 )
 
@@ -78,7 +78,7 @@ func dsnPropagationVectorSpecs() []dsnPropagationVectorSpec {
 	member.Instance = 2
 	completion := receivedDSNHop(receivedDSNForwardDomain, receivedDSNForwardMailFrom, receivedDSNDestination)
 	completion.Instance = 2
-	// Draft-08 Sections 16.2 and 16.3: the completion d= signs the propagated
+	// Draft-09 Sections 16.2 and 16.3: the completion d= signs the propagated
 	// report, so every eligible run's previous hop rt= sits under it.
 	aligned := alignedPropagationPrevious(nextDomainRun.Hops[0])
 	misalignedRun := propagationOriginal(propagationFullRecipe)
@@ -164,7 +164,7 @@ func dsnPropagationVectorSpecs() []dsnPropagationVectorSpec {
 
 // alignedPropagationPrevious returns the previous hop of a run with its rt=
 // under the completion domain, so the propagated report's d= relaxed-matches
-// the rebuilt highest signature (Draft-08 Sections 16.2 and 16.3).
+// the rebuilt highest signature (Draft-09 Sections 16.2 and 16.3).
 func alignedPropagationPrevious(previous dsntest.Hop) dsntest.Hop {
 	previous.Recipients = []string{receivedDSNForwardRecipient}
 	return previous
@@ -271,10 +271,10 @@ func TestDSNPropagationGoldenVectorsRegenerate(t *testing.T) {
 	}
 }
 
-// TestDSNPropagationDraft08GoldenVectors proves every frozen case rebuilds
+// TestDSNPropagationDraft09GoldenVectors proves every frozen case rebuilds
 // and signs to its recorded outcome and byte-exact output from the corpus
 // input alone, under the published keys and the fixed clock and entropy.
-func TestDSNPropagationDraft08GoldenVectors(t *testing.T) {
+func TestDSNPropagationDraft09GoldenVectors(t *testing.T) {
 	corpus := loadDSNPropagationVectorCorpus(t)
 	specs := make(map[string]propagationCase)
 	for _, entry := range dsnPropagationVectorSpecs() {
@@ -342,7 +342,7 @@ func assertFrozenPropagatedDSN(t *testing.T, fixture propagationFixture, expecte
 		fields[1].NameLower() != strings.ToLower(signature.HeaderName) {
 		t.Fatal("frozen propagated report does not start with its trace block")
 	}
-	verifier, err := NewVerifier(fixture.provider, WithVerificationClock(func() time.Time { return time.Unix(propagationSigningClock+60, 0) }))
+	verifier, err := NewVerifier(fixture.provider, WithVerificationClock(func() time.Time { return time.Unix(propagationSigningClock+60, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal(err)
 	}

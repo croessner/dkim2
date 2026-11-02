@@ -13,7 +13,7 @@ local lua_util = require 'lua_util'
 local ucl = require 'ucl'
 
 local API_VERSION = 'v1'
-local DRAFT = 'draft-ietf-dkim-dkim2-spec-08'
+local DRAFT = 'draft-ietf-dkim-dkim2-spec-09'
 local PROJECTION_SCHEMA = 'dkim2.verifier-projection.v1'
 local PROCESS_PATH = '/v1/process'
 local MAX_MESSAGE_BYTES = 33554432
@@ -105,6 +105,7 @@ local authentication_results = {
   FAIL = 'fail',
   PERMERROR = 'permerror',
   TEMPERROR = 'temperror',
+  NONE = 'none',
 }
 
 local policy_verdicts = {
@@ -127,7 +128,9 @@ local replay_classes = {
 local verification_reasons = {
   none = true, limit_exceeded = true, malformed_message = true, malformed_protocol = true,
   duplicate_hash_algorithm = true, invalid_recipe_json = true, invalid_recipe = true,
-  from_not_authentic = true, duplicate_selector = true,
+  from_not_authentic = true, from_subdomain_forbidden = true,
+  domain_policy_temporary = true, domain_policy_ambiguous = true, domain_policy_invalid = true,
+  duplicate_selector = true,
   missing_protocol = true, sequence_invalid = true,
   unsupported_algorithm = true, hash_mismatch = true, signature_mismatch = true,
   missing_key = true, invalid_key = true, ambiguous_key = true, revoked_key = true,
@@ -424,8 +427,8 @@ local function valid_header_name(value)
   return true
 end
 
--- The verifier projection lists only the Draft-08 Section 3 signature
--- algorithms the daemon verifies; DNS-02 registry names without a Draft-08
+-- The verifier projection lists only the Draft-09 Section 3 signature
+-- algorithms the daemon verifies; DNS-02 registry names without a Draft-09
 -- signing definition never appear.
 local signature_algorithms = {
   ['rsa-sha256'] = true, ['ed25519-sha256'] = true, mldsa44 = true,
@@ -618,8 +621,79 @@ local function valid_report(value, authentication)
     value == bare .. ' (reason=' .. authentication.primary_reason .. ')'
 end
 
+-- none_marked reports whether any member claims the Draft-09 NONE state or
+-- its policy reason, so a partial NONE shape can never pass as verified.
+local function none_marked(value)
+  if type(value.verification) == 'table' and value.verification.state == 'NONE' or
+      type(value.authentication) == 'table' and value.authentication.state == 'NONE' or
+      type(value.policy) == 'table' and value.policy.primary_reason == 'none' then
+    return true
+  end
+  if type(value.policy) == 'table' and type(value.policy.findings) == 'table' then
+    for _, finding in ipairs(value.policy.findings) do
+      if type(finding) == 'table' and finding.reason == 'none' then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+-- valid_none_response admits the Draft-09 Section 14.1 NONE state (no DKIM2
+-- field of either family) only in its exact closed shape: no verification
+-- evidence, a non-terminal continue policy with reason none, replay
+-- not_checked, no projection, and exactly the bound reasonless dkim2=none
+-- report when a local authority is configured.
+local function valid_none_response(value)
+  local verification, policy = value.verification, value.policy
+  if not exact_keys(value, {
+      'api_version', 'draft', 'verification', 'authentication', 'policy',
+      'replay', 'disposition', 'actions',
+    }, {}) or value.api_version ~= API_VERSION or value.draft ~= DRAFT or
+      not exact_keys(verification, {
+        'state', 'primary_reason', 'scope', 'historical_content', 'historical_signatures',
+        'custody_structure', 'checks', 'signature_sets',
+      }, {}) or
+      verification.state ~= 'NONE' or verification.primary_reason ~= 'none' or
+      verification.scope ~= 'current' or verification.historical_content ~= 'not_evaluated' or
+      verification.historical_signatures ~= 'not_evaluated' or
+      verification.custody_structure ~= 'not_evaluated' or
+      dense_array_len(verification.checks, 1) ~= 1 or
+      not exact_keys(verification.checks[1], { 'class', 'reason' }, {}) or
+      verification.checks[1].class ~= 'protocol' or verification.checks[1].reason ~= 'none' or
+      dense_array_len(verification.signature_sets, 0) ~= 0 or
+      not exact_keys(value.authentication, { 'state', 'primary_reason' }, {}) or
+      value.authentication.state ~= 'NONE' or value.authentication.primary_reason ~= 'none' or
+      not exact_keys(policy, { 'mode', 'verdict', 'primary_reason', 'feedback', 'findings' }, {}) or
+      not policy_modes[policy.mode] or policy.verdict ~= 'continue' or policy.primary_reason ~= 'none' or
+      not exact_keys(policy.feedback, { 'requested', 'relay_required', 'history_coverage' }, {}) or
+      policy.feedback.requested ~= false or policy.feedback.relay_required ~= false or
+      policy.feedback.history_coverage ~= 'not_evaluated' or
+      dense_array_len(policy.findings, 1) ~= 1 or
+      not exact_keys(policy.findings[1], { 'reason', 'severity' }, {}) or
+      policy.findings[1].reason ~= 'none' or policy.findings[1].severity ~= 'info' or
+      not exact_keys(value.replay, { 'class' }, {}) or value.replay.class ~= 'not_checked' or
+      value.disposition ~= 'continue' then
+    return false
+  end
+  local action_count = dense_array_len(value.actions, 1)
+  if action_count == nil or (action_count == 1) ~= (settings.authserv_id ~= nil) then
+    return false
+  end
+  if action_count == 0 then
+    return true
+  end
+  local action = value.actions[1]
+  return exact_keys(action, { 'type', 'name', 'value' }, {}) and action.type == 'add_header' and
+    action.name == 'Authentication-Results' and
+    action.value == settings.authserv_id .. '; dkim2=none'
+end
+
 -- valid_response validates the response members that authorize Rspamd effects.
 local function valid_response(value)
+  if type(value) == 'table' and none_marked(value) then
+    return valid_none_response(value)
+  end
   local top_required = {
     'api_version', 'draft', 'verification', 'authentication', 'policy',
     'replay', 'disposition', 'actions',
@@ -884,9 +958,16 @@ local function apply_delivery_status(task, projection)
   end
 end
 
--- apply_response publishes trusted facts and the final DKIM2 gate result.
+-- apply_response publishes trusted facts and the final DKIM2 gate result. The
+-- Draft-09 NONE state keeps the zero-score not-applicable symbols and applies
+-- only its daemon-owned dkim2=none report.
 local function apply_response(task, response)
   insert_symbol(task, symbols.check)
+  if response.authentication.state == 'NONE' then
+    insert_symbol(task, symbols.not_applicable)
+    apply_authentication_results(task, response.actions)
+    return
+  end
   insert_symbol(task, symbols[authentication_results[response.authentication.state]])
   local replay_symbol = symbols['replay_' .. response.replay.class]
   if replay_symbol then
@@ -938,7 +1019,8 @@ local function prepare_request(task)
   return { applicable = true, content = content, envelope = envelope, body = body }
 end
 
--- submit_request calls dkim2d and returns only a strictly validated applicable result.
+-- submit_request calls dkim2d and returns only a strictly validated result,
+-- including the Draft-09 NONE state; any other status is a service failure.
 local function submit_request(task, prepared, callback)
   if type(prepared) ~= 'table' or prepared.applicable ~= true or type(callback) ~= 'function' then
     return false
@@ -961,10 +1043,6 @@ local function submit_request(task, prepared, callback)
     callback = function(err, code, response_body)
       if err then
         callback(nil)
-        return
-      end
-      if code == 204 and (response_body == nil or #tostring(response_body) == 0) then
-        callback(false)
         return
       end
       if code ~= 200 then
@@ -994,10 +1072,7 @@ local function process_message(task)
     return
   end
   local started = submit_request(task, prepared, function(response)
-    if response == false then
-      insert_symbol(task, symbols.check)
-      insert_symbol(task, symbols.not_applicable)
-    elseif response == nil then
+    if response == nil then
       apply_failure(task)
     else
       apply_response(task, response)

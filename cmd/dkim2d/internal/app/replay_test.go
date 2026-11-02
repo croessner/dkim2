@@ -201,7 +201,7 @@ func TestReplayCoordinatorCountsDirectDeliveriesUnderLocalPolicy(t *testing.T) {
 }
 
 // TestReplayCoordinatorSkipsDirectFrozenGoldenPass proves the checked-in
-// single-signature protocol vector is a direct delivery that Draft-08 Section
+// single-signature protocol vector is a direct delivery that Draft-09 Section
 // 15.1 does not count: it reaches a PASS outcome without any store mutation.
 func TestReplayCoordinatorSkipsDirectFrozenGoldenPass(t *testing.T) {
 	domain := goldenReplayDomain(t, config.PolicyStrict)
@@ -213,7 +213,7 @@ func TestReplayCoordinatorSkipsDirectFrozenGoldenPass(t *testing.T) {
 	}
 }
 
-// TestReplayCoordinatorCollapsesRecipientsToOneMessageIdentity proves Draft-08 equality.
+// TestReplayCoordinatorCollapsesRecipientsToOneMessageIdentity proves Draft-09 equality.
 func TestReplayCoordinatorCollapsesRecipientsToOneMessageIdentity(t *testing.T) {
 	recipients := [][]byte{
 		[]byte("<third@example.test>"),
@@ -939,7 +939,7 @@ func goldenReplayDomain(t *testing.T, mode config.PolicyMode) DomainResult {
 func goldenReplayInput(t *testing.T) ([]byte, [][]byte, dkim2.PublicKeyProvider) {
 	t.Helper()
 	corpusBytes, err := os.ReadFile(
-		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/public-golden.json",
+		"../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json",
 	)
 	if err != nil {
 		t.Fatal("golden replay fixture unavailable")
@@ -1023,7 +1023,7 @@ func processReplayDomain(
 		provider,
 		dkim2.WithVerificationClock(func() time.Time {
 			return time.Unix(replayTestTimestamp, 0)
-		}),
+		}), dkim2.WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("replay verifier construction failed")
@@ -1162,3 +1162,8 @@ func replayTestSecret() []byte {
 	}
 	return secret
 }
+
+// AllowSubdomainFrom selects the explicit downward-only Draft-09 Section
+// 11.1 choice for signers built over this fixture key source, which
+// publishes no Domain Policy Records.
+func (p replayTestProvider) AllowSubdomainFrom() bool { return false }

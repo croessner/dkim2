@@ -50,7 +50,7 @@ func TestPublicProviderKeysAreClonedBeforeUse(t *testing.T) {
 			handoff := make(chan struct{})
 			mutated := make(chan struct{})
 			provider, mutate := testCase.build(handoff, mutated)
-			verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+			verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 			if err != nil {
 				t.Fatal("immutability verifier construction failed")
 			}
@@ -73,7 +73,7 @@ func TestPublicProviderKeysAreClonedBeforeUse(t *testing.T) {
 func TestPublicVerifierConcurrentReuseWithFrozenKeys(t *testing.T) {
 	corpus := loadPublicGoldenCorpus(t)
 	provider := publicGoldenProvider{mode: goldenProviderKeys, rsa: cloneTestRSA(corpus.rsaKey(t)), ed: ed25519.PublicKey(append([]byte(nil), corpus.edKey(t)...))}
-	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("concurrent verifier construction failed")
 	}
@@ -100,7 +100,7 @@ func TestPublicRequestConcurrentCallerMutation(t *testing.T) {
 	forward := decodeGoldenPaths(t, vector.Forward)
 	request := NewVerifyRequest(raw, reverse, forward)
 	provider := publicGoldenProvider{mode: goldenProviderKeys, rsa: corpus.rsaKey(t), ed: corpus.edKey(t)}
-	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("request immutability verifier construction failed")
 	}

@@ -33,7 +33,7 @@ func FuzzVerifyStaticKeyRequest(f *testing.F) {
 
 	verifier, err := NewVerifier(provider, WithClock(func() time.Time {
 		return time.Unix(int64(testTimestampSeconds), 0)
-	}))
+	}), testFromChoice)
 	if err != nil {
 		f.Fatalf("NewVerifier() error = %v", err)
 	}

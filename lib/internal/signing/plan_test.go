@@ -641,7 +641,7 @@ func TestHashPlanReservesMinimumOriginFieldCapacityBeforeHashing(t *testing.T) {
 // newTestHashPlanCoordinatorWithLimits constructs a pure planner with shared narrowed limits.
 func newTestHashPlanCoordinatorWithLimits(t *testing.T, fixture revisionTestFixture, limits Limits) (HashPlanCoordinator, RevisionVerifier) {
 	t.Helper()
-	proof, err := verify.NewVerifier(mustRevisionStaticProvider(t, fixture), revisionTestClockOption())
+	proof, err := verify.NewVerifier(mustRevisionStaticProvider(t, fixture), revisionTestClockOption(), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()))
 	if err != nil {
 		t.Fatalf("verify.NewVerifier() error = %v", err)
 	}
@@ -662,7 +662,7 @@ func newTestHashPlanCoordinatorWithLimits(t *testing.T, fixture revisionTestFixt
 func TestHashPlanDoesNotReenterKeyProvider(t *testing.T) {
 	fixture := newRevisionTestFixture(t, nil, false)
 	provider := &countingPlanKeyProvider{delegate: mustRevisionStaticProvider(t, fixture)}
-	proof, err := verify.NewVerifier(provider, revisionTestClockOption())
+	proof, err := verify.NewVerifier(provider, revisionTestClockOption(), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()))
 	if err != nil {
 		t.Fatalf("verify.NewVerifier() error=%v", err)
 	}

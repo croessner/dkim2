@@ -32,7 +32,8 @@ var nonPassVerificationReasons = []generated.VerificationReason{
 	generated.VerificationReasonEnvelopeMismatch, generated.VerificationReasonDomainAlignmentMismatch,
 	generated.VerificationReasonNextDomainMismatch, generated.VerificationReasonCustodyMismatch,
 	generated.VerificationReasonOutOfBandRequired, generated.VerificationReasonBodyHistoryUnavailable,
-	generated.VerificationReasonInternalContract,
+	generated.VerificationReasonFromSubdomainForbidden, generated.VerificationReasonDomainPolicyAmbiguous,
+	generated.VerificationReasonDomainPolicyInvalid, generated.VerificationReasonInternalContract,
 }
 
 // TestProcessSMTPOutcomeIsIndependentOfFailOrPermerror proves that the Milter

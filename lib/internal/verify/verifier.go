@@ -334,7 +334,7 @@ func validateSignatureCollection(signatures []signature.Signature) error {
 		}
 	}
 	for _, parsed := range signatures {
-		// Draft-08 Section 12.5 forbids exploded on i=1; Sections 2.11 and 13
+		// Draft-09 Section 12.5 forbids exploded on i=1; Sections 2.11 and 13
 		// make every Signer requirement part of a Fully Verified DKIM2 Message.
 		if parsed.Sequence() == 1 && parsed.Flags().HasKnown(signature.FlagExploded) {
 			return malformedStateError(CheckKindSignature, Target{Sequence: 1}, nil)
@@ -392,7 +392,7 @@ func instanceByNumber(instances []instance.MessageInstance, number uint64) (inst
 // targetStatus summarizes protocol facts and the Section 14.6 signature
 // combination for the selected target. A failing hash, timestamp, envelope,
 // or alignment check, or a terminal nd= without an out-of-band arrangement
-// (Draft-08 Sections 13.2 and 14.4), is a failure; otherwise the combined
+// (Draft-09 Sections 13.2 and 14.4), is a failure; otherwise the combined
 // signature result decides: PASS, TEMPERROR (indeterminate), FAIL, or
 // PERMERROR (no group could be checked to a pass or a fail, reported as
 // unsupported).

@@ -123,6 +123,7 @@ type snapshotState struct {
 	server        serverState
 	policy        PolicyMode
 	dns           dnsState
+	verification  verificationState
 	replay        replayState
 	signing       signingState
 	observability observabilityState
@@ -253,6 +254,15 @@ type dnsState struct {
 	positiveTTLCap       time.Duration
 	negativeTTLCap       time.Duration
 	stableErrorTTLCap    time.Duration
+}
+
+// verificationState carries local verification policy that the Draft-09
+// baseline leaves to the operator.
+type verificationState struct {
+	// allowSubdomainFrom selects the Draft-09 Section 11.1 upward Authentic
+	// From match resolved through Domain Policy Records (true, conforming
+	// default) or the documented downward-only local policy (false).
+	allowSubdomainFrom bool
 }
 
 type replayState struct {
@@ -432,6 +442,10 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 	if err != nil {
 		return nil, err
 	}
+	verification, err := parseVerification(values)
+	if err != nil {
+		return nil, err
+	}
 	replay, err := parseReplay(values, backend, generation, server.capabilityFile)
 	if err != nil {
 		return nil, err
@@ -485,6 +499,7 @@ func validateSnapshot(values map[string]rawValue, presence map[string]Presence) 
 		server:        server,
 		policy:        policy,
 		dns:           dns,
+		verification:  verification,
 		replay:        replay,
 		signing:       signing,
 		observability: observability,
@@ -1313,6 +1328,15 @@ func parseDNS(values map[string]rawValue) (dnsState, error) {
 		lookupTimeout: timeout, maxConcurrentLookups: uint16(concurrent), maxCacheEntries: uint32(maxEntries),
 		positiveTTLCap: positiveCap, negativeTTLCap: negativeCap, stableErrorTTLCap: stableErrorCap,
 	}, nil
+}
+
+// parseVerification validates the typed local verification policy.
+func parseVerification(values map[string]rawValue) (verificationState, error) {
+	allow, err := boolValue(values, pathVerificationAllowSubdomainFrom)
+	if err != nil {
+		return verificationState{}, err
+	}
+	return verificationState{allowSubdomainFrom: allow}, nil
 }
 
 // parseReplay validates selected provider-neutral and provider-specific values.

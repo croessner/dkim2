@@ -34,7 +34,7 @@ type backendConstructors struct {
 type offlineDomainCoordinator interface {
 	Plan(context.Context, *domainadmin.JournalStore, domainadmin.Intent, datasourceadmin.DNSPolicy) (domainadmin.OnboardingResult, error)
 	Prepare(context.Context, *domainadmin.JournalStore) (domainadmin.OnboardingResult, error)
-	DNSExport(context.Context, *domainadmin.JournalStore, string) (domainadmin.OnboardingResult, error)
+	DNSExport(context.Context, *domainadmin.JournalStore, string, domainadmin.DNSExportOptions) (domainadmin.OnboardingResult, error)
 	Prove(context.Context, *domainadmin.JournalStore) (domainadmin.OnboardingResult, error)
 	Activate(context.Context, *domainadmin.JournalStore) (domainadmin.OnboardingResult, error)
 	Status(context.Context, *domainadmin.JournalStore) (domainadmin.StatusResult, error)
@@ -269,7 +269,9 @@ func executeCommand(
 	case domainadmin.CommandPrepare:
 		return coordinator.Prepare(ctx, store)
 	case domainadmin.CommandDNSExport:
-		return coordinator.DNSExport(ctx, store, request.OutputPath)
+		return coordinator.DNSExport(ctx, store, request.OutputPath, domainadmin.DNSExportOptions{
+			DomainPolicyStrict: request.DomainPolicyStrict,
+		})
 	case domainadmin.CommandProve:
 		return coordinator.Prove(ctx, store)
 	case domainadmin.CommandActivate:

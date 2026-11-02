@@ -31,7 +31,7 @@ func TestPublicDiagnosticsDiscardProtectedValues(t *testing.T) {
 	provider := publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return PublicKeyResult{}, toxicTemporaryProviderError{}
 	})
-	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("diagnostic verifier construction failed")
 	}
@@ -65,7 +65,7 @@ func TestPublicDiagnosticsDiscardProtectedValues(t *testing.T) {
 		{raw: valid, provider: markerProvider},
 		{raw: bytes.Replace(valid, []byte("Subject: provider facade"), []byte("Subject: token="+lowerMarker+" credential="+lowerMarker), 1), provider: provider},
 	} {
-		caseVerifier, constructErr := NewVerifier(testCase.provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+		caseVerifier, constructErr := NewVerifier(testCase.provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 		if constructErr != nil {
 			t.Fatal("toxic-case verifier construction failed")
 		}

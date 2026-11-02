@@ -8,7 +8,7 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2-exim/internal/adapter"
 )
 
-// TestTransformPrependsAdmittedFieldsAsOneTopBlock proves Draft-08 Sections
+// TestTransformPrependsAdmittedFieldsAsOneTopBlock proves Draft-09 Sections
 // 9 and 10 trace placement: inherited LF bytes remain unchanged and the
 // ordered additions form one block in plan order above the previous top field,
 // which in an Exim transport filter is Exim's own Received field.

@@ -183,6 +183,7 @@ const (
 	authenticationResultFail      = "fail"
 	authenticationResultPermerror = "permerror"
 	authenticationResultTemperror = "temperror"
+	authenticationResultNone      = "none"
 )
 
 // MapDomainResult maps one complete verification and local-policy result atomically.
@@ -216,6 +217,9 @@ func MapInboundResult(
 	replay, replayErr := result.Replay()
 	if domainErr != nil || replayErr != nil || !replay.Valid() {
 		return generated.ProcessResponse{}, newMappingError(MappingInternalContract)
+	}
+	if !domain.Applicable() {
+		return mapNoneInboundResult(domain, replay, authservID)
 	}
 	verification, verificationErr := domain.Verification()
 	policy, policyErr := domain.Policy()
@@ -278,7 +282,7 @@ func MapInboundResult(
 	}
 	return generated.ProcessResponse{
 		ApiVersion:         generated.V1,
-		Draft:              generated.DraftIetfDkimDkim2Spec08,
+		Draft:              generated.DraftIetfDkimDkim2Spec09,
 		Verification:       verificationDTO,
 		Authentication:     authentication,
 		Policy:             policyDTO,
@@ -287,6 +291,63 @@ func MapInboundResult(
 		Actions:            actions,
 		VerifierProjection: verifierProjection,
 		DeliveryStatus:     deliveryStatus,
+	}, nil
+}
+
+// mapNoneInboundResult projects a message without any DKIM2 field of either
+// family as the Draft-09 Section 14.1 NONE state. Applicability is a
+// pre-verification classification owned by the library; the NONE state exists
+// only at this transport boundary and never reaches the policy evaluator.
+func mapNoneInboundResult(
+	domain app.DomainResult,
+	replay app.ReplayOutcome,
+	authservID string,
+) (generated.ProcessResponse, error) {
+	configured, modeOK := domain.NotApplicableMode()
+	mode, mappedOK := mapPolicyMode(configured)
+	if !modeOK || !mappedOK || replay.Class() != app.ReplayResultNotChecked ||
+		replay.Disposition() != app.FinalDispositionContinue {
+		return generated.ProcessResponse{}, newMappingError(MappingInternalContract)
+	}
+	return newNoneProcessResponse(mode, authservID)
+}
+
+// newNoneProcessResponse builds the one closed NONE response shape: no
+// verification evidence, the configured mode with a non-terminal continue
+// policy, replay not_checked, and at most the reasonless dkim2=none report
+// when a local reporting authority is configured.
+func newNoneProcessResponse(mode generated.PolicyResultMode, authservID string) (generated.ProcessResponse, error) {
+	if !mode.Valid() {
+		return generated.ProcessResponse{}, newMappingError(MappingInternalContract)
+	}
+	actions, err := mapProcessReportActions(generated.NONE, generated.DispositionContinue, authservID)
+	if err != nil {
+		return generated.ProcessResponse{}, err
+	}
+	return generated.ProcessResponse{
+		ApiVersion: generated.V1,
+		Draft:      generated.DraftIetfDkimDkim2Spec09,
+		Verification: generated.VerificationResult{
+			State: generated.NONE, PrimaryReason: generated.VerificationReasonNone, Scope: generated.Current,
+			HistoricalContent:    generated.VerificationResultHistoricalContentNotEvaluated,
+			HistoricalSignatures: generated.VerificationResultHistoricalSignaturesNotEvaluated,
+			CustodyStructure:     generated.VerificationResultCustodyStructureNotEvaluated,
+			Checks: []generated.VerificationCheck{{
+				Class: generated.VerificationCheckClassProtocol, Reason: generated.VerificationReasonNone,
+			}},
+			SignatureSets: []generated.SignatureSetResult{},
+		},
+		Authentication: generated.AuthenticationResult{
+			State: generated.NONE, PrimaryReason: generated.AuthenticationResultPrimaryReasonNone,
+		},
+		Policy: generated.PolicyResult{
+			Mode: mode, Verdict: generated.PolicyResultVerdictContinue, PrimaryReason: generated.PolicyReasonNone,
+			Feedback: generated.PolicyFeedback{HistoryCoverage: generated.PolicyFeedbackHistoryCoverageNotEvaluated},
+			Findings: []generated.PolicyFinding{{Reason: generated.PolicyReasonNone, Severity: generated.Info}},
+		},
+		Replay:      generated.ReplayResult{Class: generated.NotChecked},
+		Disposition: generated.DispositionContinue,
+		Actions:     actions,
 	}, nil
 }
 
@@ -312,7 +373,7 @@ func mapVerifierProjection(result dkim2.VerifyResult) (*generated.VerifierProjec
 	}
 	binding := projection.Binding()
 	return &generated.VerifierProjection{
-		Schema: generated.Dkim2VerifierProjectionV1, Draft: generated.DraftIetfDkimDkim2Spec08,
+		Schema: generated.Dkim2VerifierProjectionV1, Draft: generated.DraftIetfDkimDkim2Spec09,
 		BindingAlgorithm: generated.Sha256, Binding: slices.Clone(binding[:]), Hops: mappedHops,
 	}, nil
 }
@@ -461,6 +522,8 @@ func authenticationResult(state generated.VerificationState) (string, bool) {
 		return authenticationResultPermerror, true
 	case generated.TEMPERROR:
 		return authenticationResultTemperror, true
+	case generated.NONE:
+		return authenticationResultNone, true
 	default:
 		return "", false
 	}
@@ -736,7 +799,7 @@ func mapVerificationState(value dkim2.ResultState) (generated.VerificationState,
 // responseSelectorCoherent re-checks the library per-set selector rule at
 // the REST boundary: a passing set and an internal-contract fact carry no
 // selector, every other non-passing set carries one bounded selector
-// (Draft-08 Section 14.6 step 8).
+// (Draft-09 Section 14.6 step 8).
 func responseSelectorCoherent(status dkim2.SignatureStatus, reason dkim2.ReasonCode, selector string) bool {
 	if len(selector) > 253 {
 		return false

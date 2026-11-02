@@ -77,9 +77,10 @@ func (l VerificationLimits) MaxSignatureFacts() int {
 }
 
 type verifierConfig struct {
-	limits VerificationLimits
-	clock  *verificationClock
-	sink   ObservationSink
+	limits     VerificationLimits
+	clock      *verificationClock
+	sink       ObservationSink
+	fromChoice subdomainFromChoice
 }
 
 type verificationClock struct{ now func() time.Time }

@@ -75,11 +75,11 @@ const (
 	// RejectUnavailableBody fails when the prior body cannot be represented.
 	RejectUnavailableBody BodyUnavailablePolicy = iota
 	// AllowUnavailableBody permits explicit b:null when representation is
-	// impossible (Draft-08 Section 12.1 MAY).
+	// impossible (Draft-09 Section 12.1 MAY).
 	//
 	// Warning: a message whose history contains a null body Recipe is never
-	// a Fully Verified DKIM2 Message (Draft-08 Section 13). Every later
-	// verifier reports FAIL body_history_unavailable, and every later
+	// a Fully Verified DKIM2 Message (Draft-09 Section 13). Every later
+	// verifier reports PERMERROR body_history_unavailable (Section 14.2), and every later
 	// transit or revision signer, including this library's
 	// VerifyForRevision, refuses to sign it again. Use it only where the
 	// recipients accept that outcome by local arrangement.
@@ -264,8 +264,9 @@ func (r ExistingSigningRequest) Format(state fmt.State, _ rune) {
 }
 
 type signerConfig struct {
-	clock  func() time.Time
-	limits SigningLimits
+	clock      func() time.Time
+	limits     SigningLimits
+	fromChoice subdomainFromChoice
 }
 
 // SignerOption configures one validated signing facade dependency.
@@ -295,6 +296,13 @@ type Signer struct {
 }
 
 // NewSigner constructs the complete three-path signing facade.
+//
+// Its incoming-chain verification (VerifyForRevision) requires the same
+// explicit Draft-09 Section 11.1 choice as NewVerifier: publicKeys also
+// implements DomainPolicyProvider, WithSignerDomainPolicyProvider is passed,
+// or WithoutSignerSubdomainFromAuthorization is passed; otherwise
+// construction fails with SigningErrorInvalidOptions. The signer's own d=
+// choice stays downward only (disposition D8).
 func NewSigner(publicKeys PublicKeyProvider, routes RouteFanoutAuthority, authorizer SigningAuthorizer, privateKeys PrivateKeySigner, options ...SignerOption) (*Signer, error) {
 	if nilPublicKeyProvider(publicKeys) || nilSigningCallback(routes) ||
 		nilSigningCallback(authorizer) || nilSigningCallback(privateKeys) {
@@ -310,9 +318,14 @@ func NewSigner(publicKeys PublicKeyProvider, routes RouteFanoutAuthority, author
 	if err != nil {
 		return nil, newSigningError(SigningErrorInvalidOptions)
 	}
+	fromAuthorization, err := config.fromChoice.resolve(publicKeys)
+	if err != nil {
+		return nil, newSigningError(SigningErrorInvalidOptions)
+	}
 	limits := resolvedLimits.signing
 	verification, err := verify.NewVerifier(
 		publicKeyBridge{provider: publicKeys},
+		verify.WithFromAuthorization(fromAuthorization),
 		verify.WithClock(config.clock),
 		verify.WithAlgorithmPolicy(resolvedLimits.algorithm),
 		verify.WithLimits(resolvedLimits.verification),

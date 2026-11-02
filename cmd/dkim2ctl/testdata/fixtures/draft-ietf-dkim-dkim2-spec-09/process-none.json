@@ -1,0 +1,35 @@
+{
+  "schema": "dkim2ctl.fixture.v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-09",
+  "fixture": "process-none",
+  "cases": [
+    {
+      "case": "no-dkim2-fields",
+      "kind": "process",
+      "process": {
+        "raw_rfc5322_base64": "RnJvbTogc2VuZGVyQGV4YW1wbGUudGVzdA0KU3ViamVjdDogUHVibGljIHVuc2lnbmVkDQoNCmJvZHkgbGluZQ0K",
+        "fidelity": "raw_rfc5322",
+        "mail_from": "<sender@example.test>",
+        "rcpt_to": [
+          "<rcpt@example.test>"
+        ],
+        "authserv_id": "mx.example.test"
+      },
+      "expect": {
+        "http_status": 200,
+        "disposition": "continue",
+        "verification_state": "NONE",
+        "authentication_state": "NONE",
+        "policy_verdict": "continue",
+        "replay_class": "not_checked",
+        "actions": [
+          {
+            "type": "add_header",
+            "name": "Authentication-Results",
+            "value": "mx.example.test; dkim2=none"
+          }
+        ]
+      }
+    }
+  ]
+}

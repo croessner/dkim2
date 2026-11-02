@@ -15,7 +15,7 @@ import (
 // so a migration cannot leave one owner on an older behavior baseline.
 func TestDraftBaselineDeclarationsAgree(t *testing.T) {
 	const (
-		messageDraft = "draft-ietf-dkim-dkim2-spec-08"
+		messageDraft = "draft-ietf-dkim-dkim2-spec-09"
 		dnsDraft     = "draft-ietf-dkim-dkim2-dns-02"
 	)
 	for name, value := range map[string]string{

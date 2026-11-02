@@ -135,7 +135,7 @@ func TestEmbeddedOpenAPIContract(t *testing.T) {
 		testProcessPath: {
 			testMethodPost: {
 				id:        "processMessage",
-				responses: []string{"200", "204", "400", "403", "408", "413", "415", "417", "500", "503"},
+				responses: []string{"200", "400", "403", "408", "413", "415", "417", "500", "503"},
 				success:   "ProcessResponse",
 			},
 		},
@@ -365,7 +365,7 @@ func requiredResponseHeaders(path string, status string) []string {
 	if status == "204" && path == testDSNSignPath {
 		return append(headers, testHeaderUnsignedReason)
 	}
-	if status == "204" && (path == testProcessPath || path == testSignPath) {
+	if status == "204" && path == testSignPath {
 		return headers
 	}
 	headers = append(headers, "Content-Length", testHeaderContentTypeOptions)
@@ -846,12 +846,13 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 
 	expected := map[string][]string{
 		"APIVersion":        {"v1"},
-		"DraftVersion":      {"draft-ietf-dkim-dkim2-spec-08"},
-		"VerificationState": {"PASS", "FAIL", "PERMERROR", "TEMPERROR"},
+		"DraftVersion":      {"draft-ietf-dkim-dkim2-spec-09"},
+		"VerificationState": {"PASS", "FAIL", "PERMERROR", "TEMPERROR", "NONE"},
 		"NullSenderPolicy":  {"header_from"},
 		"VerificationReason": {
 			"none", "limit_exceeded", "malformed_message", "malformed_protocol",
-			"duplicate_hash_algorithm", "invalid_recipe_json", "invalid_recipe", "from_not_authentic", "duplicate_selector",
+			"duplicate_hash_algorithm", "invalid_recipe_json", "invalid_recipe", "from_not_authentic",
+			"from_subdomain_forbidden", "domain_policy_temporary", "domain_policy_ambiguous", "domain_policy_invalid", "duplicate_selector",
 			"missing_protocol", "sequence_invalid", "unsupported_algorithm",
 			"hash_mismatch", "signature_mismatch", "missing_key", "invalid_key",
 			"ambiguous_key", "revoked_key", "unsupported_key_type",
@@ -861,7 +862,7 @@ func assertFrozenEnums(t *testing.T, document *openapi3.T) {
 			"out_of_band_required", "body_history_unavailable", "internal_contract",
 		},
 		"PolicyReason": {
-			"protocol_pass", "protocol_fail", "protocol_permerror",
+			"none", "protocol_pass", "protocol_fail", "protocol_permerror",
 			"protocol_temperror", "permissive_override", "testing_mode_observe",
 			"feedback_requested", "feedback_relay_selected", "feedhere_inert",
 			"exploded_reported",
@@ -1055,7 +1056,7 @@ func TestGeneratedRequestFormattingIsContentFree(t *testing.T) {
 	}
 	request := ProcessRequest{
 		ApiVersion: V1,
-		Draft:      DraftIetfDkimDkim2Spec08,
+		Draft:      DraftIetfDkimDkim2Spec09,
 		Message:    MessageInput{RawRfc5322Base64: protected},
 		Smtp: SMTPInput{
 			MailFrom: protected,

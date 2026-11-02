@@ -27,7 +27,7 @@ func (p *countingProvider) LookupKey(context.Context, verify.KeyQuery) (verify.P
 // TestAssessClassifiesUnsignedBeforeVerification proves protocol absence is not a fifth result.
 func TestAssessClassifiesUnsignedBeforeVerification(t *testing.T) {
 	provider := &countingProvider{}
-	verifier, err := NewVerifier(provider, DefaultConfig())
+	verifier, err := NewVerifier(provider, verify.DownwardOnlyFromAuthorization(), DefaultConfig())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -47,7 +47,7 @@ func TestAssessClassifiesUnsignedBeforeVerification(t *testing.T) {
 // TestAssessKeepsPartialProtocolApplicable proves malformed claims remain fail closed.
 func TestAssessKeepsPartialProtocolApplicable(t *testing.T) {
 	provider := &countingProvider{}
-	verifier, err := NewVerifier(provider, DefaultConfig())
+	verifier, err := NewVerifier(provider, verify.DownwardOnlyFromAuthorization(), DefaultConfig())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -69,7 +69,7 @@ func TestVerifierMapsSequenceExtractionFailureToUnevaluatedCustody(t *testing.T)
 	raw := strings.Replace(string(syntheticCurrentMessage(t, timestamp, 1, 1)), "DKIM2-Signature: i=1;", "DKIM2-Signature: i=2;", 1)
 	config := DefaultConfig()
 	config.Clock = func() time.Time { return time.Unix(int64(timestamp), 0) }
-	verifier, err := NewVerifier(&countingProvider{}, config)
+	verifier, err := NewVerifier(&countingProvider{}, verify.DownwardOnlyFromAuthorization(), config)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -99,7 +99,7 @@ func TestVerifierMapsDuplicateSequenceDiagnosticToUnavailableTarget(t *testing.T
 	raw = raw[:start] + line + raw[start:]
 	config := DefaultConfig()
 	config.Clock = func() time.Time { return time.Unix(int64(timestamp), 0) }
-	verifier, err := NewVerifier(&countingProvider{}, config)
+	verifier, err := NewVerifier(&countingProvider{}, verify.DownwardOnlyFromAuthorization(), config)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -154,7 +154,7 @@ func TestStructuralChainErrorsNormalizeToUnavailableMalformedProtocol(t *testing
 }
 
 // TestVerifierPreservesEvaluatedCustodyOnNextDomainMismatch verifies that a
-// Draft-08 Section 14.4 nd= mismatch is a FAIL next_domain_mismatch for the
+// Draft-09 Section 14.4 nd= mismatch is a FAIL next_domain_mismatch for the
 // selected target, keeps the evaluated custody structure, and stops before
 // any key lookup.
 func TestVerifierPreservesEvaluatedCustodyOnNextDomainMismatch(t *testing.T) {
@@ -167,7 +167,7 @@ func TestVerifierPreservesEvaluatedCustodyOnNextDomainMismatch(t *testing.T) {
 	provider := &countingProvider{}
 	config := DefaultConfig()
 	config.Clock = func() time.Time { return time.Unix(1700000000, 0) }
-	verifier, err := NewVerifier(provider, config)
+	verifier, err := NewVerifier(provider, verify.DownwardOnlyFromAuthorization(), config)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -194,7 +194,7 @@ func TestVerifierDoesNotClaimAbsentCustodyWhenInstancesAreMissing(t *testing.T) 
 	provider := &countingProvider{}
 	config := DefaultConfig()
 	config.Clock = func() time.Time { return time.Unix(1700000000, 0) }
-	verifier, err := NewVerifier(provider, config)
+	verifier, err := NewVerifier(provider, verify.DownwardOnlyFromAuthorization(), config)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -207,11 +207,11 @@ func TestVerifierDoesNotClaimAbsentCustodyWhenInstancesAreMissing(t *testing.T) 
 	}
 }
 
-// TestVerifierMapsOrdinaryAdjacencyMismatchAsDraft08CustodyFail verifies
-// that an mf= and d= that do not match the previous rt= are the Draft-08
+// TestVerifierMapsOrdinaryAdjacencyMismatchAsDraft09CustodyFail verifies
+// that an mf= and d= that do not match the previous rt= are the Draft-09
 // Section 14.4 FAIL custody_mismatch for the selected target, decided before
 // any key lookup.
-func TestVerifierMapsOrdinaryAdjacencyMismatchAsDraft08CustodyFail(t *testing.T) {
+func TestVerifierMapsOrdinaryAdjacencyMismatchAsDraft09CustodyFail(t *testing.T) {
 	digest := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x11}, 32))
 	signatureText := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x22}, 128))
 	raw := "From: sender@example.test\r\n" +
@@ -221,7 +221,7 @@ func TestVerifierMapsOrdinaryAdjacencyMismatchAsDraft08CustodyFail(t *testing.T)
 	provider := &countingProvider{}
 	config := DefaultConfig()
 	config.Clock = func() time.Time { return time.Unix(1700000000, 0) }
-	verifier, err := NewVerifier(provider, config)
+	verifier, err := NewVerifier(provider, verify.DownwardOnlyFromAuthorization(), config)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -257,7 +257,7 @@ func (p *dereferencingProvider) LookupKey(context.Context, verify.KeyQuery) (ver
 // TestNewVerifierRejectsTypedNilProvider verifies invalid interface dependencies fail at construction.
 func TestNewVerifierRejectsTypedNilProvider(t *testing.T) {
 	var provider *dereferencingProvider
-	verifier, err := NewVerifier(provider, DefaultConfig())
+	verifier, err := NewVerifier(provider, verify.DownwardOnlyFromAuthorization(), DefaultConfig())
 	if err == nil || verifier.initialized {
 		t.Fatalf("NewVerifier(typed nil) = %#v, %v", verifier, err)
 	}
@@ -268,7 +268,7 @@ func TestVerifierRejectsPreExtractionLimitsBeforeProvider(t *testing.T) {
 	provider := &countingProvider{}
 	config := DefaultConfig()
 	config.Limits.MaxRawMessageBytes = 8
-	verifier, err := NewVerifier(provider, config)
+	verifier, err := NewVerifier(provider, verify.DownwardOnlyFromAuthorization(), config)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -288,7 +288,7 @@ func TestVerifierRejectsPreExtractionLimitsBeforeProvider(t *testing.T) {
 // TestVerifierMapsMalformedInputWithoutRawDiagnostics verifies protocol errors remain results.
 func TestVerifierMapsMalformedInputWithoutRawDiagnostics(t *testing.T) {
 	provider := &countingProvider{}
-	verifier, err := NewVerifier(provider, DefaultConfig())
+	verifier, err := NewVerifier(provider, verify.DownwardOnlyFromAuthorization(), DefaultConfig())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -306,7 +306,7 @@ func TestVerifierMapsMalformedInputWithoutRawDiagnostics(t *testing.T) {
 
 // TestVerifierReturnsCallerContextAsGoError verifies result/error disjointness.
 func TestVerifierReturnsCallerContextAsGoError(t *testing.T) {
-	verifier, err := NewVerifier(&countingProvider{}, DefaultConfig())
+	verifier, err := NewVerifier(&countingProvider{}, verify.DownwardOnlyFromAuthorization(), DefaultConfig())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -346,7 +346,7 @@ func TestVerifierMapsRealTypedProviderFailures(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := DefaultConfig()
 			config.Clock = func() time.Time { return time.Unix(int64(timestamp), 0) }
-			verifier, err := NewVerifier(failingProvider{class: tt.class}, config)
+			verifier, err := NewVerifier(failingProvider{class: tt.class}, verify.DownwardOnlyFromAuthorization(), config)
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}

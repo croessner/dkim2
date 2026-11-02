@@ -295,7 +295,7 @@ cannot both succeed.
 The profile use is part of the published generation, not a runtime switch.
 Every domain this deployment forwards mail under needs an active
 `delivery_status` profile in addition to the `ordinary_transit` or
-`next_domain_transit` profile that signs the forwarded copy. Draft-08
+`next_domain_transit` profile that signs the forwarded copy. Draft-09
 Section 16.3 propagation signs the rebuilt delivery-status notification
 under the removed completion signature's own domain, so the outgoing
 delivery-status authority that derives a domain from an embedded signature
@@ -342,7 +342,7 @@ correlate through bounded logs without widening redaction.
 
 ## ML-DSA-44 Credentials
 
-Draft-08 Section 3.4 pure ML-DSA-44 (`mldsa44`) is a signable credential
+Draft-09 Section 3.4 pure ML-DSA-44 (`mldsa44`) is a signable credential
 algorithm in every backend through the same admission owner
 (`provider.ParseAlgorithm`) and the same custody codec. A signing profile
 holds at most three credentials, one per algorithm (`rsa-sha256`,

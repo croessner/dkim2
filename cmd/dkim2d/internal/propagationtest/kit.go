@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	corpusRelativePath = "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-08/dsn-propagation-golden.json"
+	corpusRelativePath = "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/dsn-propagation-golden.json"
 	// CaseRunOfOne is a rebuildable single-signature local hop run.
 	CaseRunOfOne = "run_of_one"
 	// CaseNextDomainRun is a rebuildable nd= run whose signing domain is the forward domain.
@@ -210,11 +210,14 @@ func (p *Provider) LookupPublicKey(_ context.Context, query dkim2.PublicKeyQuery
 	return dkim2.FoundEd25519PublicKey(key), nil
 }
 
-// Verifier constructs the library verifier over the provider at the corpus clock.
+// Verifier constructs the library verifier over the provider at the corpus
+// clock. The corpus publishes no Domain Policy Records and every corpus From
+// is Authentic through the downward match, so the verifier uses the explicit
+// downward-only Section 11.1 choice.
 func (c *Corpus) Verifier(t testing.TB, provider dkim2.PublicKeyProvider) *dkim2.Verifier {
 	t.Helper()
 	clock := c.Clock()
-	verifier, err := dkim2.NewVerifier(provider, dkim2.WithVerificationClock(func() time.Time { return clock }))
+	verifier, err := dkim2.NewVerifier(provider, dkim2.WithVerificationClock(func() time.Time { return clock }), dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("construct verifier: %v", err)
 	}
@@ -396,3 +399,8 @@ func (a *Authority) SignDigest(
 
 // Close releases the stateless lease.
 func (*Authority) Close() error { return nil }
+
+// AllowSubdomainFrom selects the explicit downward-only Draft-09 Section
+// 11.1 choice for signers built over this fixture key source, which
+// publishes no Domain Policy Records.
+func (p *Provider) AllowSubdomainFrom() bool { return false }

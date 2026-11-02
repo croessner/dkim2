@@ -6,10 +6,10 @@ import (
 	"testing"
 )
 
-// TestSplitAcceptsDraft08GroupGrammar pins the hash-any/sig-any grammar:
+// TestSplitAcceptsDraft09GroupGrammar pins the hash-any/sig-any grammar:
 // "|" separates groups, "," binds more tightly, and [FWS] may surround both
 // separators.
-func TestSplitAcceptsDraft08GroupGrammar(t *testing.T) {
+func TestSplitAcceptsDraft09GroupGrammar(t *testing.T) {
 	tests := []struct {
 		name  string
 		value string

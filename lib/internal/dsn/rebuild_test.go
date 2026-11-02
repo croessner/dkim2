@@ -260,7 +260,7 @@ func mustRawSpec(t *testing.T, spec propagationSpec) []byte {
 // TestRebuildRemovesEveryRunMember proves nd= and imaginary-hop runs of
 // several signatures are removed completely and the previous hop is kept byte-exact.
 func TestRebuildRemovesEveryRunMember(t *testing.T) {
-	// Draft-08 Sections 16.2 and 16.3: the previous hop's rt= sits under the
+	// Draft-09 Sections 16.2 and 16.3: the previous hop's rt= sits under the
 	// completion d= that signs the propagated report.
 	previous := receivedHop(receivedRemoteDomain, rebuildPreviousSender, receivedForwardRecipient)
 	nextDomainMember := receivedNextDomainHop(receivedLocalDomain, receivedForwardDomain)
@@ -405,7 +405,7 @@ func TestRebuildUnsignedFieldPolicy(t *testing.T) {
 	}
 }
 
-// TestRebuildUndoesForwarderAutoSubmittedThroughRecipe proves the Draft-08
+// TestRebuildUndoesForwarderAutoSubmittedThroughRecipe proves the Draft-09
 // Section 4 consequence for propagation: Auto-Submitted is a signed field, so
 // a forwarder that adds it must describe the addition in its Recipe, and the
 // rebuild removes it by applying that Recipe rather than by the Section 16.3
@@ -1113,7 +1113,7 @@ func TestRebuildBoundsSizeAmplification(t *testing.T) {
 	}
 }
 
-// TestRebuildRemovesDestinationEvidence is the Draft-08 Section 16.3 privacy
+// TestRebuildRemovesDestinationEvidence is the Draft-09 Section 16.3 privacy
 // sentinel: the propagated report must not reveal where the local system
 // forwarded the message. No part, header, or embedded field may carry the
 // downstream destination domain or the failed final recipient.

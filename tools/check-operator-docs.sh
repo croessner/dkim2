@@ -79,6 +79,7 @@ for document in \
   docs/operator/datasource-ldap-postgresql.md \
   docs/operator/opendkim-migration.md \
   docs/operator/draft-08-migration.md \
+  docs/operator/draft-09-migration.md \
   docs/operator/examples/dkim2d-signing-ldap.yaml \
   docs/operator/examples/dkim2d-signing-postgresql.yaml \
   docs/operator/examples/dkim2d-signing-mysql.yaml \
@@ -257,44 +258,45 @@ refute 'replay-store-valkey.md' README.md "$daemon" docs/ci.md docs/conformance.
   docs/operator/postfix-admin.md docs/operator/postfix-compose.md
 refute 'Production Valkey replay' "$daemon"
 
-# The Draft-08 operator migration guide is linked from the entry points and
+# The Draft-09 operator migration guide is linked from the entry points and
 # names every operator-visible change the upgrade and its rollback depend on.
-draft08_guide=docs/operator/draft-08-migration.md
-grep -Fq "$draft08_guide" README.md
+draft09_guide=docs/operator/draft-09-migration.md
+grep -Fq "$draft09_guide" README.md
+grep -Fq 'draft-09-migration.md' docs/reference/README.md
 grep -Fq 'draft-08-migration.md' docs/reference/README.md
 for required in \
-  'draft-ietf-dkim-dkim2-spec-08' \
+  'draft-ietf-dkim-dkim2-spec-09' \
   'unsupported_draft' \
-  'reporting_domain' \
-  'MinSigningRSABits' \
-  '010_mldsa44_algorithm.sql' \
-  'GOFIPS140=v1.0.0' \
-  'too_many_signatures' \
-  'custody_mismatch' \
   'body_history_unavailable' \
-  'invalid_recipe' \
-  'X-DKIM2-Unsigned-Reason' \
-  'dkim2d_dsn_unsigned_total' \
-  'insert_header' \
-  'insertion_offset' \
-  'Fully Verified DKIM2 Message' \
+  'PERMERROR' \
+  'dkim2=none' \
+  'NONE' \
+  'from_subdomain_forbidden' \
+  'domain_policy_temporary' \
+  'domain_policy_ambiguous' \
+  'domain_policy_invalid' \
+  'f=strict' \
+  'allow_subdomain_from' \
+  'MaxCarriedTXTRecords' \
+  'rt=' \
+  'X-DKIM2-Info' \
   'dkim2pub' \
   'dkim2-intelligence' \
   'Rollback'; do
-  grep -Fq "$required" "$draft08_guide"
+  grep -Fq "$required" "$draft09_guide"
 done
 for reference in draft-issues.md compatibility.md known-limitations.md; do
   grep -Fq "$reference" docs/reference/README.md
 done
 
 for required in \
-  'draft-ietf-dkim-dkim2-spec-08' \
+  'draft-ietf-dkim-dkim2-spec-09' \
   'draft-ietf-dkim-dkim2-dns-02' \
   '127.0.0.1:2525' \
   'milter_protocol = 6' \
   'milter_default_action = tempfail' \
   'Exim' \
-  'unqualified_draft08' \
+  'unqualified_draft09' \
   'LDAP' \
   'SQL' \
   'PostgreSQL' \
@@ -304,8 +306,8 @@ for required in \
   grep -Fq "$required" "$guide"
 done
 
-grep -Fq 'draft-ietf-dkim-dkim2-spec-08' README.md
-grep -Fq 'unqualified_draft08' README.md
+grep -Fq 'draft-ietf-dkim-dkim2-spec-09' README.md
+grep -Fq 'unqualified_draft09' README.md
 
 # The walkthrough is the conceptual map; it must stay indexed, pinned to the
 # same baselines, and must not restate the procedure it links to.
@@ -313,10 +315,10 @@ for reference in README.md docs/reference/README.md; do
   grep -Fq 'operator/deployment-walkthrough.md' "$reference"
 done
 for required in \
-  'draft-ietf-dkim-dkim2-spec-08' \
+  'draft-ietf-dkim-dkim2-spec-09' \
   'draft-ietf-dkim-dkim2-dns-02' \
   'postfix-compose.md' \
-  'unqualified_draft08' \
+  'unqualified_draft09' \
   'milter_reconstructed_crlf' \
   'lmtp_delivered_crlf' \
   '{postfix_internal_origin}' \
@@ -346,7 +348,7 @@ for document in \
   docs/reference/known-limitations.md \
   docs/reference/release-candidate.md \
   "$exim_operations"; do
-  grep -Fq 'unqualified_draft08' "$document"
+  grep -Fq 'unqualified_draft09' "$document"
 done
 for required in \
   'duplicate_hash_algorithm' \
@@ -558,7 +560,7 @@ done
 for document in README.md "$guide"; do
   grep -Fq 'Exim adapter' "$document"
   grep -Fq 'matrix' "$document"
-  grep -Fq 'unqualified_draft08' "$document"
+  grep -Fq 'unqualified_draft09' "$document"
   grep -Fq 'LDAP' "$document"
   grep -Fq 'SQL' "$document"
   refute 'deferred_ldap_sql_migration' "$document"

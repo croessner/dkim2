@@ -506,7 +506,7 @@ func appendSignatureInputValueWithoutWSP(output []byte, value []byte) []byte {
 // through the shared signature renderer, so selectors, algorithm names, and
 // the ":" "," "|" punctuation stay exactly as received (Section 12.8).
 // Tags are separated by semicolons, and the optional final semicolon of
-// Draft-08 Section 8 is retained exactly when the received field carries it,
+// Draft-09 Section 8 is retained exactly when the received field carries it,
 // because Section 12.8 signs the incomplete field as it appears in the message.
 func renderIncompleteSignatureValue(unfoldedValue []byte, target signature.Signature) ([]byte, error) {
 	tagField, err := tagvalue.ScanHeader(unfoldedValue, knownSignatureInputTags, tagvalue.DefaultLimits())

@@ -546,7 +546,7 @@ func EvaluatePolicy(result VerifyResult, options ...PolicyOption) (PolicyDecisio
 }
 
 // EvaluateAuthenticationPolicy evaluates local policy from the authoritative
-// final Draft-08 result, extended by the received-DSN facts when
+// final Draft-09 result, extended by the received-DSN facts when
 // WithReceivedDSNEvaluation attached them; a final state other than PASS keeps
 // the outer policy and retains the facts as the outer-policy finding.
 func EvaluateAuthenticationPolicy(result AuthenticationResult, options ...PolicyOption) (PolicyDecision, error) {

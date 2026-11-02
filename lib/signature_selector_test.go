@@ -12,7 +12,7 @@ import (
 // diagnosticSelector is the selector of the signed fixture.
 const diagnosticSelector = "selector.test"
 
-// TestNonPassingSignatureSetsNameTheirSelector reproduces Draft-08 Section
+// TestNonPassingSignatureSetsNameTheirSelector reproduces Draft-09 Section
 // 14.6 step 8 at the per-set result level: every non-passing set names its
 // parsed selector, whether it failed, hit a key error, met a temporary
 // provider failure, or used an unknown algorithm, while a passing set names
@@ -43,7 +43,7 @@ func TestNonPassingSignatureSetsNameTheirSelector(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 				return test.result, test.err
-			}), WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }))
+			}), WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }), WithoutSubdomainFromAuthorization())
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}

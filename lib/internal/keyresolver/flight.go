@@ -6,8 +6,10 @@ import (
 	"time"
 )
 
+// flightResult carries the outcome of the kind its cache key names.
 type flightResult struct {
 	outcome KeyOutcome
+	policy  DomainPolicyOutcome
 	expiry  time.Time
 }
 
@@ -116,13 +118,13 @@ func (g *flightGroup) run(ctx context.Context, key cacheKey, flight *resolverFli
 	var admission cacheAdmission
 	prepared := false
 	if ctx.Err() == nil && g.publication.cache != nil {
-		admission, prepared = g.publication.cache.prepareAdmission(key, result.outcome, result.expiry)
+		admission, prepared = g.publication.cache.prepareAdmission(key, cacheValue{key: result.outcome, policy: result.policy}, result.expiry)
 	}
 	g.mu.Lock()
 	g.pruneCanceledWaitersLocked(flight)
 	// This liveness and identity check is the cache-publication linearization point.
 	if ctx.Err() != nil || g.flights[key] != flight || len(flight.waiterCtx) == 0 {
-		result = flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, key.algorithm)}
+		result = temporaryFlightResult(key)
 	} else if prepared {
 		g.publication.cache.commitAdmission(admission)
 	}
@@ -210,5 +212,14 @@ func (g *flightGroup) pruneCanceledWaitersLocked(flight *resolverFlight) {
 
 // cloneFlightResult detaches coalesced key material for each caller.
 func cloneFlightResult(result flightResult) flightResult {
-	return flightResult{outcome: cloneKeyOutcome(result.outcome), expiry: result.expiry}
+	return flightResult{outcome: cloneKeyOutcome(result.outcome), policy: result.policy, expiry: result.expiry}
+}
+
+// temporaryFlightResult reports an abandoned or canceled flight as a
+// retryable outcome of the kind the cache key names.
+func temporaryFlightResult(key cacheKey) flightResult {
+	if OwnerKindDomainPolicy.ValidAbsoluteOwner(key.owner) {
+		return flightResult{policy: newDomainPolicyOutcome(DomainPolicyTemporary)}
+	}
+	return flightResult{outcome: newStatusOutcome(KeyOutcomeTemporary, key.algorithm)}
 }

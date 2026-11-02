@@ -86,7 +86,7 @@ func moveLatestHopToBottom(t *testing.T, raw []byte, count int) []byte {
 	return append(output, rest...)
 }
 
-// TestVerificationIsIndependentOfTraceFieldPlacement proves Draft-08 Sections
+// TestVerificationIsIndependentOfTraceFieldPlacement proves Draft-09 Sections
 // 9 and 10 trace placement is presentation only: the library prepends each
 // hop's block, and the verifier authenticates a chain whose hops were
 // top-placed, bottom-placed, or mixed, and a Reviser signs over both a

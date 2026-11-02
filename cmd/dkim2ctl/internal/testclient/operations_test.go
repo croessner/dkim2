@@ -17,8 +17,8 @@ import (
 	"github.com/croessner/dkim2/cmd/dkim2ctl/internal/testclient/generated"
 )
 
-const signAcceptResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","operation":"sign","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=1; h=sha256:synthetic"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=synthetic"}]}`
-const reviseContinueResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","operation":"revise","result":"pass","disposition":"continue","actions":[]}`
+const signAcceptResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-09","operation":"sign","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=1; h=sha256:synthetic"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; a=ed25519-sha256; d=example.test; s=test; b=synthetic"}]}`
+const reviseContinueResponse = `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-09","operation":"revise","result":"pass","disposition":"continue","actions":[]}`
 const operationFixtureMessageBase64 = "U3ViamVjdDogdGVzdA0KDQpib2R5DQo="
 const operationFixtureRecipient = "<recipient@example.test>"
 const operationFixtureSender = "<sender@example.test>"
@@ -183,7 +183,7 @@ func TestOperationFixturesRejectVersionFidelityAndBase64Contradictions(t *testin
 		func(value string) string {
 			return strings.Replace(
 				value,
-				`"draft": "draft-ietf-dkim-dkim2-spec-08"`,
+				`"draft": "draft-ietf-dkim-dkim2-spec-09"`,
 				`"draft": "draft-ietf-dkim-dkim2-spec-04"`,
 				1,
 			)
@@ -261,9 +261,9 @@ func TestOperationResponseAcceptsDocumentedNoMutationAndRevisePlans(t *testing.T
 		operation Operation
 		response  string
 	}{
-		{OperationSign, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","operation":"sign","result":"pass","disposition":"continue","actions":[]}`},
-		{OperationRevise, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"DKIM2-Signature","value":"v=1; b=unchanged"}]}`},
-		{OperationRevise, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=2"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; b=changed"}]}`},
+		{OperationSign, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-09","operation":"sign","result":"pass","disposition":"continue","actions":[]}`},
+		{OperationRevise, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-09","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"DKIM2-Signature","value":"v=1; b=unchanged"}]}`},
+		{OperationRevise, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-09","operation":"revise","result":"pass","disposition":"accept","actions":[{"type":"add_header","name":"Message-Instance","value":"v=1; i=2"},{"type":"add_header","name":"DKIM2-Signature","value":"v=1; b=changed"}]}`},
 	} {
 		response := buildHostileResponse(http.StatusOK, mediaTypeJSON, testCase.response)
 		if _, err := classifyResponse(testCase.operation, response); err != nil {
@@ -273,10 +273,10 @@ func TestOperationResponseAcceptsDocumentedNoMutationAndRevisePlans(t *testing.T
 }
 
 // TestOperationResponseAcceptsDocumentedNoContentApplicability proves generated
-// process, sign, and delivery-status clients retain the bodyless OpenAPI
-// variants exactly.
+// sign and delivery-status clients retain the bodyless OpenAPI variants
+// exactly. Process reports the NONE state as a 200 document instead.
 func TestOperationResponseAcceptsDocumentedNoContentApplicability(t *testing.T) {
-	for _, operation := range []Operation{OperationProcess, OperationSign, OperationDSNSign} {
+	for _, operation := range []Operation{OperationSign, OperationDSNSign} {
 		response := &http.Response{
 			StatusCode: http.StatusNoContent,
 			Close:      true,
@@ -421,7 +421,8 @@ func TestOperationResponseRejectsMalformedNoContent(t *testing.T) {
 }
 
 // TestRuntimeAcceptsRealNoContentApplicability proves net/http's projected
-// Connection-close representation preserves the two bodyless OpenAPI variants.
+// Connection-close representation preserves the bodyless sign variant and
+// that the retired bodyless process variant fails closed.
 func TestRuntimeAcceptsRealNoContentApplicability(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		defer func() { _ = request.Body.Close() }()
@@ -456,8 +457,7 @@ func TestRuntimeAcceptsRealNoContentApplicability(t *testing.T) {
 	editor := func(context.Context, *http.Request) error { return nil }
 	processFact, processErr := runtime.CallProcess(t.Context(), processRequest, editor)
 	signFact, signErr := runtime.CallSign(t.Context(), signRequest, editor)
-	if processErr != nil || signErr != nil || processFact.Status != http.StatusNoContent ||
-		signFact.Status != http.StatusNoContent {
+	if ExitClassOf(processErr) != ExitContract || signErr != nil || signFact.Status != http.StatusNoContent {
 		t.Fatalf("real 204 process=%#v/%v sign=%#v/%v", processFact, processErr, signFact, signErr)
 	}
 }

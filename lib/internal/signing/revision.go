@@ -544,10 +544,19 @@ func mapRevisionProofOutcome(outcome verify.RevisionProofOutcome) (RevisionVerif
 	case verify.RevisionProofTerminalNextDomainAuthorizationRequired:
 		return RevisionVerificationTerminalNextDomainAuthorizationRequired, true
 	case verify.RevisionProofProtocolRejected, verify.RevisionProofInvalidRecipeJSON, verify.RevisionProofInvalidRecipe,
-		verify.RevisionProofFromNotAuthentic:
+		verify.RevisionProofFromNotAuthentic, verify.RevisionProofFromSubdomainForbidden:
 		return RevisionVerificationProtocolRejected, true
+	case verify.RevisionProofDomainPolicyAmbiguous, verify.RevisionProofDomainPolicyInvalid:
+		// Draft-09 Sections 3.8 and 13.1: a PERMERROR Domain Policy Record
+		// leaves the message not Fully Verified, so it must not be forwarded
+		// under a new signature.
+		return RevisionVerificationProtocolRejected, true
+	case verify.RevisionProofDomainPolicyTemporary:
+		// A temporarily unavailable Domain Policy Record is retryable like a
+		// temporary key lookup; no signature is produced meanwhile.
+		return RevisionVerificationProviderTemporary, true
 	case verify.RevisionProofBodyHistoryUnavailable:
-		// Draft-08 Sections 12 and 13: a history with a null body Recipe is
+		// Draft-09 Sections 12 and 13: a history with a null body Recipe is
 		// not Fully Verified, so it must not be signed again; there is no
 		// local acceptance knob for the inherited gap.
 		return RevisionVerificationProtocolRejected, true
@@ -670,6 +679,7 @@ func (v RevisionVerifier) seal(capability VerifiedRevisionInput) [sha256.Size]by
 	transcript.addCount("usage_signature_sets", usage.SignatureSets())
 	transcript.addCount("usage_key_lookups", usage.KeyLookups())
 	transcript.addCount("usage_provider_calls", usage.ProviderCalls())
+	transcript.addCount("usage_domain_policy_lookups", usage.DomainPolicyLookups())
 	transcript.addCount("usage_canonical_bytes", usage.CanonicalBytes())
 	transcript.addCount("usage_current_canonical_bytes", usage.CurrentCanonicalBytes())
 	transcript.addCount("usage_signature_canonical_bytes", usage.SignatureCanonicalBytes())

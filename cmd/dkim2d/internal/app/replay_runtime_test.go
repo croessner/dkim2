@@ -708,7 +708,7 @@ func TestInboundProcessCountsDirectDeliveriesEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatalf("newReplayRuntime() error = %v", err)
 		}
-		verifier, err := dkim2.NewVerifier(provider, dkim2.WithVerificationClock(func() time.Time { return time.Unix(replayTestTimestamp, 0) }))
+		verifier, err := dkim2.NewVerifier(provider, dkim2.WithVerificationClock(func() time.Time { return time.Unix(replayTestTimestamp, 0) }), dkim2.WithoutSubdomainFromAuthorization())
 		if err != nil {
 			t.Fatal("verifier construction failed")
 		}

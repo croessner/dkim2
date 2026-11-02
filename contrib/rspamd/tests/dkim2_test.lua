@@ -7,6 +7,7 @@ local expected_endpoint = arg[2] or 'http://127.0.0.1:8080/v1/process'
 local expected_transport = arg[3] or 'loopback'
 local expected_server_name = arg[4]
 local pending_response
+local pending_code = 200
 local last_request
 local last_encoded_message
 local callback
@@ -27,7 +28,7 @@ local function response(state, verdict, replay, actions)
   })[verdict]
   return {
     api_version = 'v1',
-    draft = 'draft-ietf-dkim-dkim2-spec-08',
+    draft = 'draft-ietf-dkim-dkim2-spec-09',
     verification = {
       state = state, primary_reason = 'none', scope = 'current',
       historical_content = 'not_evaluated', historical_signatures = 'not_evaluated',
@@ -148,7 +149,11 @@ package.preload.rspamd_http = function()
       assert(request.no_ssl_verify == false)
       assert(request.headers['X-DKIM2-Capability'] ==
         'eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg')
-      request.callback(nil, 200, '{}')
+      if pending_code == 204 then
+        request.callback(nil, 204, '')
+      else
+        request.callback(nil, pending_code, '{}')
+      end
       return true
     end,
   }
@@ -277,7 +282,7 @@ callback(rejected)
 assert(rejected.pre_result.action == 'reject')
 assert(contains(rejected.symbols, 'DKIM2_REPLAYED'))
 
--- A passing direct i=1-only delivery is outside Draft-08 replay counting.
+-- A passing direct i=1-only delivery is outside Draft-09 replay counting.
 pending_response = response('PASS', 'accept', 'not_eligible', {
   { type = 'add_header', name = 'Authentication-Results', value = 'mx.example.test; dkim2=pass' },
 })
@@ -322,7 +327,7 @@ projected.policy.mode = 'strict'
 projected.policy.primary_reason = 'protocol_pass'
 projected.verifier_projection = {
   schema = 'dkim2.verifier-projection.v1',
-  draft = 'draft-ietf-dkim-dkim2-spec-08',
+  draft = 'draft-ietf-dkim-dkim2-spec-09',
   binding_algorithm = 'sha-256',
   binding = string.rep('A', 43) .. '=',
   hops = {
@@ -392,13 +397,18 @@ for _, report in ipairs({
   end
 end
 
--- Draft-08 Section 14.1 FAIL reasons and the Section 14.2 invalid_recipe
--- PERMERROR are admitted with their exact report and emit the state symbol.
+-- Draft-09 Section 14.1 FAIL reasons, the Section 14.2 invalid_recipe and
+-- null Recipe PERMERRORs, and the Section 3.8 Domain Policy Record outcomes
+-- are admitted with their exact report and emit the state symbol.
 for _, case in ipairs({
   { state = 'FAIL', reason = 'custody_mismatch', symbol = 'DKIM2_FAIL' },
-  { state = 'FAIL', reason = 'body_history_unavailable', symbol = 'DKIM2_FAIL' },
+  { state = 'PERMERROR', reason = 'body_history_unavailable', symbol = 'DKIM2_PERMERROR' },
   { state = 'FAIL', reason = 'timestamp_invalid', symbol = 'DKIM2_FAIL' },
   { state = 'PERMERROR', reason = 'invalid_recipe', symbol = 'DKIM2_PERMERROR' },
+  { state = 'FAIL', reason = 'from_subdomain_forbidden', symbol = 'DKIM2_FAIL' },
+  { state = 'PERMERROR', reason = 'domain_policy_ambiguous', symbol = 'DKIM2_PERMERROR' },
+  { state = 'PERMERROR', reason = 'domain_policy_invalid', symbol = 'DKIM2_PERMERROR' },
+  { state = 'TEMPERROR', reason = 'domain_policy_temporary', symbol = 'DKIM2_TEMPERROR' },
 }) do
   local result = string.lower(case.state)
   pending_response = response(case.state, 'accept', 'not_checked', {
@@ -411,8 +421,8 @@ for _, case in ipairs({
   pending_response.policy.primary_reason = 'permissive_override'
   local task = new_task({ ['DKIM2-Signature'] = true })
   callback(task)
-  assert(task.pre_result == nil, 'Draft-08 reason was not admitted: ' .. case.reason)
-  assert(contains(task.symbols, case.symbol), 'Draft-08 reason emitted the wrong state symbol: ' .. case.reason)
+  assert(task.pre_result == nil, 'Draft-09 reason was not admitted: ' .. case.reason)
+  assert(contains(task.symbols, case.symbol), 'Draft-09 reason emitted the wrong state symbol: ' .. case.reason)
 end
 
 local incomplete_pass = response('PASS', 'accept', 'first_seen')
@@ -531,7 +541,7 @@ local plain_attributes = assert(verifier.policy_attributes(projected, true))
 assert(plain_attributes['dkim2.received_dsn_propagation'] == nil,
   'a message that is not a received notification carries no propagation class')
 
--- Draft-08 pure ML-DSA-44 ("mldsa44") belongs to both closed daemon
+-- Draft-09 pure ML-DSA-44 ("mldsa44") belongs to both closed daemon
 -- vocabularies. The Draft-07 composite that Draft-08 removed stays outside
 -- them; dkim2d reports such sets as unknown, so a composite token in a daemon
 -- response is a contract violation that fails closed.
@@ -541,7 +551,7 @@ projected.verifier_projection.hops[1].signature_algorithms = { 'ed25519-sha256',
 assert(verifier.policy_attributes(projected) == nil, 'composite hop algorithm must fail closed')
 projected.verifier_projection.hops[1].signature_algorithms = { 'mldsa44-ed25519-sha256' }
 assert(verifier.policy_attributes(projected) == nil, 'unknown hop algorithm must fail closed')
--- DNS-02 registry names without a Draft-08 signing definition never verify,
+-- DNS-02 registry names without a Draft-09 signing definition never verify,
 -- so the daemon never lists them on a hop.
 for _, unproduced in ipairs({ 'rsa-sha512', 'ed25519-sha512' }) do
   projected.verifier_projection.hops[1].signature_algorithms = { unproduced }
@@ -571,7 +581,7 @@ for _, case in ipairs({
   end
 end
 
--- Draft-08 Section 14.6 step 4: an unknown algorithm is a permerror set with
+-- Draft-09 Section 14.6 step 4: an unknown algorithm is a permerror set with
 -- unsupported_algorithm; the removed ignored status is no longer admitted.
 for _, case in ipairs({
   { status = 'permerror', valid = true },
@@ -591,5 +601,78 @@ for _, case in ipairs({
   callback(unknown_task)
   assert((unknown_task.pre_result == nil) == case.valid, 'unexpected unknown-set admission: ' .. case.status)
 end
+
+-- Draft-09 Section 14.1 NONE: the daemon reports a message without any DKIM2
+-- field as a 200 NONE continue. Rspamd keeps its zero-score not-applicable
+-- symbols, publishes no verification, replay, or policy symbol, and applies
+-- only the bound reasonless dkim2=none report.
+local function none_response(actions)
+  local value = response('NONE', 'continue', 'not_checked', actions)
+  value.policy.primary_reason = 'none'
+  value.policy.findings = { { reason = 'none', severity = 'info' } }
+  return value
+end
+
+pending_response = none_response({
+  { type = 'add_header', name = 'Authentication-Results', value = 'mx.example.test; dkim2=none' },
+})
+local none_task = new_task({ ['Message-Instance'] = true }, {
+  ['Authentication-Results'] = { { decoded = 'mx.example.test; dkim2=pass' } },
+})
+callback(none_task)
+assert(none_task.pre_result == nil)
+assert(contains(none_task.symbols, 'DKIM2_CHECK'))
+assert(contains(none_task.symbols, 'DKIM2_NOT_APPLICABLE'))
+for _, symbol in ipairs({
+  'DKIM2_PASS', 'DKIM2_FAIL', 'DKIM2_PERMERROR', 'DKIM2_TEMPERROR', 'DKIM2_SERVICE_ERROR',
+  'DKIM2_REPLAY_NOT_CHECKED', 'DKIM2_POLICY_CONTINUE',
+}) do
+  assert(not contains(none_task.symbols, symbol), 'NONE published ' .. symbol)
+end
+assert(none_task.alterations.add['Authentication-Results'].value == 'mx.example.test; dkim2=none')
+assert(#none_task.alterations.remove['Authentication-Results'] == 1)
+
+for name, mutate in pairs({
+  accept = function(value) value.policy.verdict, value.disposition = 'accept', 'accept' end,
+  reject = function(value)
+    value.policy.verdict, value.disposition, value.actions = 'reject', 'reject', {}
+  end,
+  policy_reason = function(value) value.policy.primary_reason = 'protocol_pass' end,
+  finding_severity = function(value) value.policy.findings[1].severity = 'permanent' end,
+  verification_reason = function(value) value.verification.primary_reason = 'missing_protocol' end,
+  verification_state = function(value) value.verification.state = 'PERMERROR' end,
+  replay = function(value) value.replay.class = 'disabled' end,
+  signature_set = function(value)
+    value.verification.signature_sets = { { algorithm = 'rsa-sha256', status = 'pass', reason = 'none' } }
+  end,
+  diagnostic = function(value)
+    value.actions[1].value = 'mx.example.test; dkim2=none (reason=missing_protocol)'
+  end,
+  pass_report = function(value) value.actions[1].value = 'mx.example.test; dkim2=pass' end,
+  missing_report = function(value) value.actions = {} end,
+  signing_action = function(value)
+    value.actions[1] = { type = 'add_header', name = 'DKIM2-Signature', value = 'i=1' }
+  end,
+}) do
+  pending_response = none_response({
+    { type = 'add_header', name = 'Authentication-Results', value = 'mx.example.test; dkim2=none' },
+  })
+  mutate(pending_response)
+  local incoherent = new_task({ ['Message-Instance'] = true })
+  callback(incoherent)
+  assert(incoherent.pre_result and incoherent.pre_result.action == 'soft reject',
+    'incoherent NONE admitted: ' .. name)
+  assert(contains(incoherent.symbols, 'DKIM2_SERVICE_ERROR'))
+  assert(not contains(incoherent.symbols, 'DKIM2_NOT_APPLICABLE'))
+end
+
+-- The retired bodyless process 204 is a service error, not a not-applicable result.
+pending_code = 204
+local retired = new_task({ ['Message-Instance'] = true })
+callback(retired)
+pending_code = 200
+assert(retired.pre_result and retired.pre_result.action == 'soft reject')
+assert(contains(retired.symbols, 'DKIM2_SERVICE_ERROR'))
+assert(not contains(retired.symbols, 'DKIM2_NOT_APPLICABLE'))
 
 print('dkim2 Rspamd Lua contract tests: PASS')

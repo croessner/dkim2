@@ -108,7 +108,7 @@ func TestHandlerUsesExactInboundGeneratedOperation(t *testing.T) {
 		reporting, _ := document["reporting"].(map[string]any)
 		recipients, _ := smtpInput["rcpt_to"].([]any)
 		if document["api_version"] != "v1" ||
-			document["draft"] != "draft-ietf-dkim-dkim2-spec-08" ||
+			document["draft"] != "draft-ietf-dkim-dkim2-spec-09" ||
 			messageInput["fidelity"] != "milter_reconstructed_crlf" ||
 			messageInput["raw_rfc5322_base64"] != expectedRaw ||
 			smtpInput["mail_from"] != "<a@example.test>" ||
@@ -138,14 +138,6 @@ func TestHandlerUsesExactInboundGeneratedOperation(t *testing.T) {
 		result.Actions[0].Value != "mx.example.test; dkim2=pass" {
 		t.Fatalf("Handle()=(%v,%v), calls=%d", result, err, calls)
 	}
-}
-
-// TestHandlerAcceptsUnsignedNoContent proves the generated client preserves the
-// exact applicability response through the real HTTP transport.
-func TestHandlerAcceptsUnsignedNoContent(t *testing.T) {
-	testHandlerAcceptsNoContent(
-		t, modeInbound, "", "", routeProcess, operationProcess,
-	)
 }
 
 // testHandlerAcceptsNoContent proves one generated client preserves an exact
@@ -185,19 +177,6 @@ func testHandlerAcceptsNoContent(
 	}
 }
 
-// TestMapProcessAcceptsOnlyExactUnsignedNoContent proves the applicability wire variant.
-func TestMapProcessAcceptsOnlyExactUnsignedNoContent(t *testing.T) {
-	guard := &handlerGuard{authservID: testAuthservID}
-	assertNoContentMapping(t, routeProcess, routeSign, operationProcess,
-		func(response *http.Response, body []byte, hasJSONDocument bool) (milter.Result, error) {
-			wrapped := &generated.ProcessMessageResponse{HTTPResponse: response, Body: body}
-			if hasJSONDocument {
-				wrapped.JSON200 = &generated.ProcessResponse{}
-			}
-			return guard.mapProcess(wrapped)
-		})
-}
-
 // TestMapSignAcceptsOnlyExactNotApplicableNoContent proves the originator
 // applicability wire variant is bodyless, mutation-free, and operation-bound.
 func TestMapSignAcceptsOnlyExactNotApplicableNoContent(t *testing.T) {
@@ -234,7 +213,7 @@ const testUnsignedOriginal = "unsigned_original"
 
 // assertUnsignedReasonVocabulary proves the DSN 204 requires exactly one
 // X-DKIM2-Unsigned-Reason from the closed vocabulary and that every closed
-// reason, including the Draft-08 Section 16.2 identity outcomes, continues
+// reason, including the Draft-09 Section 16.2 identity outcomes, continues
 // without mutation instead of tempfailing the bounce.
 func assertUnsignedReasonVocabulary(
 	t *testing.T,
@@ -437,7 +416,7 @@ func TestHandlerNonOKResponseIsContractFailure(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		writer.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = io.WriteString(writer, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08","code":"service_unavailable","category":"availability"}`)
+		_, _ = io.WriteString(writer, `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-09","code":"service_unavailable","category":"availability"}`)
 	}))
 	defer server.Close()
 	handler, err := NewHandler(
@@ -506,7 +485,7 @@ func TestHandlerDerivesOriginatorDomainFromEnvelopeSender(t *testing.T) {
 			t.Fatalf("Handle(%q)=(%v,%v)", reverse, result, handleErr)
 		}
 	}
-	// SMTPUTF8 envelopes are signable (Draft-08 Section 18): a UTF-8 local
+	// SMTPUTF8 envelopes are signable (Draft-09 Section 18): a UTF-8 local
 	// part keeps the envelope domain, and a UTF-8 recipient is accepted.
 	for _, envelope := range [][2]string{
 		{"<séndér@example.test>", "<recipient@example.test>"},
@@ -558,7 +537,7 @@ func TestObservedDomainsMatchesAuthoritativeRouteSelection(t *testing.T) {
 }
 
 // TestHandlerTempfailsNullReversePathUntilPrevalidatedDSNGateExists reproduces
-// the missing Draft-08 Section 16.2 trusted-evidence gate.
+// the missing Draft-09 Section 16.2 trusted-evidence gate.
 func TestHandlerTempfailsNullReversePathUntilPrevalidatedDSNGateExists(t *testing.T) {
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -935,7 +914,7 @@ func validOperationResponse(operation generated.OperationResponseOperation) gene
 	return generated.OperationResponse{
 		Actions: generated.ActionPlan{}, ApiVersion: generated.V1,
 		Disposition: generated.DispositionReject,
-		Draft:       generated.DraftIetfDkimDkim2Spec08,
+		Draft:       generated.DraftIetfDkimDkim2Spec09,
 		Operation:   operation, Result: generated.OperationResponseResultFail,
 	}
 }
@@ -949,7 +928,7 @@ func validProcessResponse() generated.ProcessResponse {
 		}},
 		ApiVersion:  generated.V1,
 		Disposition: generated.DispositionAccept,
-		Draft:       generated.DraftIetfDkimDkim2Spec08,
+		Draft:       generated.DraftIetfDkimDkim2Spec09,
 		Authentication: generated.AuthenticationResult{
 			PrimaryReason: generated.AuthenticationResultPrimaryReasonNone,
 			State:         generated.PASS,
@@ -982,9 +961,9 @@ func validProcessResponse() generated.ProcessResponse {
 	}
 }
 
-// TestDraft08PermanentReasonsDoNotTempfail proves every new protocol
+// TestDraft09PermanentReasonsDoNotTempfail proves every new protocol
 // infraction remains a permanent rejection at the Milter daemon boundary.
-func TestDraft08PermanentReasonsDoNotTempfail(t *testing.T) {
+func TestDraft09PermanentReasonsDoNotTempfail(t *testing.T) {
 	for _, reason := range []generated.VerificationReason{
 		generated.VerificationReasonDuplicateHashAlgorithm,
 		generated.VerificationReasonInvalidRecipeJson,
@@ -993,7 +972,7 @@ func TestDraft08PermanentReasonsDoNotTempfail(t *testing.T) {
 		value := validProcessResponse()
 		value.Actions = generated.ActionPlan{}
 		value.Disposition = generated.DispositionReject
-		value.Draft = generated.DraftIetfDkimDkim2Spec08
+		value.Draft = generated.DraftIetfDkimDkim2Spec09
 		value.Verification.State = generated.PERMERROR
 		value.Verification.PrimaryReason = reason
 		value.Authentication.State = generated.PERMERROR
@@ -1086,7 +1065,7 @@ func (c closeTracker) Close() error {
 	return nil
 }
 
-// TestProcessMappingMarksTemporaryKeyTempfail proves the Draft-08 Section 13
+// TestProcessMappingMarksTemporaryKeyTempfail proves the Draft-09 Section 13
 // key-lookup tempfail is recognized only for a TEMPERROR provider_temporary
 // tempfail and not for other temporary reasons.
 func TestProcessMappingMarksTemporaryKeyTempfail(t *testing.T) {
@@ -1096,6 +1075,9 @@ func TestProcessMappingMarksTemporaryKeyTempfail(t *testing.T) {
 	}{
 		{reason: generated.VerificationReasonProviderTemporary, want: true},
 		{reason: generated.VerificationReasonProviderContract, want: false},
+		// A temporarily unavailable Domain Policy Record is TEMPERROR but not
+		// a key lookup, so it keeps the generic tempfail reply.
+		{reason: generated.VerificationReasonDomainPolicyTemporary, want: false},
 	} {
 		value := validProcessResponse()
 		value.Actions = generated.ActionPlan{}

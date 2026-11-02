@@ -1,7 +1,7 @@
 # Milter Adapter Implementation Specification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 
 Status: implementation-ready planning baseline.
@@ -134,7 +134,7 @@ This is a documented limitation of the `ordinary_transit` Milter mode, not
 of the daemon route. A Milter observes only the outgoing SMTP transaction, so
 `handler.go` sends that envelope as both `smtp` and `incoming_smtp`. A
 forwarder that installs its own local return path, which is the premise of
-Draft-08 Section 16.3 delivery-status propagation, presents an outgoing
+Draft-09 Section 16.3 delivery-status propagation, presents an outgoing
 `MAIL FROM` that differs from the inherited one; the daemon then rejects the
 revision as a custody discontinuity (`disposition: reject`), exactly as it
 must for evidence it cannot distinguish from a forged envelope. Such a
@@ -253,7 +253,7 @@ emitted in reverse order, so the hop's fields form one block at the top of the
 header in plan order (`Message-Instance`, `DKIM2-Signature`, then any
 `X-DKIM2-Info`), directly above the previous top field. Under Postfix, index 0
 also places the block above Postfix's own `Received` field, which Milters never
-see. Message-Instance and DKIM2-Signature are trace fields (Draft-08 Sections
+see. Message-Instance and DKIM2-Signature are trace fields (Draft-09 Sections
 9 and 10, RFC 5322 Section 3.6); placement is outside the signed input. SMFIF_ADDHDRS
 covers both SMFIR_ADDHEADER and SMFIR_INSHEADER and is required at
 negotiation. The sole bounded exception is RFC 8601 trust-boundary
@@ -381,7 +381,7 @@ ASCII SMTP reverse-path while retaining one statically configured tenant.
 `postfix_dsn` instead requires `domain_source: verified_embedded` and no
 configured domain. The bounded Postfix origin enum authorizes only the route;
 the daemon verifies the complete embedded object and only then resolves the
-Draft-08 Section 16.2 signing identity: a tenant `delivery_status` profile
+Draft-09 Section 16.2 signing identity: a tenant `delivery_status` profile
 domain that relaxed-matches an `rt=` address of the original's highest
 DKIM2-Signature and makes the bounce From Authentic. No outer-envelope or
 caller-selected domain can participate in that lookup;
@@ -583,7 +583,7 @@ forbidden. SMTPUTF8 octets are preserved for inbound processing under RFC
 6531/6532. Since the Draft-07 migration, signing accepts SMTPUTF8 paths in
 originator and transit mode: the library validates every path and maps a
 U-label envelope-sender domain to its A-label for `envelope_sender` domain
-selection (Draft-08 Section 18); a non-ASCII path without the `SMTPUTF8`
+selection (Draft-09 Section 18); a non-ASCII path without the `SMTPUTF8`
 parameter still fails closed. Every null sender fails closed before those
 boundaries unless the trusted-route `signing.null_sender: header_from` opt-in
 derives the signing domain from the single From mailbox.
@@ -657,20 +657,24 @@ Daemon dispositions map deterministically:
 | `tempfail` | temporary failure unchanged | `451 4.7.1 DKIM2 service unavailable` |
 | `tempfail` after TEMPERROR `provider_temporary` | temporary failure unchanged | `451 4.7.5 DKIM2 public key temporarily unavailable` |
 
-The `4.7.5` reply follows Draft-08 Section 13: a temporary public-key (DNS)
+The `4.7.5` reply follows Draft-09 Section 13: a temporary public-key (DNS)
 lookup failure is signalled distinctly. It is derived only from the daemon
 result TEMPERROR with primary reason `provider_temporary`, so operators find
 that reason in the daemon logs for every `4.7.5` reply, while adapter, transport, and other
 daemon tempfails keep `4.7.1`. Every DKIM2 rejection uses `5.7.1`.
 
-Three routes also define a bodyless HTTP 204 applicability variant, which the
-adapter maps to `continue` without any action: `/v1/process` (unsigned inbound
-message), `/v1/sign` (authoritative absent originator policy), and, in
+Two routes also define a bodyless HTTP 204 applicability variant, which the
+adapter maps to `continue` without any action: `/v1/sign` (authoritative
+absent originator policy) and, in
 `postfix_dsn` mode, `/v1/dsn/sign` when the daemon's explicit
 `signing.policy.delivery_status.unsigned_original: continue` policy lets a
 bounce whose returned original carries no DKIM2-Signature leave unsigned. The
 adapter accepts a 204 only with the exact shared envelope bound to the route
-that produced it; any other 204 is a contract failure.
+that produced it; any other 204 is a contract failure. An unsigned inbound
+message is the HTTP 200 `NONE` result instead: the adapter admits it only in
+its exact closed shape, continues, and inserts only the bound reasonless
+`dkim2=none` report when an `authserv-id` is configured; a process 204 is a
+contract failure.
 
 ### Canonical multi-instance policy response
 

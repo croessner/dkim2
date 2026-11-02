@@ -6,7 +6,7 @@
       "additionalProperties": false,
       "properties": {
         "daemon": {"const": "supported"},
-        "exim": {"const": "unqualified_draft08"},
+        "exim": {"const": "unqualified_draft09"},
         "library": {"const": "supported"},
         "milter": {"const": "partial"},
         "postfix": {"const": "partial_linux"}
@@ -59,7 +59,7 @@
     "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-02"},
     "manifest_schema": {"const": "dkim2.conformance-manifest.v1"},
     "manifest_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
-    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-08"},
+    "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-09"},
     "overall": {"enum": ["pass", "fail"]},
     "platform": {"enum": ["portable", "linux"]},
     "profile": {"enum": ["portable", "full"]},

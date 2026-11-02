@@ -14,7 +14,7 @@ import (
 // with the fixture clock and the given provider.
 func receivedDSNOuterVerification(t *testing.T, provider PublicKeyProvider, raw []byte) VerifyResult {
 	t.Helper()
-	verifier, err := NewVerifier(provider, receivedDSNClockOption())
+	verifier, err := NewVerifier(provider, receivedDSNClockOption(), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,9 +1,9 @@
 # Test Vectors And Conformance Suite Implementation Specification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture. Its `qualified_linux` evidence does not
-> qualify Draft-08.
+> qualify Draft-09.
 
 Status: implementation-ready planning baseline.
 

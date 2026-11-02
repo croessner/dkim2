@@ -39,7 +39,7 @@ func FuzzPublicVerify(f *testing.F) {
 	provider := publicProviderFunc(func(_ context.Context, query PublicKeyQuery) (PublicKeyResult, error) {
 		return MissingPublicKey(query.Algorithm()), nil
 	})
-	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		f.Fatal("fuzz verifier construction failed")
 	}

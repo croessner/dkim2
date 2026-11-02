@@ -31,7 +31,7 @@ func newContinuationSignerHarness(t *testing.T) signerHarness {
 	revisionProvider := &recordingRevisionProvider{
 		delegate: mustRevisionStaticProvider(t, fixture), events: events,
 	}
-	proofVerifier, err := verify.NewVerifier(revisionProvider, revisionTestClockOption())
+	proofVerifier, err := verify.NewVerifier(revisionProvider, revisionTestClockOption(), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()))
 	if err != nil {
 		t.Fatalf("verify.NewVerifier() error = %v", err)
 	}

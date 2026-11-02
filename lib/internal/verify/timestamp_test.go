@@ -15,10 +15,10 @@ import (
 	"github.com/croessner/dkim2/internal/signature"
 )
 
-// TestVerifierAppliesDraft08TimestampWindows reproduces the fixed Draft-08
+// TestVerifierAppliesDraft09TimestampWindows reproduces the fixed Draft-09
 // Section 14.3 windows: at most 14 days old and at most one day in the future,
 // with exact boundaries accepted and one second beyond rejected.
-func TestVerifierAppliesDraft08TimestampWindows(t *testing.T) {
+func TestVerifierAppliesDraft09TimestampWindows(t *testing.T) {
 	now := time.Unix(int64(testTimestampSeconds), 0).Add(time.Hour)
 
 	tests := []struct {
@@ -101,7 +101,7 @@ func mustVerifierForFixtureWithOptions(t *testing.T, fixture verificationFixture
 		t.Fatalf("NewStaticKeyProvider() error = %v", err)
 	}
 	resolvedOptions := append([]Option{testClockOption()}, options...)
-	verifier, err := NewVerifier(provider, resolvedOptions...)
+	verifier, err := NewVerifier(provider, append([]Option{testFromChoice}, resolvedOptions...)...)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -159,7 +159,7 @@ func checkStatusForTarget(status TargetStatus) CheckStatus {
 	return CheckStatusFail
 }
 
-// TestVerifierChecksTimestampsOfEverySignature reproduces Draft-08 Section
+// TestVerifierChecksTimestampsOfEverySignature reproduces Draft-09 Section
 // 14.3: any signature outside the windows makes the message invalid, not only
 // the selected highest signature. The failure is attributed to the offending
 // i=.
@@ -215,7 +215,7 @@ func TestVerifierChecksTimestampsOfEverySignature(t *testing.T) {
 func TestCheckTimestampsFailsClosedOnUnorderedChain(t *testing.T) {
 	verifier, err := NewVerifier(providerFunc(func(context.Context, KeyQuery) (PublicKey, error) {
 		return PublicKey{}, nil
-	}), testClockOption())
+	}), testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}

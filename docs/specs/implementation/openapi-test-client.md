@@ -1,7 +1,7 @@
 # OpenAPI Test Client Implementation Specification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 
 Status: implemented; independent review and closeout pending.
@@ -141,7 +141,7 @@ most 32 MiB. Files must be regular, non-symlink files and are read with a
 bounded reader. Directories are not recursively expanded.
 
 The top-level object requires exact schema `dkim2ctl.fixture.v1`, the exact
-current draft identifier `draft-ietf-dkim-dkim2-spec-08`, one stable
+current draft identifier `draft-ietf-dkim-dkim2-spec-09`, one stable
 identifier, and one `cases` array.
 
 Each file contains 1 through 256 cases. The file-wide encoded message total is
@@ -159,7 +159,7 @@ Closed case kinds:
 - `revise`: generated authorized revision request against `POST /v1/revise`;
 - `sign_dsn`: generated outgoing delivery-status signing request against
   `POST /v1/dsn/sign`;
-- `propagate_dsn`: generated Draft-08 Section 16.3 propagation request
+- `propagate_dsn`: generated Draft-09 Section 16.3 propagation request
   against `POST /v1/dsn/propagate`;
 - `commit_dsn_propagation`: generated commit request against
   `POST /v1/dsn/propagate/commit`;

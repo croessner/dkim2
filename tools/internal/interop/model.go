@@ -21,7 +21,7 @@ import (
 
 const (
 	// MessageDraft is the exact message-signature behavior baseline.
-	MessageDraft = "draft-ietf-dkim-dkim2-spec-08"
+	MessageDraft = "draft-ietf-dkim-dkim2-spec-09"
 	// DNSDraft is the exact historical DNS behavior identifier.
 	DNSDraft = "draft-ietf-dkim-dkim2-dns-02"
 	// RegistrySchema identifies the closed discovery registry.

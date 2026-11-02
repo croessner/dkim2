@@ -12,7 +12,7 @@ described below before inserting the daemon-owned trace field.
 The adapter is operational glue. DKIM2 parsing, verification, signing,
 revision, recipe, replay, and datasource rules remain in the library and
 daemon. The implemented behavior is pinned to
-`draft-ietf-dkim-dkim2-spec-08` and the repository's historical
+`draft-ietf-dkim-dkim2-spec-09` and the repository's historical
 `draft-ietf-dkim-dkim2-dns-02` baseline.
 
 ## Runtime requirements
@@ -131,7 +131,7 @@ than one outer DSN recipient.
 
 `verified_embedded` is required for `postfix_dsn`; `domain` must be absent. The
 daemon verifies the embedded original first and only then chooses the signing
-domain under draft-ietf-dkim-dkim2-spec-08 Section 16.2: a tenant
+domain under draft-ietf-dkim-dkim2-spec-09 Section 16.2: a tenant
 `delivery_status` profile domain that relaxed-matches an `rt=` address of the
 original's highest DKIM2-Signature and makes the bounce From Authentic
 (`signing.policy.delivery_status.reporting_domain` is only a preferred
@@ -145,7 +145,7 @@ default, and the adapter then answers `550 5.7.1`, which leaves the original
 message queued at Postfix. When the daemon operator explicitly configures
 `signing.policy.delivery_status.unsigned_original: continue`, the daemon
 answers `/v1/dsn/sign` with bodyless HTTP 204 instead. The daemon gives the
-same answer when Draft-08 forbids signing a verified bounce: no local profile
+same answer when Draft-09 forbids signing a verified bounce: no local profile
 domain relaxed-matches the original's `rt=` (for example a bounce of mail this
 system sent to a remote recipient), or none makes the bounce From Authentic.
 The adapter accepts only the exact 204 envelope bound to `/v1/dsn/sign` (no
@@ -288,14 +288,18 @@ daemon omits the `continue` report and an older adapter rejects it. Deploy the
 daemon and inbound Milter together as one digest-pinned change, and roll them
 back together.
 
-An inbound HTTP 204 response is the separate `not_applicable` variant for a
-message containing neither DKIM2 protocol field family. The adapter accepts it
-only with the exact bodyless daemon response contract, emits one Milter EOM
-continue response, requests no DKIM2 result action, and never fabricates
-`dkim2=none` as a four-state verification result. Mandatory removal of a
-pre-existing local `Authentication-Results` field still occurs at the RFC 8601
-trust boundary. Partial or malformed DKIM2 state continues through the normal
-fail-closed HTTP 200 result contract.
+A message containing neither DKIM2 protocol field family is the Draft-09
+`NONE` state. The daemon answers HTTP 200 with state `NONE`, policy `continue`
+with reason `none`, and replay `not_checked`. The adapter accepts it only in
+that exact closed shape, emits one Milter EOM continue response, and, when an
+`authserv-id` is configured, inserts exactly the daemon-owned
+`<authserv-id>; dkim2=none` report under the same authority binding as every
+other inbound report. A `NONE` response with any other verdict, a diagnostic
+comment, a foreign authority, or any non-report action fails closed. An
+inbound HTTP 204 is no longer valid and is a contract failure. Mandatory
+removal of a pre-existing local `Authentication-Results` field still occurs at
+the RFC 8601 trust boundary. Partial or malformed DKIM2 state continues
+through the normal fail-closed HTTP 200 result contract.
 
 An originator HTTP 204 response is independently the authoritative absent or
 inactive exact-profile variant. It maps to `none`/`continue` with zero actions.
@@ -315,7 +319,7 @@ revision, and malformed no-content responses fail closed.
 Every accepted field is inserted with `SMFIR_INSHEADER` at index 0. The plan
 is emitted in reverse, so the queued header starts with this hop's fields in
 the order of the table above, then the previous top field. Message-Instance
-and DKIM2-Signature are trace fields (Draft-08 Sections 9 and 10), which
+and DKIM2-Signature are trace fields (Draft-09 Sections 9 and 10), which
 RFC 5322 Section 3.6 says SHOULD be kept in blocks prepended to the message.
 An optional `X-DKIM2-Info` field directly follows the hop's DKIM2-Signature.
 Under Postfix, index 0 places the block above Postfix's own `Received` field,

@@ -25,7 +25,7 @@ const (
 	KeyTypeEd25519 KeyType = "ed25519"
 	// KeyTypeMLDSA44 identifies the raw 1312-octet FIPS 204 ML-DSA-44
 	// public-key encoding. DNS-02 defines no key type for pure ML-DSA-44;
-	// "mldsa44" is the local interpretation that equals the Draft-08
+	// "mldsa44" is the local interpretation that equals the Draft-09
 	// Section 10.9 sig-name, as the k=/algorithm match requires
 	// (DKIM2-ISSUE-0020).
 	KeyTypeMLDSA44 KeyType = "mldsa44"
@@ -196,7 +196,7 @@ func ParseRecord(input []byte, limits Limits) (Record, error) {
 		return Record{}, mappedScannerError(err)
 	}
 	tags := field.Tags()
-	if version, ok := field.Get("v"); ok && (len(tags) == 0 || tags[0].Name() != "v" || version.Value() != "DKIM1") {
+	if version, ok := field.Get("v"); ok && (len(tags) == 0 || tags[0].Name() != "v" || version.Value() != dkim1Version) {
 		return Record{}, newRecordError(RecordErrorInvalidVersion)
 	}
 	publicKeyTag, ok := field.Get("p")

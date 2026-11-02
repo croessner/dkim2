@@ -272,7 +272,7 @@ func IsErrorCode(err error, code ErrorCode) bool {
 
 // IsJSONSyntaxError reports whether err is a recipe failure of the JSON text
 // itself: malformed RFC 8259 syntax, a repeated member name, or a root that
-// is not a JSON object. Draft-08 Section 14.2 reports these as "contains
+// is not a JSON object. Draft-09 Section 14.2 reports these as "contains
 // invalid JSON"; every schema, step, range, literal, or application failure
 // of otherwise valid JSON is instead "Recipe <value> is invalid".
 func IsJSONSyntaxError(err error) bool {

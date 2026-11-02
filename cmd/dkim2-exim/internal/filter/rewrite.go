@@ -17,7 +17,7 @@ func Transform(message []byte, plan adapter.Plan) ([]byte, error) {
 }
 
 // TransformLimited applies one plan under configured message-structure limits.
-// The admitted fields are trace fields (Draft-08 Sections 9 and 10, RFC 5322
+// The admitted fields are trace fields (Draft-09 Sections 9 and 10, RFC 5322
 // Section 3.6), so they are prepended as one block in plan order above the
 // previous top field, which in a transport filter is Exim's own Received
 // field. Inherited header and body bytes are copied unchanged after the block.

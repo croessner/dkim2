@@ -42,7 +42,7 @@ func TestEvidenceEvaluatorAuthenticatesCompleteAndHeadersOnlyOriginals(t *testin
 				t.Fatalf("NewEvidenceEvaluator() error=%v", err)
 			}
 			evidence, err := evaluator.Evaluate(context.Background(), EvidenceRequest{Report: report})
-			// Draft-08 Section 16.2 no longer derives the DSN identity from
+			// Draft-09 Section 16.2 no longer derives the DSN identity from
 			// the embedded highest d=; the evidence carries the per-rt=
 			// RFC 3464 linkage that orders the Section 16.2 candidates.
 			if err != nil || !evidence.Valid() || evidence.Form() != form.wantForm || evidence.Target().Sequence != 1 || evidence.Target().InstanceNumber != 1 ||
@@ -673,7 +673,7 @@ func newEvidenceFixtureAt(t *testing.T, headersOnly bool, now time.Time) evidenc
 	if err != nil {
 		t.Fatalf("verify.NewStaticKeyProvider() error=%v", err)
 	}
-	verifier, err := verify.NewVerifier(provider, verify.WithClock(func() time.Time { return now }))
+	verifier, err := verify.NewVerifier(provider, verify.WithClock(func() time.Time { return now }), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()))
 	if err != nil {
 		t.Fatalf("verify.NewVerifier() error=%v", err)
 	}
@@ -733,7 +733,7 @@ func mustEvidenceReportWithDeliveryStatus(t *testing.T, contentType ContentType,
 }
 
 // TestEvidenceEvaluatorJudgesOriginalAtArrivalDate reproduces a DSN generated
-// after a long queue lifetime: Draft-08 Section 14.3 evaluates signature
+// after a long queue lifetime: Draft-09 Section 14.3 evaluates signature
 // windows at delivery, so the local MTA's RFC 3464 Arrival-Date is the
 // reference instant. An absent, future, or implausibly old Arrival-Date keeps
 // the verifier clock, which is never more permissive.

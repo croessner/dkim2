@@ -43,12 +43,13 @@ func TestUnsignedTargetAndCompleteFieldRemainDistinct(t *testing.T) {
 		t.Fatal("unsigned target exposes complete-field Bytes method")
 	}
 	unsigned := string(target.UnsignedBytes())
+	secondRecipient := base64.StdEncoding.EncodeToString(request.Recipients[1])
 	wantUnsigned := "DKIM2-Signature: i=4;\r\n" +
 		"\tm=3;\r\n" +
 		"\tt=1234;\r\n" +
 		"\tmf=" + base64.StdEncoding.EncodeToString(request.MailFrom) + ";\r\n" +
-		"\trt=" + base64.StdEncoding.EncodeToString(request.Recipients[0]) + ",\r\n" +
-		"\t" + base64.StdEncoding.EncodeToString(request.Recipients[1]) + ";\r\n" +
+		"\trt=" + base64.StdEncoding.EncodeToString(request.Recipients[0]) + "," + secondRecipient[:1] + "\r\n" +
+		"\t" + secondRecipient[1:] + ";\r\n" +
 		"\td=example.test;\r\n" +
 		"\ts=rsa1:rsa-sha256:,\r\n" +
 		"\ted1:ed25519-sha256:;\r\n" +
@@ -583,4 +584,71 @@ func signatureTestErrorCode(err error) ErrorCode {
 		return typed.Code()
 	}
 	return ""
+}
+
+// TestRecipientListFoldsInsideTheNextBase64String pins the Draft-09 Section
+// 10.6 sig-rt-tag: "," is followed directly by a base64string, which per
+// Section 2.14 cannot begin with FWS. Folding therefore happens after the
+// first character of each later recipient, never directly after the comma,
+// and every physical line stays within the 64-character fold width.
+func TestRecipientListFoldsInsideTheNextBase64String(t *testing.T) {
+	long := []byte("<" + strings.Repeat("r", 60) + "@example.net>")
+	other := []byte("<" + strings.Repeat("s", 60) + "@example.net>")
+	target, err := NewUnsignedTarget(TargetRequest{
+		Sequence: 1, InstanceNumber: 1, Timestamp: 1, MailFrom: []byte("<sender@example.test>"),
+		Recipients: [][]byte{long, []byte("<two@example.net>"), other}, Domain: signatureTestDomain,
+		Sets: []SetPlan{{Selector: signatureTestFirstSelector, Algorithm: AlgorithmEd25519SHA256}},
+	}, RenderLimits{})
+	if err != nil {
+		t.Fatalf("NewUnsignedTarget() code=%s", signatureTestErrorCode(err))
+	}
+	unsigned := target.UnsignedBytes()
+	if bytes.Contains(unsigned, []byte(",\r\n")) || bytes.Contains(unsigned, []byte(", ")) {
+		t.Fatal("rt= emitted FWS directly after a comma")
+	}
+	if longest := longestPhysicalLine(unsigned); longest > 1+len("rt=")+64+1+1 {
+		t.Fatalf("longest physical line = %d", longest)
+	}
+	unfolded := strings.ReplaceAll(string(unsigned), "\r\n", "")
+	start := strings.Index(unfolded, "rt=") + len("rt=")
+	end := start + strings.IndexByte(unfolded[start:], ';')
+	recipients, err := parseRecipientPaths(unfolded[start:end], DefaultLimits(), 0)
+	if err != nil {
+		t.Fatalf("parseRecipientPaths(rendered) code=%s", signatureTestErrorCode(err))
+	}
+	if len(recipients) != 3 || !bytes.Equal(recipients[0].Value(), long) || !bytes.Equal(recipients[1].Value(), []byte("<two@example.net>")) {
+		t.Fatal("rendered recipients did not round-trip")
+	}
+}
+
+// TestRecipientListAcceptsFWSAfterCommaForCompatibility pins the documented
+// compatibility interpretation: signers up to v0.2.0 folded rt= directly
+// after the comma, which Draft-08 admitted and Draft-09 Section 10.6 with
+// Section 2.14 no longer does. Verifiers keep accepting that one position so
+// those signatures verify; no other base64string accepts leading FWS. The
+// field value is the unfolded form, so the former ",CRLF TAB" fold is ",TAB".
+func TestRecipientListAcceptsFWSAfterCommaForCompatibility(t *testing.T) {
+	first := base64.StdEncoding.EncodeToString([]byte("<one@example.net>"))
+	second := base64.StdEncoding.EncodeToString([]byte("<two@example.net>"))
+	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("rt", first+",\t"+second)))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if len(parsed.Recipients()) != 2 {
+		t.Fatalf("recipients = %d", len(parsed.Recipients()))
+	}
+}
+
+// TestRecipientListRejectsFWSBeforeComma proves the compatibility exception
+// covers only FWS after an rt= comma, the one position earlier signers
+// emitted. Draft-09 Sections 2.14 and 10.6 forbid a base64string that ends
+// with FWS, so white space before a comma is malformed.
+func TestRecipientListRejectsFWSBeforeComma(t *testing.T) {
+	first := base64.StdEncoding.EncodeToString([]byte("<one@example.net>"))
+	second := base64.StdEncoding.EncodeToString([]byte("<two@example.net>"))
+	for _, separator := range []string{" ,", "\t,", " ,\t"} {
+		if _, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("rt", first+separator+second))); err == nil {
+			t.Fatalf("Parse() accepted rt= separator %q", separator)
+		}
+	}
 }

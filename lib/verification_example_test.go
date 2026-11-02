@@ -13,7 +13,7 @@ import (
 	dkim2 "github.com/croessner/dkim2"
 )
 
-//go:embed testdata/vectors/draft-ietf-dkim-dkim2-spec-08/public-golden.json
+//go:embed testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json
 var publicExampleCorpus []byte
 
 type syntheticMissingProvider struct{}
@@ -44,7 +44,7 @@ func (p syntheticKeyProvider) LookupPublicKey(_ context.Context, query dkim2.Pub
 func ExampleVerifier() {
 	verifier, err := dkim2.NewVerifier(
 		syntheticMissingProvider{},
-		dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }),
+		dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), dkim2.WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		fmt.Println("construction error")
@@ -93,7 +93,7 @@ func ExampleVerifier() {
 
 // ExampleVerifier_temporaryProvider demonstrates bounded provider-failure inspection.
 func ExampleVerifier_temporaryProvider() {
-	verifier, err := dkim2.NewVerifier(syntheticTemporaryProvider{}, dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	verifier, err := dkim2.NewVerifier(syntheticTemporaryProvider{}, dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		fmt.Println("construction error")
 		return
@@ -114,7 +114,7 @@ func ExampleVerifier_temporaryProvider() {
 
 // ExampleEvaluatePolicy demonstrates strict policy over a library-created passing result.
 func ExampleEvaluatePolicy() {
-	verifier, _ := dkim2.NewVerifier(syntheticKeyProvider{key: syntheticExampleRSAKey()}, dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	verifier, _ := dkim2.NewVerifier(syntheticKeyProvider{key: syntheticExampleRSAKey()}, dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), dkim2.WithoutSubdomainFromAuthorization())
 	result, _ := verifier.Verify(context.Background(), syntheticExampleRequest())
 	decision, _ := dkim2.EvaluatePolicy(result)
 	action := decision.ActionPlan().Actions()[0]
@@ -128,7 +128,7 @@ func ExampleEvaluatePolicy() {
 
 // ExampleEvaluatePolicy_testingUnavailable demonstrates explicit non-terminal observation of unavailable protocol input.
 func ExampleEvaluatePolicy_testingUnavailable() {
-	verifier, _ := dkim2.NewVerifier(syntheticMissingProvider{}, dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	verifier, _ := dkim2.NewVerifier(syntheticMissingProvider{}, dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), dkim2.WithoutSubdomainFromAuthorization())
 	result, _ := verifier.Verify(context.Background(), syntheticExampleRequestNamed("missing_protocol"))
 	decision, _ := dkim2.EvaluatePolicy(result, dkim2.WithPolicyMode(dkim2.PolicyModeTesting))
 	action := decision.ActionPlan().Actions()[0]

@@ -18,7 +18,7 @@ import (
 // representative of the Section 12.8 signature input that algorithm signs:
 // the 32-byte SHA-256 digest for rsa-sha256 and ed25519-sha256, and the
 // complete Section 12.8 input bytes for mldsa44, which is pure ML-DSA
-// (Draft-08 Section 3.4: the field values are not hashed first).
+// (Draft-09 Section 3.4: the field values are not hashed first).
 type PrivateKeySignRequest struct {
 	algorithm      Algorithm
 	representative []byte
@@ -54,13 +54,13 @@ func (r PrivateKeySignRequest) Digest() []byte {
 
 // MLDSA44SignerOptions returns the options every mldsa44 PrivateKeySigner
 // passes to crypto/mldsa PrivateKey.Sign: pure ML-DSA.Sign over the message
-// representative with the Draft-08 Section 3.4 context string "DKIM2".
+// representative with the Draft-09 Section 3.4 context string "DKIM2".
 // Signers use the default hedged (randomized) Sign, never SignDeterministic.
 func MLDSA44SignerOptions() *mldsa.Options { return cryptodkim2.MLDSA44SignerOptions() }
 
 // MinSigningRSABits is the local RSA signing floor: RSA signing credentials
 // and loaded signing profiles require a modulus of at least 2048 bits
-// (Draft-08 Section 3.2 SHOULD made a local MUST). Verification still
+// (Draft-09 Section 3.2 SHOULD made a local MUST). Verification still
 // accepts 1024 to 8192 bits.
 const MinSigningRSABits = cryptodkim2.MinSigningRSABits
 

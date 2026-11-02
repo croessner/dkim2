@@ -35,7 +35,7 @@ type signingPolicies struct {
 	// declaration for a null reverse path. The zero value refuses it.
 	admitHeaderFromNullSender bool
 	// reportingIdentity is the operator-preferred DSN signing domain. It
-	// wins within its Draft-08 Section 16.2 linkage tier only when it
+	// wins within its Draft-09 Section 16.2 linkage tier only when it
 	// relaxed-matches an rt= address of the reported message; it never
 	// signs on its own. The zero value states no preference.
 	reportingIdentity dkim2.DSNIdentity
@@ -431,12 +431,12 @@ func (s *SigningService) execute(
 		}
 		return applicableOperationExecution(result)
 	}
-	signer, err := dkim2.NewSigner(
+	signer, err := newOperationSigner(
 		s.publicKeys,
 		dkim2.NewRequestRouteAuthority(),
 		exactSigningAuthorizer{recipients: recipients},
 		lease,
-		dkim2.WithSigningClock(func() time.Time { return operationTime }),
+		operationTime,
 	)
 	if err != nil {
 		return operationExecution{}, &DomainError{}

@@ -78,7 +78,7 @@ func TestVerificationOwnersHideProtectedStateAcrossFormatting(t *testing.T) {
 	keyResult := FoundRSAPublicKey((rsaPublicKeyForPrivacyTest{
 		n: new(big.Int).SetBytes([]byte(protectedVerificationMarker)),
 	}).publicKey())
-	verifier, err := NewVerifier(markerPublicKeyProvider{marker: protectedVerificationMarker})
+	verifier, err := NewVerifier(markerPublicKeyProvider{marker: protectedVerificationMarker}, WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("failed to construct privacy-test verifier")
 	}

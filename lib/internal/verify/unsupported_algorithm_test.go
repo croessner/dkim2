@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// compositeAlgorithmToken is the Draft-08 Section 3.4 post-quantum composite
+// compositeAlgorithmToken is the Draft-09 Section 3.4 post-quantum composite
 // token this implementation deliberately does not support.
 const compositeAlgorithmToken Algorithm = "mldsa44-ed25519-sha512"
 

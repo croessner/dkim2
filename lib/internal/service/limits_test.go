@@ -43,7 +43,7 @@ func TestVerifierEnforcesExactAndOverPreProviderLimits(t *testing.T) {
 			config := DefaultConfig()
 			config.Clock = func() time.Time { return time.Unix(int64(timestamp), 0) }
 			tt.configure(&config.Limits)
-			verifier, err := NewVerifier(provider, config)
+			verifier, err := NewVerifier(provider, verify.DownwardOnlyFromAuthorization(), config)
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}

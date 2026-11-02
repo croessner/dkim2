@@ -145,14 +145,14 @@ func Scan(input []byte, known KnownTags, limits Limits) (Field, error) {
 }
 
 // ScanHeader parses an unfolded Message-Instance or DKIM2-Signature tag list.
-// Draft-08 Section 8 makes the final semicolon optional, and Sections 9 and 10
+// Draft-09 Section 8 makes the final semicolon optional, and Sections 9 and 10
 // require every tag name, including unknown extension names, to be lowercase;
 // an uppercase name is a syntax error rather than an ignored tag.
 func ScanHeader(input []byte, known KnownTags, limits Limits) (Field, error) {
 	return scan(input, known, limits, scanModeHeader)
 }
 
-// scan parses one Draft-08 Section 8 tag-list under the selected field-family mode.
+// scan parses one Draft-09 Section 8 tag-list under the selected field-family mode.
 func scan(input []byte, known KnownTags, limits Limits, mode scanMode) (Field, error) {
 	limits = limits.normalize()
 	if err := limits.Validate(); err != nil {
@@ -319,7 +319,7 @@ func invalidUnfoldedLineBreak(input []byte) int {
 	return -1
 }
 
-// tagName validates the Draft-08 Section 8 tag-name grammar without folding case.
+// tagName validates the Draft-09 Section 8 tag-name grammar without folding case.
 func tagName(input []byte, maxNameBytes int) (string, bool) {
 	if len(input) == 0 || len(input) > maxNameBytes || !isASCIILetter(input[0]) {
 		return "", false

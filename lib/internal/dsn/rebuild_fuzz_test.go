@@ -33,7 +33,7 @@ func FuzzRebuild(f *testing.F) {
 	if err != nil {
 		f.Fatal(err)
 	}
-	verifier, err := verify.NewVerifier(provider, verify.WithClock(receivedFuzzClock))
+	verifier, err := verify.NewVerifier(provider, verify.WithClock(receivedFuzzClock), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()))
 	if err != nil {
 		f.Fatal(err)
 	}

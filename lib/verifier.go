@@ -14,11 +14,21 @@ import (
 const verifierRedactedText = "dkim2.Verifier{redacted}"
 
 // NewVerifier constructs a fully initialized current-verification facade.
+//
+// Construction requires an explicit Draft-09 Section 11.1 choice (local
+// interpretation D9): provider also implements DomainPolicyProvider (as
+// DNSPublicKeyProvider does), WithDomainPolicyProvider is passed, or
+// WithoutSubdomainFromAuthorization is passed. A missing or conflicting
+// choice fails with APIErrorCodeInvalidOption.
 func NewVerifier(provider PublicKeyProvider, options ...VerifierOption) (*Verifier, error) {
 	if nilPublicKeyProvider(provider) {
 		return nil, newAPIError(APIErrorCodeInvalidProvider)
 	}
 	config, err := applyVerifierOptions(options...)
+	if err != nil {
+		return nil, newAPIError(APIErrorCodeInvalidOption)
+	}
+	fromAuthorization, err := config.fromChoice.resolve(provider)
 	if err != nil {
 		return nil, newAPIError(APIErrorCodeInvalidOption)
 	}
@@ -34,6 +44,7 @@ func NewVerifier(provider PublicKeyProvider, options ...VerifierOption) (*Verifi
 	}
 	coordinator, err := service.NewVerifier(
 		publicKeyBridge{provider: provider, sink: config.sink},
+		fromAuthorization,
 		serviceConfig,
 	)
 	if err != nil {

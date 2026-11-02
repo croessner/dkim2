@@ -264,14 +264,18 @@ func foundResult(rcode int, records []*dns.TXT, chainTTL ttlEvidence) (dkim2.TXT
 	if rcode != dns.RcodeSuccess {
 		return dkim2.TXTLookupResult{}, "", ttlEvidence{}, true, dkim2.NewPermanentProviderError()
 	}
+	for _, record := range records {
+		chainTTL.include(record.Hdr.Ttl)
+	}
+	// Count first: an answer above the carry bound stays count-only, so no
+	// payload of an oversized RRset is joined.
+	if len(records) > dkim2.MaxCarriedTXTRecords() {
+		result, err := dkim2.NewAmbiguousTXTLookupResult(len(records), chainTTL.duration(), dkim2.DNSSECStatusUnavailable)
+		return result, "", chainTTL, true, err
+	}
 	payloads := make([][]byte, len(records))
 	for index, record := range records {
 		payloads[index] = []byte(strings.Join(record.Txt, ""))
-		chainTTL.include(record.Hdr.Ttl)
-	}
-	if len(payloads) > 1 {
-		result, err := dkim2.NewAmbiguousTXTLookupResult(len(payloads), chainTTL.duration(), dkim2.DNSSECStatusUnavailable)
-		return result, "", chainTTL, true, err
 	}
 	result, err := dkim2.NewFoundTXTLookupResult(payloads, chainTTL.duration(), dkim2.DNSSECStatusUnavailable)
 	return result, "", chainTTL, true, err
@@ -292,7 +296,7 @@ func withBoundedResultTTL(result dkim2.TXTLookupResult, chainTTL ttlEvidence) (d
 		for index := range records {
 			payloads[index] = records[index].Payload()
 		}
-		if result.RecordCount() > 1 {
+		if len(records) == 0 {
 			return dkim2.NewAmbiguousTXTLookupResult(result.RecordCount(), chainTTL.duration(), result.DNSSECStatus())
 		}
 		return dkim2.NewFoundTXTLookupResult(payloads, chainTTL.duration(), result.DNSSECStatus())

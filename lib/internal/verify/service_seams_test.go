@@ -49,7 +49,7 @@ func TestTypedTemporaryProviderProducesIndeterminateTarget(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)
 	verifier, err := NewVerifier(providerFunc(func(context.Context, KeyQuery) (PublicKey, error) {
 		return PublicKey{}, NewProviderFailure(ProviderFailureTemporary)
-	}), testClockOption())
+	}), testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -70,7 +70,7 @@ func TestSupportedPassAndTemporaryProviderRemainIndeterminate(t *testing.T) {
 			return PublicKey{Algorithm: query.Algorithm, Material: fixture.rsaKey, Metadata: KeyMetadata{Status: KeyStatusFound}}, nil
 		}
 		return PublicKey{}, NewProviderFailure(ProviderFailureTemporary)
-	}), testClockOption())
+	}), testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -105,7 +105,7 @@ func TestVerifierClassifiesProviderFailureOnce(t *testing.T) {
 	failure := &togglingVerifierProviderFailure{}
 	verifier, err := NewVerifier(providerFunc(func(context.Context, KeyQuery) (PublicKey, error) {
 		return PublicKey{}, failure
-	}), testClockOption())
+	}), testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -148,7 +148,7 @@ func TestDeclaredNonFoundProviderStatusesRemainDistinct(t *testing.T) {
 		fixture := newRSAVerificationFixture(t)
 		verifier, err := NewVerifier(providerFunc(func(context.Context, KeyQuery) (PublicKey, error) {
 			return PublicKey{Algorithm: AlgorithmRSASHA256, Metadata: KeyMetadata{Status: tt.key}}, nil
-		}), testClockOption())
+		}), testClockOption(), testFromChoice)
 		if err != nil {
 			t.Fatalf("NewVerifier() error = %v", err)
 		}
@@ -169,7 +169,7 @@ func TestArbitraryProviderEvenRSAModulusIsRejected(t *testing.T) {
 			Material:  &rsa.PublicKey{N: evenModulus, E: fixture.rsaPublicKey.E},
 			Metadata:  KeyMetadata{Status: KeyStatusFound},
 		}, nil
-	}), testClockOption())
+	}), testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -190,7 +190,7 @@ func TestArbitraryProviderUsesVerifierBoundMinimumRSABits(t *testing.T) {
 			Material:  fixture.rsaPublicKey,
 			Metadata:  KeyMetadata{Status: KeyStatusFound},
 		}, nil
-	}), WithAlgorithmPolicy(policy), testClockOption())
+	}), WithAlgorithmPolicy(policy), testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -210,7 +210,7 @@ func TestProviderUnknownKeyStatusAndInvalidMetadataBecomeContract(t *testing.T) 
 	} {
 		verifier, err := NewVerifier(providerFunc(func(context.Context, KeyQuery) (PublicKey, error) {
 			return PublicKey{Algorithm: AlgorithmRSASHA256, Material: fixture.rsaPublicKey, Metadata: metadata}, nil
-		}), testClockOption())
+		}), testClockOption(), testFromChoice)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -237,7 +237,7 @@ func TestProviderErrorsRemainContractAndAlgorithmMismatchStaysTyped(t *testing.T
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			verifier, err := NewVerifier(providerFunc(func(context.Context, KeyQuery) (PublicKey, error) { return tt.key, tt.err }), testClockOption())
+			verifier, err := NewVerifier(providerFunc(func(context.Context, KeyQuery) (PublicKey, error) { return tt.key, tt.err }), testClockOption(), testFromChoice)
 			if err != nil {
 				t.Fatal(err)
 			}

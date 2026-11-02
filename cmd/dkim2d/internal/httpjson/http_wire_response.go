@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/croessner/dkim2/authresults"
 	"io"
 	"net/http"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/croessner/dkim2/authresults"
 
 	dkim2 "github.com/croessner/dkim2"
 	"github.com/croessner/dkim2/cmd/dkim2d/internal/app"
@@ -61,7 +63,7 @@ func newErrorResponse(
 		ApiVersion: generated.V1,
 		Category:   category,
 		Code:       code,
-		Draft:      generated.DraftIetfDkimDkim2Spec08,
+		Draft:      generated.DraftIetfDkimDkim2Spec09,
 	}, maxErrorResponseBytes)
 	if err != nil {
 		return preMarshaledResponse{}, err
@@ -130,7 +132,7 @@ func validSuccessResponse(value any) bool {
 // members, so that an incoherent internal result never reaches the wire.
 func validPropagationResponse(response generated.DSNPropagateResponse) bool {
 	if response.ApiVersion != generated.V1 ||
-		response.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+		response.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		response.Operation != generated.PropagationOperationDeliveryStatusPropagation ||
 		!response.Result.Valid() || !response.Disposition.Valid() ||
 		!response.Replay.Class.Valid() ||
@@ -203,7 +205,7 @@ func validPropagationOutput(output generated.PropagationOutput) bool {
 // validPropagationCommitResponse validates the closed committed singleton.
 func validPropagationCommitResponse(response generated.DSNPropagateCommitResponse) bool {
 	return response.ApiVersion == generated.V1 &&
-		response.Draft == generated.DraftIetfDkimDkim2Spec08 &&
+		response.Draft == generated.DraftIetfDkimDkim2Spec09 &&
 		response.State == generated.PropagationStateCommitted
 }
 
@@ -282,11 +284,11 @@ func validStatusResponse(value any) bool {
 	switch response := value.(type) {
 	case generated.HealthResponse:
 		return response.ApiVersion == generated.V1 &&
-			response.Draft == generated.DraftIetfDkimDkim2Spec08 &&
+			response.Draft == generated.DraftIetfDkimDkim2Spec09 &&
 			response.Status == generated.Alive
 	case generated.ReadinessResponse:
 		return response.ApiVersion == generated.V1 &&
-			response.Draft == generated.DraftIetfDkimDkim2Spec08 &&
+			response.Draft == generated.DraftIetfDkimDkim2Spec09 &&
 			response.Status == generated.Ready
 	default:
 		return false
@@ -295,8 +297,11 @@ func validStatusResponse(value any) bool {
 
 // validProcessResponse validates every closed generated enum and coherence rule before commit.
 func validProcessResponse(response generated.ProcessResponse) bool {
+	if noneMarkedProcessResponse(response) {
+		return validNoneProcessResponse(response)
+	}
 	if response.ApiVersion != generated.V1 ||
-		response.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+		response.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		!response.Disposition.Valid() ||
 		!validProcessActions(response) ||
 		!response.Replay.Class.Valid() ||
@@ -327,6 +332,42 @@ func validProcessResponse(response generated.ProcessResponse) bool {
 	}
 }
 
+// noneMarkedProcessResponse reports whether any member claims the NONE state
+// or its policy reason, so a partial NONE projection can never pass as a
+// verified result.
+func noneMarkedProcessResponse(response generated.ProcessResponse) bool {
+	if response.Verification.State == generated.NONE || response.Authentication.State == generated.NONE ||
+		response.Policy.PrimaryReason == generated.PolicyReasonNone {
+		return true
+	}
+	for _, finding := range response.Policy.Findings {
+		if finding.Reason == generated.PolicyReasonNone {
+			return true
+		}
+	}
+	return false
+}
+
+// validNoneProcessResponse admits only the exact shape that
+// newNoneProcessResponse builds for the configured mode and the authority of
+// the optional reasonless dkim2=none report.
+func validNoneProcessResponse(response generated.ProcessResponse) bool {
+	authority := ""
+	switch len(response.Actions) {
+	case 0:
+	case 1:
+		report, ok := authresults.Parse(response.Actions[0].Value)
+		if !ok {
+			return false
+		}
+		authority = report.Authority()
+	default:
+		return false
+	}
+	expected, err := newNoneProcessResponse(response.Policy.Mode, authority)
+	return err == nil && reflect.DeepEqual(expected, response)
+}
+
 // validVerifierProjection enforces presence and closed wire coherence for complete PASS evidence.
 func validVerifierProjection(projection *generated.VerifierProjection, verification generated.VerificationResult) bool {
 	required := verification.State == generated.PASS && verification.Scope == generated.Chain &&
@@ -337,7 +378,7 @@ func validVerifierProjection(projection *generated.VerifierProjection, verificat
 	if projection == nil {
 		return true
 	}
-	if projection.Schema != generated.Dkim2VerifierProjectionV1 || projection.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+	if projection.Schema != generated.Dkim2VerifierProjectionV1 || projection.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		projection.BindingAlgorithm != generated.Sha256 || len(projection.Binding) != 32 ||
 		len(projection.Hops) == 0 || len(projection.Hops) > 128 || verification.Target == nil ||
 		strconv.Itoa(len(projection.Hops)) != verification.Target.Sequence {
@@ -429,7 +470,7 @@ func sortedUniqueStrings(values []string) bool {
 	return true
 }
 
-// validAuthenticationResponse enforces the Draft-08 final authentication projection.
+// validAuthenticationResponse enforces the Draft-09 final authentication projection.
 func validAuthenticationResponse(
 	authentication generated.AuthenticationResult,
 	verification generated.VerificationState,
@@ -479,7 +520,7 @@ func validProcessActions(response generated.ProcessResponse) bool {
 // validOperationResponse validates one complete sign or revision response.
 func validOperationResponse(response generated.OperationResponse) bool {
 	if response.ApiVersion != generated.V1 ||
-		response.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+		response.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		!response.Operation.Valid() || !response.Result.Valid() ||
 		!response.Disposition.Valid() ||
 		!validWireOperationOutcome(response.Result, response.Disposition) ||

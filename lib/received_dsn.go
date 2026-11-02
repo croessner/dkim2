@@ -120,7 +120,7 @@ const (
 	ReceivedDSNPropagationForbiddenNullPreviousSender ReceivedDSNPropagation = "forbidden_null_previous_sender"
 	// ReceivedDSNPropagationForbiddenIdentityMisaligned reports a completion
 	// d= that does not relaxed-match the previous hop's rt= address, so the
-	// propagated report would violate Draft-08 Section 16.2.
+	// propagated report would violate Draft-09 Section 16.2.
 	ReceivedDSNPropagationForbiddenIdentityMisaligned ReceivedDSNPropagation = "forbidden_identity_misaligned"
 	// ReceivedDSNPropagationUnsupportedChain reports an nd= previous hop or a non-verifying run member.
 	ReceivedDSNPropagationUnsupportedChain ReceivedDSNPropagation = "unsupported_chain"
@@ -470,7 +470,7 @@ func newReceivedDSNEvaluator(core verify.Verifier, limits VerificationLimits) (d
 }
 
 // EvaluateReceivedDSN evaluates one inbound DKIM2-signed delivery-status
-// notification under Draft-08 Section 16.4 after the caller verified the
+// notification under Draft-09 Section 16.4 after the caller verified the
 // outer message as an ordinary message with this verifier. It shares the
 // verifier's key provider, limits, clock, and observation sink and adds the
 // tenant-bound local authority carried by the request. The request must carry

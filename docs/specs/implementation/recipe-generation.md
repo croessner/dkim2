@@ -1,7 +1,7 @@
 # DKIM2 Recipe Generation
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 
 Status: implemented; final exact-snapshot review and commit closeout in progress.
@@ -212,7 +212,7 @@ implementation is owned by `lib/internal/canonical`.
 
 The classifier covers the Section 4 exclusions plus the additional Section 6.2
 exclusions, notably `Message-Instance` and `DKIM2-Signature`, as well as
-`Delivered-To`, `X-*`, and all other Draft-08 Section 4.1 classes. Draft-08
+`Delivered-To`, `X-*`, and all other Draft-09 Section 4.1 classes. Draft-09
 removed `Auto-Submitted` and `VBR-Info` from the unsigned set, so the
 generator now emits recipes for changes to both. The generator supplies
 only validated canonical lowercase ASCII names and never exposes them through

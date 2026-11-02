@@ -81,7 +81,7 @@ func TestTopTraceOrderPinsPropagatedPlacement(t *testing.T) {
 	}
 }
 
-// TestForeignNotificationRecipientAlignsWithForeignSigner pins the Draft-08
+// TestForeignNotificationRecipientAlignsWithForeignSigner pins the Draft-09
 // Section 16.2 topology of the not_local lane: the foreign delivery-status
 // signer may sign only a notification whose embedded completion signature
 // names a recipient under its own domain, so the foreign original must be

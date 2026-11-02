@@ -37,7 +37,7 @@ type VerificationService interface {
 	Assess(context.Context, dkim2.VerifyRequest) (dkim2.VerificationAssessment, error)
 }
 
-// AuthenticationService is the narrow library-owned final Draft-08 boundary.
+// AuthenticationService is the narrow library-owned final Draft-09 boundary.
 type AuthenticationService interface {
 	AuthenticateVerified(context.Context, dkim2.VerifyResult) (dkim2.AuthenticationResult, error)
 }
@@ -47,6 +47,11 @@ type AuthenticationService interface {
 type DNSVerifier struct {
 	verifier *dkim2.Verifier
 	provider dkim2.PublicKeyProvider
+	policy   dkim2.DomainPolicyProvider
+	// allowSubdomainFrom is the configured Draft-09 Section 11.1 choice
+	// (verification.domain_policy.allow_subdomain_from); signers built over
+	// this verifier apply the same choice.
+	allowSubdomainFrom bool
 }
 
 // String returns a constant content-free DNS verifier summary.
@@ -100,14 +105,26 @@ type DomainResult struct {
 	policy            dkim2.PolicyDecision
 	deliveryStatus    DeliveryStatusProjection
 	hasDeliveryStatus bool
+	// notApplicableMode retains the configured local policy mode of a
+	// message without any DKIM2 field. The policy evaluator never sees such a
+	// message; the mode is only reported by the transport projection.
+	notApplicableMode dkim2.PolicyMode
 }
 
-// NewDNSVerifier constructs one instance-owned bounded DNS verifier.
+// NewDNSVerifier constructs one instance-owned bounded DNS verifier. With
+// verification.domain_policy.allow_subdomain_from the same DNS provider
+// resolves Domain Policy Records for the Draft-09 Section 11.1 upward
+// Authentic From match; without it the verifier uses the documented
+// downward-only local policy and never queries a Domain Policy Record.
 func NewDNSVerifier(
 	parent context.Context,
 	dnsConfig config.DNSConfig,
+	verification config.VerificationConfig,
 	sinks ...dkim2.ObservationSink,
 ) (*DNSVerifier, error) {
+	if !verification.Valid() {
+		return nil, &DomainError{}
+	}
 	providerConfig, err := dnsProviderConfig(parent, dnsConfig)
 	if err != nil {
 		return nil, &DomainError{}
@@ -120,7 +137,13 @@ func NewDNSVerifier(
 	if err != nil {
 		return nil, &DomainError{}
 	}
-	options := make([]dkim2.VerifierOption, 0, 1)
+	allowSubdomainFrom := verification.AllowSubdomainFrom()
+	options := make([]dkim2.VerifierOption, 0, 2)
+	if allowSubdomainFrom {
+		options = append(options, dkim2.WithDomainPolicyProvider(provider))
+	} else {
+		options = append(options, dkim2.WithoutSubdomainFromAuthorization())
+	}
 	if len(sinks) == 1 && !nilInterface(sinks[0]) {
 		options = append(options, dkim2.WithObservationSink(sinks[0]))
 	}
@@ -128,7 +151,27 @@ func NewDNSVerifier(
 	if err != nil {
 		return nil, &DomainError{}
 	}
-	return &DNSVerifier{verifier: verifier, provider: provider}, nil
+	return &DNSVerifier{verifier: verifier, provider: provider, policy: provider, allowSubdomainFrom: allowSubdomainFrom}, nil
+}
+
+// LookupDomainPolicy delegates Domain Policy Record lookups of signers built
+// over this verifier to the same bounded DNS provider.
+func (v *DNSVerifier) LookupDomainPolicy(
+	ctx context.Context,
+	query dkim2.DomainPolicyQuery,
+) (dkim2.DomainPolicyStatus, error) {
+	if v == nil || nilInterface(v.policy) {
+		// A verifier without a provider is a wiring defect, not a DNS outage:
+		// it must not be retried as a temporary failure.
+		return "", dkim2.NewPermanentProviderError()
+	}
+	return v.policy.LookupDomainPolicy(ctx, query)
+}
+
+// AllowSubdomainFrom reports the configured Draft-09 Section 11.1 choice so
+// that signers built over this verifier apply the same choice.
+func (v *DNSVerifier) AllowSubdomainFrom() bool {
+	return v != nil && v.allowSubdomainFrom
 }
 
 // Verify delegates one immutable request to the instance verifier.
@@ -225,7 +268,7 @@ func (p *DomainProcessor) ProcessInbound(ctx context.Context, inbound InboundReq
 		return DomainResult{}, &DomainError{}
 	}
 	if !assessment.Applicable() {
-		return DomainResult{initialized: true}, nil
+		return DomainResult{initialized: true, notApplicableMode: p.state.mode}, nil
 	}
 	verification, ok := assessment.Verification()
 	if !ok || !verification.Valid() {
@@ -396,9 +439,20 @@ func (r DomainResult) Verification() (dkim2.VerifyResult, error) {
 	return r.verification, nil
 }
 
-// Authentication returns the authoritative final Draft-08 result when configured.
+// Authentication returns the authoritative final Draft-09 result when configured.
 func (r DomainResult) Authentication() (dkim2.AuthenticationResult, bool) {
 	return r.authentication, r.valid() && r.applicable && r.authentication.Valid()
+}
+
+// NotApplicableMode returns the configured local policy mode of a message
+// that carries no DKIM2 field of either family. Such a message is never
+// policy-evaluated; transport boundaries report it as the Draft-09 NONE
+// state together with this mode.
+func (r DomainResult) NotApplicableMode() (dkim2.PolicyMode, bool) {
+	if !r.valid() || r.applicable {
+		return "", false
+	}
+	return r.notApplicableMode, true
 }
 
 // Policy returns the immutable server-owned local-policy result only when applicable.
@@ -415,9 +469,10 @@ func (r DomainResult) valid() bool {
 		return false
 	}
 	if !r.applicable {
-		return !r.verification.Valid() && !r.authentication.Valid() && !r.policy.Valid() && !r.hasDeliveryStatus
+		return r.notApplicableMode.Known() && !r.verification.Valid() && !r.authentication.Valid() &&
+			!r.policy.Valid() && !r.hasDeliveryStatus
 	}
-	if !r.verification.Valid() || !r.policy.Valid() || r.hasDeliveryStatus != r.deliveryStatus.Valid() {
+	if r.notApplicableMode != "" || !r.verification.Valid() || !r.policy.Valid() || r.hasDeliveryStatus != r.deliveryStatus.Valid() {
 		return false
 	}
 	if r.authentication.Valid() {

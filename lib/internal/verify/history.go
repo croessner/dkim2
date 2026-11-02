@@ -692,7 +692,7 @@ func (c HistoryCoordinator) currentStateMatches(state recipe.State, current inst
 
 // historyParseStop maps parser and cumulative failures to one closed stop:
 // JSON syntax and object-shape failures stay separate from schema failures
-// of valid JSON, as Draft-08 Section 14.2 reports them differently.
+// of valid JSON, as Draft-09 Section 14.2 reports them differently.
 func historyParseStop(parseErr, usageErr error) (HistoryStopReason, bool) {
 	if usageErr != nil {
 		if IsErrorCode(usageErr, ErrorCodeHistoryLimitExceeded) {

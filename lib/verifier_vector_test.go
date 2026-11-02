@@ -116,8 +116,8 @@ type publicGoldenSignatureFact struct {
 	reason    ReasonCode
 }
 
-// TestPublicDraft08GoldenVectors proves chain-authenticated verification through the root facade.
-func TestPublicDraft08GoldenVectors(t *testing.T) {
+// TestPublicDraft09GoldenVectors proves chain-authenticated verification through the root facade.
+func TestPublicDraft09GoldenVectors(t *testing.T) {
 	corpus := loadPublicGoldenCorpus(t)
 	cases := publicGoldenCases(corpus)
 	for _, testCase := range cases {
@@ -143,7 +143,7 @@ func TestPublicDraft08GoldenVectors(t *testing.T) {
 			if testCase.clock != 0 {
 				clock = testCase.clock
 			}
-			verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(clock, 0) }))
+			verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(clock, 0) }), WithoutSubdomainFromAuthorization())
 			if err != nil {
 				t.Fatalf("NewVerifier() failed for %s", testCase.name)
 			}
@@ -171,7 +171,7 @@ func TestPublicGoldenVectorBytesAreFrozenCRLF(t *testing.T) {
 	}
 }
 
-// publicGoldenCases returns the binding Draft-08 public result matrix.
+// publicGoldenCases returns the binding Draft-09 public result matrix.
 func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 	pass := func(name, vector string) publicGoldenCase {
 		return publicGoldenCase{name: name, vector: vector, mode: goldenProviderKeys, state: ResultStatePASS, reason: ReasonNone, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1}
@@ -181,7 +181,7 @@ func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 		pass("ed25519_sha256_pass", "ed25519_pass"),
 		pass("rsa_and_ed25519_both_pass", "both_pass"),
 		// The frozen "supported_unknown_pass" vector joins an RSA set and an
-		// unknown set with ",". Draft-08 Section 14.6 step 4 makes the unknown
+		// unknown set with ",". Draft-09 Section 14.6 step 4 makes the unknown
 		// set a PERMERROR intermediate, so the one sig-all group is PERMERROR.
 		{name: "supported_pass_plus_unknown_signature_in_group_permerror", vector: "supported_unknown_pass", mode: goldenProviderKeys, state: ResultStatePERMERROR, reason: ReasonUnsupportedAlgorithm, class: CheckClassSignature, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "sha256_plus_mismatching_sha512_fails", vector: "sha_unknown_hash_pass", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonHashMismatch, class: CheckClassBodyHash, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
@@ -201,11 +201,11 @@ func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 		{name: "typed_provider_deadline_temperror", vector: goldenVectorRSAPass, mode: goldenProviderTemporaryDeadline, state: ResultStateTEMPERROR, reason: ReasonProviderTemporary, class: CheckClassProvider, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "unclassified_provider_deadline_permerror", vector: goldenVectorRSAPass, mode: goldenProviderUnclassifiedDeadline, state: ResultStatePERMERROR, reason: ReasonProviderContract, class: CheckClassProvider, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		pass("timestamp_exact_14_days_pass", "age_exact"),
-		// Draft-08 Section 14.3: timestamp failures are FAIL.
+		// Draft-09 Section 14.3: timestamp failures are FAIL.
 		{name: "timestamp_14_days_plus_one_fail", vector: "age_over", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		// future_exact is signed 300 seconds after publicVectorClock and
 		// future_over 301 seconds after it; the clock is moved back so both
-		// sit on the Draft-08 Section 14.3 one-day future boundary.
+		// sit on the Draft-09 Section 14.3 one-day future boundary.
 		{name: "timestamp_exact_one_day_future_pass", vector: "future_exact", mode: goldenProviderKeys, state: ResultStatePASS, reason: ReasonNone, custody: CustodyStructureNotPresent, sequence: 1, instance: 1, clock: publicVectorClock + 300 - 86400},
 		{name: "timestamp_one_day_plus_one_fail", vector: "future_over", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1, clock: publicVectorClock + 300 - 86400},
 		{name: "timestamp_large_parseable_fail", vector: "timestamp_large", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonTimestampInvalid, class: CheckClassTimestamp, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
@@ -215,14 +215,14 @@ func publicGoldenCases(corpus publicGoldenCorpus) []publicGoldenCase {
 		pass("null_reverse_path_matches_null", "mail_null"),
 		{name: "null_reverse_path_nonnull_mismatch", vector: "mail_null", mode: goldenProviderKeys, reverse: []byte("<sender@example.test>"), state: ResultStateFAIL, reason: ReasonEnvelopeMismatch, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "recipient_subset_order_and_signed_extra_pass", vector: "recipient_set", mode: goldenProviderKeys, forward: [][]byte{[]byte("<two@example.test>"), []byte("<one@example.test>")}, state: ResultStatePASS, reason: ReasonNone, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
-		// Draft-08 Section 14.4: Chain of Custody envelope failures are FAIL.
+		// Draft-09 Section 14.4: Chain of Custody envelope failures are FAIL.
 		{name: "recipient_missing_current_fail", vector: "recipient_set", mode: goldenProviderKeys, forward: [][]byte{[]byte("<one@example.test>"), []byte("<missing@example.test>")}, state: ResultStateFAIL, reason: ReasonEnvelopeMismatch, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		{name: "current_envelope_mismatch_fail", vector: "mail_exact", mode: goldenProviderKeys, reverse: []byte("<Sender@other.test>"), state: ResultStateFAIL, reason: ReasonEnvelopeMismatch, class: CheckClassEnvelope, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
 		pass("relaxed_d_alignment_pass", "alignment_relaxed"),
 		{name: "d_alignment_mismatch_fail", vector: "alignment_mismatch", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonDomainAlignmentMismatch, class: CheckClassDomainAlignment, custody: CustodyStructureNotPresent, sequence: 1, instance: 1},
-		// Draft-08 Sections 14.1 and 14.8: an inauthentic From is FAIL.
+		// Draft-09 Sections 14.1 and 14.8: an inauthentic From is FAIL.
 		{name: "intermediate_nd_from_not_authentic", vector: "intermediate_nd", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonFromNotAuthentic, class: CheckClassProtocol, custody: CustodyStructureNDLinksEvaluated, sequence: 2, instance: 1},
-		// Draft-08 Sections 13.2 and 14.4: terminal nd= without an out-of-band arrangement is FAIL.
+		// Draft-09 Sections 13.2 and 14.4: terminal nd= without an out-of-band arrangement is FAIL.
 		{name: "terminal_current_nd_fail", vector: "terminal_nd", mode: goldenProviderKeys, state: ResultStateFAIL, reason: ReasonOutOfBandRequired, class: CheckClassNextDomain, custody: CustodyStructureTerminalNDRequiresOOB, sequence: 1, instance: 1},
 	}
 	for index := range cases {
@@ -387,10 +387,10 @@ func assertPublicGoldenFactImmutability(t *testing.T, result VerifyResult, name 
 	}
 }
 
-// loadPublicGoldenCorpus loads the frozen synthetic Draft-08 corpus.
+// loadPublicGoldenCorpus loads the frozen synthetic Draft-09 corpus.
 func loadPublicGoldenCorpus(t testing.TB) publicGoldenCorpus {
 	t.Helper()
-	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-08/public-golden.json")
+	raw, err := os.ReadFile("testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json")
 	if err != nil {
 		t.Fatal("golden corpus unavailable")
 	}

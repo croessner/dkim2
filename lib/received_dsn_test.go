@@ -144,7 +144,7 @@ func TestEvaluateReceivedDSNRunAcrossNextDomainAndImaginaryHops(t *testing.T) {
 		propagation ReceivedDSNPropagation
 		runLength   int
 	}{
-		// Draft-08 Sections 16.2 and 16.3: the completion d= signs the
+		// Draft-09 Sections 16.2 and 16.3: the completion d= signs the
 		// propagated report, so the previous hop's rt= sits under it.
 		{name: "nd run", hops: []dsntest.Hop{
 			receivedDSNHop(receivedDSNRemoteDomain, "<sender@remote.example>", receivedDSNForwardRecipient),
@@ -373,7 +373,7 @@ func TestReceivedDSNEvaluatorConcurrentReuse(t *testing.T) {
 
 // TestReceivedDSNLimitsNarrowParser proves narrowed raw-message limits apply to the DSN parser.
 func TestReceivedDSNLimitsNarrowParser(t *testing.T) {
-	evaluator, err := NewVerifier(&receivedDSNProvider{}, receivedDSNClockOption(), WithMaxRawMessageBytes(1024))
+	evaluator, err := NewVerifier(&receivedDSNProvider{}, receivedDSNClockOption(), WithMaxRawMessageBytes(1024), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal(err)
 	}

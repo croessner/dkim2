@@ -44,7 +44,7 @@ func (r InsertionRequest) Format(state fmt.State, _ rune) {
 
 // PrependValidatedFields places ordered complete fields as one block at the
 // top of the header block without rewriting inherited bytes. Message-Instance
-// and DKIM2-Signature are trace fields (Draft-08 Sections 9 and 10), and RFC
+// and DKIM2-Signature are trace fields (Draft-09 Sections 9 and 10), and RFC
 // 5322 Section 3.6 says trace fields SHOULD be kept in blocks prepended to the
 // message, so the block lands above the previous top field in request order.
 // This is the single library owner of whole-message trace-block placement.

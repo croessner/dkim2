@@ -125,7 +125,7 @@ func TestSigningServiceSignsHeaderFromNullSenderThatVerifies(t *testing.T) {
 		!bytes.Contains(signature, []byte("d="+signingServiceOriginDomain)) {
 		t.Fatal("signature lacks mf=<> or the From-bound d=")
 	}
-	verifier, err := dkim2.NewVerifier(fixture.publicKeys, dkim2.WithVerificationClock(service.clock))
+	verifier, err := dkim2.NewVerifier(fixture.publicKeys, dkim2.WithVerificationClock(service.clock), dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal(err)
 	}

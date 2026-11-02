@@ -163,7 +163,7 @@ func TestDNSPublicKeyProviderDefersRSAPolicyToVerifier(t *testing.T) {
 				t.Fatalf("LookupPublicKey() = %q key=%#v error=%v, want found %d-bit e=%d", result.Status(), key, lookupErr, tt.bits, tt.exponent)
 			}
 
-			verifier, constructErr := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+			verifier, constructErr := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 			if constructErr != nil {
 				t.Fatalf("NewVerifier() error = %v", constructErr)
 			}

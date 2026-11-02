@@ -51,7 +51,7 @@ func TestVerifierHandlesManySignatureSetsAtLimit(t *testing.T) {
 func TestVerifierPerformsRepeatedMissingKeyLookups(t *testing.T) {
 	fixture := newDeterministicRSAVerificationFixture(t)
 	provider := &countingMissingProvider{}
-	verifier, err := NewVerifier(provider, testClockOption())
+	verifier, err := NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}

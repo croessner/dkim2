@@ -69,7 +69,7 @@ unwraps to caller cancellation.
 
 ### Identity Derivation
 
-One Draft-08 replay identity is message-wide: it represents the authenticated
+One Draft-09 replay identity is message-wide: it represents the authenticated
 `m=1` Message-Instance hash declarations (SHA-256 preferred, SHA-512 only
 when no SHA-256 pair exists), not a recipient or terminal route. It exists
 only for an aggregate current PASS and is constructed only from the

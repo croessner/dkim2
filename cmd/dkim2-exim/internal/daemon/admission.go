@@ -81,7 +81,7 @@ func AdmitProcessJSON(body []byte, authservID string) (adapter.Plan, error) {
 // to the authoritative adapter filter plan matrix.
 func admitOperation(value generated.OperationResponse, operation string) (adapter.Plan, error) {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		string(value.Operation) != operation || !value.Operation.Valid() ||
 		!value.Result.Valid() || !value.Disposition.Valid() || value.Actions == nil {
 		return adapter.Plan{}, contractError()
@@ -160,16 +160,19 @@ func validResultDisposition(
 }
 
 // validProcess proves the closed nested process projection and report action.
+// The report is admitted for accept and for the non-terminal NONE continue.
 func validProcess(value generated.ProcessResponse, authservID string) bool {
 	if value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		!value.Disposition.Valid() || value.Actions == nil ||
 		!validAuthentication(value.Authentication) ||
 		!validVerification(value.Verification) || !validPolicy(value.Policy) ||
-		!value.Replay.Class.Valid() || !validProcessMatrix(value) {
+		!value.Replay.Class.Valid() || !validProcessMatrix(value) || !validNoneProcess(value) {
 		return false
 	}
-	if value.Disposition != generated.DispositionAccept || authservID == "" {
+	reportable := value.Disposition == generated.DispositionAccept ||
+		value.Authentication.State == generated.NONE
+	if !reportable || authservID == "" {
 		return len(value.Actions) == 0
 	}
 	result, ok := verificationResult(value.Authentication.State)
@@ -181,6 +184,51 @@ func validProcess(value generated.ProcessResponse, authservID string) bool {
 		value.Actions[0].Type == generated.AddHeader &&
 		value.Actions[0].Name == generated.AuthenticationResults &&
 		report.Matches(authservID, resultText(result))
+}
+
+// validNoneProcess admits the Draft-09 Section 14.1 NONE state (no DKIM2
+// field of either family) only in its exact closed shape: no verification
+// evidence, a non-terminal continue policy with reason none, replay
+// not_checked, and no projection. Any member that claims NONE without the
+// complete shape fails closed; validProcess binds the optional report.
+func validNoneProcess(value generated.ProcessResponse) bool {
+	marked := value.Verification.State == generated.NONE || value.Authentication.State == generated.NONE ||
+		value.Policy.PrimaryReason == generated.PolicyReasonNone
+	for _, finding := range value.Policy.Findings {
+		marked = marked || finding.Reason == generated.PolicyReasonNone
+	}
+	if !marked {
+		return true
+	}
+	return noneVerificationShape(value.Verification) && nonePolicyShape(value.Policy) &&
+		value.Authentication.State == generated.NONE &&
+		value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonNone &&
+		value.Replay.Class == generated.NotChecked && value.Disposition == generated.DispositionContinue &&
+		value.VerifierProjection == nil && value.DeliveryStatus == nil
+}
+
+// noneVerificationShape reports whether a verification object carries no
+// evidence beyond the single protocol classification fact of the NONE state.
+func noneVerificationShape(verification generated.VerificationResult) bool {
+	return verification.State == generated.NONE && verification.PrimaryReason == generated.VerificationReasonNone &&
+		verification.Scope == generated.Current &&
+		verification.HistoricalContent == generated.VerificationResultHistoricalContentNotEvaluated &&
+		verification.HistoricalSignatures == generated.VerificationResultHistoricalSignaturesNotEvaluated &&
+		verification.CustodyStructure == generated.VerificationResultCustodyStructureNotEvaluated &&
+		len(verification.Checks) == 1 && verification.Checks[0].Class == generated.VerificationCheckClassProtocol &&
+		verification.Checks[0].Reason == generated.VerificationReasonNone &&
+		len(verification.SignatureSets) == 0 && verification.Target == nil
+}
+
+// nonePolicyShape reports whether a policy object is the fixed non-terminal
+// continue/none object of the NONE state, which is never policy-evaluated.
+func nonePolicyShape(policy generated.PolicyResult) bool {
+	return policy.Mode.Valid() && policy.Verdict == generated.PolicyResultVerdictContinue &&
+		policy.PrimaryReason == generated.PolicyReasonNone &&
+		!policy.Feedback.Requested && !policy.Feedback.RelayRequired && policy.Feedback.RelaySequence == nil &&
+		policy.Feedback.HistoryCoverage == generated.PolicyFeedbackHistoryCoverageNotEvaluated &&
+		len(policy.Findings) == 1 && policy.Findings[0].Reason == generated.PolicyReasonNone &&
+		policy.Findings[0].Severity == generated.Info && policy.Findings[0].Sequence == nil
 }
 
 // validProcessMatrix preserves replay and policy coordinator semantics.
@@ -248,7 +296,7 @@ func validVerification(value generated.VerificationResult) bool {
 }
 
 // validSignatureSelector admits a bounded selector exactly for every
-// non-passing set except an internal-contract fact (Draft-08 Section 14.6
+// non-passing set except an internal-contract fact (Draft-09 Section 14.6
 // step 8).
 func validSignatureSelector(status generated.SignatureSetResultStatus, reason generated.VerificationReason, selector *string) bool {
 	if status == generated.SignatureSetResultStatusPass || reason == generated.VerificationReasonInternalContract {
@@ -478,7 +526,8 @@ func consumeJSON(decoder *json.Decoder, depth int) bool {
 	}
 }
 
-// verificationResult maps the daemon's closed uppercase result vocabulary.
+// verificationResult maps the daemon's closed uppercase result vocabulary,
+// including the Draft-09 NONE state.
 func verificationResult(value generated.VerificationState) (adapter.Result, bool) {
 	switch value {
 	case generated.PASS:
@@ -489,6 +538,8 @@ func verificationResult(value generated.VerificationState) (adapter.Result, bool
 		return adapter.ResultPermerror, true
 	case generated.TEMPERROR:
 		return adapter.ResultTemperror, true
+	case generated.NONE:
+		return adapter.ResultNone, true
 	default:
 		return 0, false
 	}
@@ -521,6 +572,8 @@ func resultText(value adapter.Result) string {
 		return "permerror"
 	case adapter.ResultTemperror:
 		return "temperror"
+	case adapter.ResultNone:
+		return "none"
 	default:
 		return ""
 	}

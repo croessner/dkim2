@@ -31,8 +31,8 @@ func TestSignatureResultsPreserveOccurrenceOrder(t *testing.T) {
 	}
 }
 
-// TestDraft08ProtocolInfractionsMapToDistinctPermanentReasons proves the four Section 14.2 failures stay distinct.
-func TestDraft08ProtocolInfractionsMapToDistinctPermanentReasons(t *testing.T) {
+// TestDraft09ProtocolInfractionsMapToDistinctPermanentReasons proves the four Section 14.2 failures stay distinct.
+func TestDraft09ProtocolInfractionsMapToDistinctPermanentReasons(t *testing.T) {
 	tests := []struct {
 		code   verify.ErrorCode
 		reason Reason
@@ -82,15 +82,20 @@ func TestRevisionProofFailuresRetainSelectedPolicyAuthority(t *testing.T) {
 		{verify.RevisionProofProviderRejected, StatePERMERROR, ReasonProviderPermanent},
 		{verify.RevisionProofProviderContract, StatePERMERROR, ReasonProviderContract},
 		{verify.RevisionProofLimitExceeded, StatePERMERROR, ReasonLimitExceeded},
-		// Draft-08 Sections 13.2 and 14.4: an unmet out-of-band arrangement is FAIL.
+		// Draft-09 Sections 13.2 and 14.4: an unmet out-of-band arrangement is FAIL.
 		{verify.RevisionProofTerminalNextDomainAuthorizationRequired, StateFAIL, ReasonOutOfBandRequired},
 		{verify.RevisionProofInvalidRecipeJSON, StatePERMERROR, ReasonInvalidRecipeJSON},
-		// Draft-08 Section 14.2: an invalid Recipe of valid JSON is PERMERROR invalid_recipe.
+		// Draft-09 Section 14.2: an invalid Recipe of valid JSON is PERMERROR invalid_recipe.
 		{verify.RevisionProofInvalidRecipe, StatePERMERROR, ReasonInvalidRecipe},
-		// Draft-08 Section 13: a null body Recipe makes the message not Fully Verified.
-		{verify.RevisionProofBodyHistoryUnavailable, StateFAIL, ReasonBodyHistoryUnavailable},
-		// Draft-08 Sections 14.1 and 14.8: an inauthentic From is FAIL.
+		// Draft-09 Section 14.2: a null body Recipe is PERMERROR "has a null recipe".
+		{verify.RevisionProofBodyHistoryUnavailable, StatePERMERROR, ReasonBodyHistoryUnavailable},
+		// Draft-09 Sections 14.1 and 14.8: an inauthentic From is FAIL.
 		{verify.RevisionProofFromNotAuthentic, StateFAIL, ReasonFromNotAuthentic},
+		// Draft-09 Sections 3.8, 11.1, and 14.8 (D3): Domain Policy Record outcomes.
+		{verify.RevisionProofFromSubdomainForbidden, StateFAIL, ReasonFromSubdomainForbidden},
+		{verify.RevisionProofDomainPolicyTemporary, StateTEMPERROR, ReasonDomainPolicyTemporary},
+		{verify.RevisionProofDomainPolicyAmbiguous, StatePERMERROR, ReasonDomainPolicyAmbiguous},
+		{verify.RevisionProofDomainPolicyInvalid, StatePERMERROR, ReasonDomainPolicyInvalid},
 		{verify.RevisionProofProtocolRejected, StatePERMERROR, ReasonMalformedProtocol},
 		{verify.RevisionProofVerified, StatePERMERROR, ReasonInternalContract},
 		{verify.RevisionProofOutcome("future"), StatePERMERROR, ReasonInternalContract},

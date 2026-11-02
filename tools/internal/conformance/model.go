@@ -15,7 +15,7 @@ import (
 
 const (
 	// MessageDraft is the exact DKIM2 behavior baseline.
-	MessageDraft = "draft-ietf-dkim-dkim2-spec-08"
+	MessageDraft = "draft-ietf-dkim-dkim2-spec-09"
 	// DNSDraft is the exact DNS behavior baseline.
 	DNSDraft = "draft-ietf-dkim-dkim2-dns-02"
 	// ManifestSchema identifies the repository manifest format.
@@ -24,8 +24,8 @@ const (
 	ReportSchema = "dkim2.conformance-report.v1"
 	// SnapshotSchema identifies the candidate snapshot framing.
 	SnapshotSchema = "dkim2.candidate-snapshot.v1"
-	// EximUnqualifiedDraft08 identifies the evidence-free Draft-08 adapter surface.
-	EximUnqualifiedDraft08 = "unqualified_draft08"
+	// EximUnqualifiedDraft09 identifies the evidence-free Draft-09 adapter surface.
+	EximUnqualifiedDraft09 = "unqualified_draft09"
 	maxJSONDepth           = 16
 )
 
@@ -379,8 +379,8 @@ func (r Report) RenderText() []byte {
 	output.WriteString("- Milter evidence uses byte-exact callback reconstruction, not an original SMTP wire image. Postfix prepends its own `Received` field outside Milter-visible message bytes.\n")
 	output.WriteString("- Postfix execution is Linux-only and covers the pinned qualification image, explicit Milter-v6 timeouts, SMTP intake, and simulated non-SMTP callbacks.\n")
 	output.WriteString("- Replay detection is a restrictive local security policy layered after protocol verification; it is not a DKIM2 cryptographic result.\n")
-	output.WriteString("- Exim is `unqualified_draft08`; this report admits no Exim qualification case or imported evidence.\n")
-	output.WriteString("- Draft-08 IANA registrations remain incomplete; implemented interpretations are reported separately from normative claims.\n\n")
+	output.WriteString("- Exim is `unqualified_draft09`; this report admits no Exim qualification case or imported evidence.\n")
+	output.WriteString("- Draft-09 IANA registrations remain incomplete; implemented interpretations are reported separately from normative claims.\n\n")
 	output.WriteString("## Reproduce\n\n```text\nmake check-conformance\nmake conformance\n")
 	if r.Profile == profileFull {
 		output.WriteString("make conformance-postfix\nmake conformance-all\n")

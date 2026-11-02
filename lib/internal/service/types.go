@@ -8,7 +8,7 @@ import (
 )
 
 // DraftIdentifier is the exact behavior baseline carried by service results.
-const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-08"
+const DraftIdentifier = "draft-ietf-dkim-dkim2-spec-09"
 
 const hardMaxSignatureFacts = 16
 
@@ -19,7 +19,7 @@ const (
 	// StatePASS reports complete success for the declared authenticated scope.
 	StatePASS State = "PASS"
 	// StateFAIL reports completed verification of a message that is not a
-	// Fully Verified DKIM2 Message (Draft-08 Section 14.1).
+	// Fully Verified DKIM2 Message (Draft-09 Section 14.1).
 	StateFAIL State = "FAIL"
 	// StatePERMERROR reports permanent malformed, missing, or ambiguous state.
 	StatePERMERROR State = "PERMERROR"
@@ -54,7 +54,7 @@ const (
 	// HistoricalComplete reports authenticated coverage through the origin.
 	HistoricalComplete HistoricalState = "complete"
 	// HistoricalPartial reports authenticated coverage with an explicit
-	// unavailable body. Draft-08 Section 13 makes such a history FAIL
+	// unavailable body. Draft-09 Section 13 makes such a history FAIL
 	// body_history_unavailable, so verification no longer produces it.
 	HistoricalPartial HistoricalState = "partial"
 )
@@ -143,11 +143,26 @@ const (
 	// valid JSON or not a JSON object.
 	ReasonInvalidRecipeJSON Reason = "invalid_recipe_json"
 	// ReasonInvalidRecipe reports valid authenticated recipe JSON whose
-	// schema, steps, or application are invalid (Draft-08 Section 14.2).
+	// schema, steps, or application are invalid (Draft-09 Section 14.2).
 	ReasonInvalidRecipe Reason = "invalid_recipe"
 	// ReasonFromNotAuthentic reports a From header field state that is not
-	// Authentic for its responsible signature (Draft-08 Section 14.8).
+	// Authentic for its responsible signature (Draft-09 Section 14.8).
 	ReasonFromNotAuthentic Reason = "from_not_authentic"
+	// ReasonFromSubdomainForbidden reports a From state that is Authentic
+	// only through the upward match while the From domain's Domain Policy
+	// Record carries the strict flag (Draft-09 Sections 3.8 and 14.8, FAIL).
+	ReasonFromSubdomainForbidden Reason = "from_subdomain_forbidden"
+	// ReasonDomainPolicyTemporary reports a Domain Policy Record that could
+	// not be retrieved because of a temporary DNS failure (Section 3.8,
+	// TEMPERROR).
+	ReasonDomainPolicyTemporary Reason = "domain_policy_temporary"
+	// ReasonDomainPolicyAmbiguous reports more than one Domain Policy Record
+	// beginning with v=DKIM1 (Section 3.8, PERMERROR).
+	ReasonDomainPolicyAmbiguous Reason = "domain_policy_ambiguous"
+	// ReasonDomainPolicyInvalid reports a Domain Policy Record that begins
+	// with v=DKIM1 but is not a valid tag-list, or a permanent lookup failure
+	// (local interpretation D1, PERMERROR).
+	ReasonDomainPolicyInvalid Reason = "domain_policy_invalid"
 	// ReasonDuplicateSelector reports a repeated selector in one signature field.
 	ReasonDuplicateSelector Reason = "duplicate_selector"
 	// ReasonMissingProtocol reports absent required DKIM2 state.
@@ -187,13 +202,13 @@ const (
 	// ReasonNextDomainMismatch reports structural next-domain disagreement.
 	ReasonNextDomainMismatch Reason = "next_domain_mismatch"
 	// ReasonCustodyMismatch reports a Chain of Custody adjacency failure: an
-	// mf= or d= that does not match the previous signature's rt= (Draft-08
+	// mf= or d= that does not match the previous signature's rt= (Draft-09
 	// Sections 7.1 and 14.4).
 	ReasonCustodyMismatch Reason = "custody_mismatch"
 	// ReasonOutOfBandRequired reports terminal nd= requiring OOB trust.
 	ReasonOutOfBandRequired Reason = "out_of_band_required"
 	// ReasonBodyHistoryUnavailable reports a history containing a null body
-	// Recipe, so the message is not Fully Verified (Draft-08 Section 13).
+	// Recipe, so the message is not Fully Verified (Draft-09 Section 13).
 	ReasonBodyHistoryUnavailable Reason = "body_history_unavailable"
 	// ReasonInternalContract reports inconsistent internal facts.
 	ReasonInternalContract Reason = "internal_contract"
@@ -202,7 +217,7 @@ const (
 // Known reports whether the reason belongs to the closed service vocabulary.
 func (r Reason) Known() bool {
 	switch r {
-	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonInvalidRecipe, ReasonFromNotAuthentic, ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonCustodyMismatch, ReasonOutOfBandRequired, ReasonBodyHistoryUnavailable, ReasonInternalContract:
+	case ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage, ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON, ReasonInvalidRecipe, ReasonFromNotAuthentic, ReasonFromSubdomainForbidden, ReasonDomainPolicyTemporary, ReasonDomainPolicyAmbiguous, ReasonDomainPolicyInvalid, ReasonDuplicateSelector, ReasonMissingProtocol, ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch, ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey, ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch, ReasonProviderTemporary, ReasonProviderPermanent, ReasonProviderContract, ReasonTimestampInvalid, ReasonEnvelopeMismatch, ReasonDomainAlignmentMismatch, ReasonNextDomainMismatch, ReasonCustodyMismatch, ReasonOutOfBandRequired, ReasonBodyHistoryUnavailable, ReasonInternalContract:
 		return true
 	default:
 		return false

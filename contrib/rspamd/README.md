@@ -223,13 +223,28 @@ DKIM2_NAUTHILUS_DENY
 DKIM2_NAUTHILUS_INDETERMINATE
 ```
 
-`DKIM2_FAIL` and `DKIM2_PERMERROR` follow the daemon's Draft-08 Section 14.1
-state: timestamp, envelope, alignment, `nd=`, custody (`custody_mismatch`),
-out-of-band, From-authenticity, and null body Recipe
-(`body_history_unavailable`) failures report `DKIM2_FAIL`, while malformed,
-sequence, algorithm, key, Recipe (`invalid_recipe`, `invalid_recipe_json`),
-and limit failures report `DKIM2_PERMERROR`. Both symbols are zero-score; the
-daemon disposition stays authoritative.
+`DKIM2_FAIL`, `DKIM2_PERMERROR`, and `DKIM2_TEMPERROR` follow the daemon's
+Draft-09 Section 14.1 state: timestamp, envelope, alignment, `nd=`, custody
+(`custody_mismatch`), out-of-band, and From-authenticity failures
+(`from_not_authentic`, and `from_subdomain_forbidden` when the From domain's
+Domain Policy Record carries `f=strict`, Sections 3.8 and 11.1) report
+`DKIM2_FAIL`, while malformed, sequence, algorithm, key, Recipe
+(`invalid_recipe`, `invalid_recipe_json`), null body Recipe
+(`body_history_unavailable`, Section 14.2), multiple or invalid Domain Policy
+Records (`domain_policy_ambiguous`, `domain_policy_invalid`), and limit
+failures report `DKIM2_PERMERROR`. A temporarily unavailable public key
+(`provider_temporary`) or Domain Policy Record (`domain_policy_temporary`)
+reports `DKIM2_TEMPERROR`. These symbols are zero-score; the daemon
+disposition stays authoritative.
+
+`DKIM2_NOT_APPLICABLE` marks a message without any DKIM2 field. The verifier
+classifies such a message locally and sends no daemon request, so it adds no
+`Authentication-Results` value. If the daemon itself answers with the Draft-09
+`NONE` state, the verifier admits it only in its exact closed shape
+(`continue`/`none`, replay `not_checked`, and exactly the bound reasonless
+`<authserv-id>; dkim2=none` report when `authserv_id` is configured), publishes
+`DKIM2_CHECK` and `DKIM2_NOT_APPLICABLE` only, and applies that report. Any
+other `NONE` shape and any HTTP 204 from `/v1/process` is a service error.
 
 Received delivery-status notifications add one zero-score symbol per member of
 the daemon's closed received-DSN projection. They are published only when the
@@ -288,7 +303,7 @@ that need final Nauthilus outcomes must run after or depend on the unscored
 to the state symbols merely to reproduce the daemon disposition; the adapter
 already enforces terminal reject and temporary-failure outcomes.
 Unknown or future policy members and values fail closed until the module and
-the versioned daemon contract are updated together. The Draft-08 wire contract
+the versioned daemon contract are updated together. The Draft-09 wire contract
 has no `do_not_modify` or `do_not_explode` policy or hop members; a response
 that still carries them is rejected as a service error.
 

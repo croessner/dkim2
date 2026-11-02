@@ -1,6 +1,6 @@
 {
   "api_version": "v1",
-  "draft": "draft-ietf-dkim-dkim2-spec-08",
+  "draft": "draft-ietf-dkim-dkim2-spec-09",
   "verification": {
     "state": "PASS",
     "primary_reason": "none",
@@ -29,14 +29,14 @@
   "actions": [],
   "verifier_projection": {
     "schema": "dkim2.verifier-projection.v1",
-    "draft": "draft-ietf-dkim-dkim2-spec-08",
+    "draft": "draft-ietf-dkim-dkim2-spec-09",
     "binding_algorithm": "sha-256",
-    "binding": "2+I2S+HLRwAPRzrKYGXnVV5q/5IBAZwQSLG4xeF36G0=",
+    "binding": "FG4uJEGnv1qne/ypU1jHunBoHje/8UjrFyrdk+YPDqw=",
     "hops": [
       {
         "sequence": "1",
         "message_instance": "1",
-        "hop_binding": "vv6ytTdSwToqWVoR54dTQfR3IwPAVb38HdDBzE1QLBI=",
+        "hop_binding": "7/AmcXDC1iWsm2BERA5r/a7Duae4B3M6KPbA5is8FJ0=",
         "signer_domain": "historical.example.test",
         "signature_algorithms": ["rsa-sha256"],
         "signature_state": "pass",
@@ -59,7 +59,7 @@
       {
         "sequence": "2",
         "message_instance": "2",
-        "hop_binding": "z14/h2sv1jZXTmVmL2THHbNYH25LE6Gab6NCb6CfxuU=",
+        "hop_binding": "sjtMB66N0CIsIxXVaH/U5hRMmae/doaMW1ho0WHBgNg=",
         "signer_domain": "example.test",
         "signature_algorithms": ["ed25519-sha256", "rsa-sha256"],
         "signature_state": "pass",

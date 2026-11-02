@@ -784,7 +784,7 @@ func assertDeliveryStatusUnsigned(
 }
 
 // TestSigningServiceSignsBounceUnderRecipientProfileNotReportingDomain
-// reproduces Draft-08 Section 16.2 on the daemon route. The reported message's
+// reproduces Draft-09 Section 16.2 on the daemon route. The reported message's
 // highest rt= is under profile A (origin.example.test) while reporting_domain
 // is B (alternate.example.test). B never signs because it does not
 // relaxed-match rt=; a Postfix From MAILER-DAEMON@mx.<A> is signed with A, and
@@ -834,7 +834,7 @@ func TestSigningServiceSignsBounceUnderRecipientProfileNotReportingDomain(t *tes
 
 // TestSigningServiceLeavesSenderSideBounceUnsigned reproduces the sender-side
 // bounce: the highest embedded signature is ours and its rt= is remote, so no
-// local delivery_status profile can relaxed-match it (Draft-08 Section 16.2)
+// local delivery_status profile can relaxed-match it (Draft-09 Section 16.2)
 // and the report leaves unsigned as identity_unavailable instead of failing.
 func TestSigningServiceLeavesSenderSideBounceUnsigned(t *testing.T) {
 	fixture := newSigningServiceFixture(t)
@@ -932,7 +932,7 @@ func TestSigningPoliciesFromConfigMapsReportingIdentity(t *testing.T) {
 
 // TestSigningServiceClassifiesDerivedDSNPolicyFailures proves policy lookup
 // happens only after authentication and retains fail-closed resolution
-// classes. Draft-08 Section 16.2 changed the absent-profile row: a report
+// classes. Draft-09 Section 16.2 changed the absent-profile row: a report
 // without any matching delivery_status profile now leaves unsigned with the
 // identity_unavailable reason instead of being rejected.
 func TestSigningServiceClassifiesDerivedDSNPolicyFailures(t *testing.T) {
@@ -1114,3 +1114,8 @@ func deliveryStatusRequestReportedBy(t *testing.T, domain, from, reportingMTA st
 	}
 	return request
 }
+
+// AllowSubdomainFrom selects the explicit downward-only Draft-09 Section
+// 11.1 choice for signers built over this fixture key source, which
+// publishes no Domain Policy Records.
+func (p *deliveryStatusCancelingPublicKeys) AllowSubdomainFrom() bool { return false }

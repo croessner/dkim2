@@ -96,7 +96,7 @@ func TestPublicSigningMessageLimitExactAndOneOver(t *testing.T) {
 		facade, err := NewSigner(
 			fixture.provider, authority, fixture.authorizer, fixture.provider,
 			WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
-			WithSigningLimits(limits),
+			WithSigningLimits(limits), WithoutSignerSubdomainFromAuthorization(),
 		)
 		if err != nil {
 			t.Fatalf("NewSigner() error = %v", err)
@@ -146,7 +146,7 @@ func TestWithSigningLimitsWiresTheSharedParentCardinalityToFanout(t *testing.T) 
 	facade, err := NewSigner(
 		provider, publicRouteMemoryAuthority{value: routeplan.NewMemoryAuthority()},
 		&authorizeOrdinary{}, provider,
-		WithSigningLimits(SigningLimits{MaxParentOutputCopiesAndTickets: 1}),
+		WithSigningLimits(SigningLimits{MaxParentOutputCopiesAndTickets: 1}), WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)

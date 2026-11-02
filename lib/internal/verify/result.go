@@ -289,7 +289,7 @@ type SignatureSetResult struct {
 	// Index records the zero-based s= set position.
 	Index int
 	// Selector is the parsed, DNS-label-validated selector of the set, so a
-	// non-passing set can be named (Draft-08 Section 14.6 step 8).
+	// non-passing set can be named (Draft-09 Section 14.6 step 8).
 	Selector string
 	// Algorithm records the signature algorithm name.
 	Algorithm Algorithm

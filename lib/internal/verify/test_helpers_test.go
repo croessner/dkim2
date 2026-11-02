@@ -33,6 +33,12 @@ type verificationFixture struct {
 	ed25519PublicKey   ed25519.PublicKey
 }
 
+// testFromChoice is the single test-wide Section 11.1 construction choice.
+// Unit tests that predate Draft-09 keep the downward-only From semantics they
+// were written for; Domain Policy Record behavior has dedicated tests that
+// pass an explicit provider.
+var testFromChoice = WithFromAuthorization(DownwardOnlyFromAuthorization())
+
 const testTimestampSeconds = uint64(1700000000)
 const testHashCaseSHA512Only = "SHA-512 only"
 const testHashCaseDualMismatch = "dual mismatch"
@@ -271,7 +277,7 @@ func mustVerifierWithKeys(t *testing.T, keys []StaticKey) Verifier {
 	if err != nil {
 		t.Fatalf("NewStaticKeyProvider() error = %v", err)
 	}
-	verifier, err := NewVerifier(provider, testClockOption())
+	verifier, err := NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}

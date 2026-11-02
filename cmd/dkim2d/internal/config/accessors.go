@@ -30,6 +30,11 @@ type DNSConfig struct {
 	state *dnsState
 }
 
+// VerificationConfig is one immutable structurally opaque verification policy view.
+type VerificationConfig struct {
+	state *verificationState
+}
+
 // ReplayConfig is one immutable structurally opaque replay configuration view.
 type ReplayConfig struct {
 	state *replayState
@@ -90,6 +95,25 @@ func (s Snapshot) DNS() DNSConfig {
 		return DNSConfig{}
 	}
 	return DNSConfig{state: &s.state.dns}
+}
+
+// Verification returns the immutable local verification policy.
+func (s Snapshot) Verification() VerificationConfig {
+	if s.state == nil {
+		return VerificationConfig{}
+	}
+	return VerificationConfig{state: &s.state.verification}
+}
+
+// Valid reports whether the view belongs to a parsed snapshot.
+func (c VerificationConfig) Valid() bool { return c.state != nil }
+
+// AllowSubdomainFrom reports whether the verifier applies the Draft-09
+// Section 11.1 upward Authentic From match through Domain Policy Records
+// (verification.domain_policy.allow_subdomain_from, default true). False is
+// the documented downward-only local policy. A zero view reports false.
+func (c VerificationConfig) AllowSubdomainFrom() bool {
+	return c.state != nil && c.state.allowSubdomainFrom
 }
 
 // Replay returns the immutable replay configuration.
@@ -1133,6 +1157,21 @@ func (DNSConfig) MarshalJSON() ([]byte, error) { return nil, newError(CodeSerial
 
 // MarshalText rejects serialization of DNS configuration.
 func (DNSConfig) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// String returns a content-free typed configuration representation.
+func (VerificationConfig) String() string { return typedConfigRedactedText }
+
+// GoString returns a content-free typed configuration representation.
+func (VerificationConfig) GoString() string { return typedConfigRedactedText }
+
+// Format prevents formatting verbs from exposing verification configuration.
+func (VerificationConfig) Format(state fmt.State, _ rune) { writeRedacted(state) }
+
+// MarshalJSON rejects serialization of verification configuration.
+func (VerificationConfig) MarshalJSON() ([]byte, error) { return nil, newError(CodeSerialization) }
+
+// MarshalText rejects serialization of verification configuration.
+func (VerificationConfig) MarshalText() ([]byte, error) { return nil, newError(CodeSerialization) }
 
 // String returns a content-free typed configuration representation.
 func (ReplayConfig) String() string { return typedConfigRedactedText }

@@ -75,11 +75,15 @@ const (
 	AuthenticationResultPrimaryReasonBodyHistoryUnavailable          AuthenticationResultPrimaryReason = "body_history_unavailable"
 	AuthenticationResultPrimaryReasonCustodyMismatch                 AuthenticationResultPrimaryReason = "custody_mismatch"
 	AuthenticationResultPrimaryReasonDomainAlignmentMismatch         AuthenticationResultPrimaryReason = "domain_alignment_mismatch"
+	AuthenticationResultPrimaryReasonDomainPolicyAmbiguous           AuthenticationResultPrimaryReason = "domain_policy_ambiguous"
+	AuthenticationResultPrimaryReasonDomainPolicyInvalid             AuthenticationResultPrimaryReason = "domain_policy_invalid"
+	AuthenticationResultPrimaryReasonDomainPolicyTemporary           AuthenticationResultPrimaryReason = "domain_policy_temporary"
 	AuthenticationResultPrimaryReasonDuplicateHashAlgorithm          AuthenticationResultPrimaryReason = "duplicate_hash_algorithm"
 	AuthenticationResultPrimaryReasonDuplicateMessageWithoutExploded AuthenticationResultPrimaryReason = "duplicate_message_without_exploded"
 	AuthenticationResultPrimaryReasonDuplicateSelector               AuthenticationResultPrimaryReason = "duplicate_selector"
 	AuthenticationResultPrimaryReasonEnvelopeMismatch                AuthenticationResultPrimaryReason = "envelope_mismatch"
 	AuthenticationResultPrimaryReasonFromNotAuthentic                AuthenticationResultPrimaryReason = "from_not_authentic"
+	AuthenticationResultPrimaryReasonFromSubdomainForbidden          AuthenticationResultPrimaryReason = "from_subdomain_forbidden"
 	AuthenticationResultPrimaryReasonHashMismatch                    AuthenticationResultPrimaryReason = "hash_mismatch"
 	AuthenticationResultPrimaryReasonInternalContract                AuthenticationResultPrimaryReason = "internal_contract"
 	AuthenticationResultPrimaryReasonInvalidKey                      AuthenticationResultPrimaryReason = "invalid_key"
@@ -118,6 +122,12 @@ func (e AuthenticationResultPrimaryReason) Valid() bool {
 		return true
 	case AuthenticationResultPrimaryReasonDomainAlignmentMismatch:
 		return true
+	case AuthenticationResultPrimaryReasonDomainPolicyAmbiguous:
+		return true
+	case AuthenticationResultPrimaryReasonDomainPolicyInvalid:
+		return true
+	case AuthenticationResultPrimaryReasonDomainPolicyTemporary:
+		return true
 	case AuthenticationResultPrimaryReasonDuplicateHashAlgorithm:
 		return true
 	case AuthenticationResultPrimaryReasonDuplicateMessageWithoutExploded:
@@ -127,6 +137,8 @@ func (e AuthenticationResultPrimaryReason) Valid() bool {
 	case AuthenticationResultPrimaryReasonEnvelopeMismatch:
 		return true
 	case AuthenticationResultPrimaryReasonFromNotAuthentic:
+		return true
+	case AuthenticationResultPrimaryReasonFromSubdomainForbidden:
 		return true
 	case AuthenticationResultPrimaryReasonHashMismatch:
 		return true
@@ -368,13 +380,13 @@ func (e Disposition) Valid() bool {
 
 // Defines values for DraftVersion.
 const (
-	DraftIetfDkimDkim2Spec08 DraftVersion = "draft-ietf-dkim-dkim2-spec-08"
+	DraftIetfDkimDkim2Spec09 DraftVersion = "draft-ietf-dkim-dkim2-spec-09"
 )
 
 // Valid indicates whether the value is a known member of the DraftVersion enum.
 func (e DraftVersion) Valid() bool {
 	switch e {
-	case DraftIetfDkimDkim2Spec08:
+	case DraftIetfDkimDkim2Spec09:
 		return true
 	default:
 		return false
@@ -619,6 +631,7 @@ const (
 	FeedbackRequested             PolicyReason = "feedback_requested"
 	FeedhereInert                 PolicyReason = "feedhere_inert"
 	PermissiveOverride            PolicyReason = "permissive_override"
+	PolicyReasonNone              PolicyReason = "none"
 	ProtocolFail                  PolicyReason = "protocol_fail"
 	ProtocolPass                  PolicyReason = "protocol_pass"
 	ProtocolPermerror             PolicyReason = "protocol_permerror"
@@ -648,6 +661,8 @@ func (e PolicyReason) Valid() bool {
 	case FeedhereInert:
 		return true
 	case PermissiveOverride:
+		return true
+	case PolicyReasonNone:
 		return true
 	case ProtocolFail:
 		return true
@@ -879,10 +894,14 @@ const (
 	VerificationReasonBodyHistoryUnavailable  VerificationReason = "body_history_unavailable"
 	VerificationReasonCustodyMismatch         VerificationReason = "custody_mismatch"
 	VerificationReasonDomainAlignmentMismatch VerificationReason = "domain_alignment_mismatch"
+	VerificationReasonDomainPolicyAmbiguous   VerificationReason = "domain_policy_ambiguous"
+	VerificationReasonDomainPolicyInvalid     VerificationReason = "domain_policy_invalid"
+	VerificationReasonDomainPolicyTemporary   VerificationReason = "domain_policy_temporary"
 	VerificationReasonDuplicateHashAlgorithm  VerificationReason = "duplicate_hash_algorithm"
 	VerificationReasonDuplicateSelector       VerificationReason = "duplicate_selector"
 	VerificationReasonEnvelopeMismatch        VerificationReason = "envelope_mismatch"
 	VerificationReasonFromNotAuthentic        VerificationReason = "from_not_authentic"
+	VerificationReasonFromSubdomainForbidden  VerificationReason = "from_subdomain_forbidden"
 	VerificationReasonHashMismatch            VerificationReason = "hash_mismatch"
 	VerificationReasonInternalContract        VerificationReason = "internal_contract"
 	VerificationReasonInvalidKey              VerificationReason = "invalid_key"
@@ -919,6 +938,12 @@ func (e VerificationReason) Valid() bool {
 		return true
 	case VerificationReasonDomainAlignmentMismatch:
 		return true
+	case VerificationReasonDomainPolicyAmbiguous:
+		return true
+	case VerificationReasonDomainPolicyInvalid:
+		return true
+	case VerificationReasonDomainPolicyTemporary:
+		return true
 	case VerificationReasonDuplicateHashAlgorithm:
 		return true
 	case VerificationReasonDuplicateSelector:
@@ -926,6 +951,8 @@ func (e VerificationReason) Valid() bool {
 	case VerificationReasonEnvelopeMismatch:
 		return true
 	case VerificationReasonFromNotAuthentic:
+		return true
+	case VerificationReasonFromSubdomainForbidden:
 		return true
 	case VerificationReasonHashMismatch:
 		return true
@@ -1062,6 +1089,7 @@ func (e VerificationResultScope) Valid() bool {
 // Defines values for VerificationState.
 const (
 	FAIL      VerificationState = "FAIL"
+	NONE      VerificationState = "NONE"
 	PASS      VerificationState = "PASS"
 	PERMERROR VerificationState = "PERMERROR"
 	TEMPERROR VerificationState = "TEMPERROR"
@@ -1071,6 +1099,8 @@ const (
 func (e VerificationState) Valid() bool {
 	switch e {
 	case FAIL:
+		return true
+	case NONE:
 		return true
 	case PASS:
 		return true
@@ -1275,7 +1305,7 @@ func (e VerifierProjectionSchema) Valid() bool {
 // APIVersion defines model for APIVersion.
 type APIVersion string
 
-// ActionPlan Ordered header actions for one hop. Array order is the top-down order of the hop's new fields: Message-Instance, then DKIM2-Signature, then any X-DKIM2-Info. Message-Instance and DKIM2-Signature are trace header fields (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6.7), so consumers SHOULD insert the whole block above the current topmost header field, keeping array order, and must not interleave it with other fields. Verification does not depend on this placement.
+// ActionPlan Ordered header actions for one hop. Array order is the top-down order of the hop's new fields: Message-Instance, then DKIM2-Signature, then any X-DKIM2-Info. Message-Instance and DKIM2-Signature are trace header fields (Draft-09 Sections 9 and 10, RFC 5322 Section 3.6.7), so consumers SHOULD insert the whole block above the current topmost header field, keeping array order, and must not interleave it with other fields. Verification does not depend on this placement.
 type ActionPlan = []AddHeaderAction
 
 // AddHeaderAction Daemon-owned header action. Authentication-Results carries one dkim2 result, optionally followed by a bounded diagnostic comment from the closed reason vocabulary. Consumers validate authority and result and must not use diagnostic comments for policy. Legacy bare results remain accepted. Origin and failure-index properties are omitted by this privacy-preserving profile. Successful sign, revise, and delivery_status operations may append one X-DKIM2-Info action after their protocol fields when signing.interop_info.enabled is true. It is unsigned diagnostic metadata, never authentication evidence. Earlier diagnostic fields are preserved. Consumers must reject duplicates, misplaced info actions, and info actions on process, non-accept, or non-pass outcomes.
@@ -1295,7 +1325,7 @@ type AddHeaderActionType string
 type AuthenticationResult struct {
 	PrimaryReason AuthenticationResultPrimaryReason `json:"primary_reason"`
 
-	// State Draft-08 Section 14.1 verification state. PASS: the message is a Fully Verified DKIM2 Message. FAIL: verification completed and the message is not Fully Verified, reported with hash_mismatch, signature_mismatch, timestamp_invalid, envelope_mismatch, domain_alignment_mismatch, next_domain_mismatch, custody_mismatch, out_of_band_required, from_not_authentic, or body_history_unavailable. PERMERROR: an unrecoverable error such as malformed, missing, or duplicate protocol state, invalid sequencing, an unsupported algorithm, a key error, an invalid Recipe, or a local limit. TEMPERROR: a temporary inability to retrieve a public key.
+	// State Draft-09 Section 14.1 verification state. PASS: the message is a Fully Verified DKIM2 Message. FAIL: verification completed and the message is not Fully Verified, reported with hash_mismatch, signature_mismatch, timestamp_invalid, envelope_mismatch, domain_alignment_mismatch, next_domain_mismatch, custody_mismatch, out_of_band_required, from_not_authentic, or from_subdomain_forbidden (the From domain's Domain Policy Record carries f=strict, Sections 3.8 and 14.8). PERMERROR: an unrecoverable error such as malformed, missing, or duplicate protocol state, invalid sequencing, an unsupported algorithm, a key error, an invalid Recipe, a null body Recipe (body_history_unavailable, Section 14.2), multiple or invalid Domain Policy Records (domain_policy_ambiguous, domain_policy_invalid), or a local limit. TEMPERROR: a temporary inability to retrieve a DNS record, either a public key (provider_temporary) or a Domain Policy Record (domain_policy_temporary). NONE: the message does not contain any DKIM2-Signature or Message-Instance header field; it is classified before verification, always carries primary_reason none, and is never produced for a message carrying only one field family.
 	State VerificationState `json:"state"`
 }
 
@@ -1402,7 +1432,7 @@ type NullSenderPolicy string
 
 // OperationResponse Result and disposition are coherent: pass permits accept or continue, fail and permerror require reject, and temperror requires tempfail. Only accept may carry actions.
 type OperationResponse struct {
-	// Actions Ordered header actions for one hop. Array order is the top-down order of the hop's new fields: Message-Instance, then DKIM2-Signature, then any X-DKIM2-Info. Message-Instance and DKIM2-Signature are trace header fields (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6.7), so consumers SHOULD insert the whole block above the current topmost header field, keeping array order, and must not interleave it with other fields. Verification does not depend on this placement.
+	// Actions Ordered header actions for one hop. Array order is the top-down order of the hop's new fields: Message-Instance, then DKIM2-Signature, then any X-DKIM2-Info. Message-Instance and DKIM2-Signature are trace header fields (Draft-09 Sections 9 and 10, RFC 5322 Section 3.6.7), so consumers SHOULD insert the whole block above the current topmost header field, keeping array order, and must not interleave it with other fields. Verification does not depend on this placement.
 	Actions     ActionPlan                 `json:"actions"`
 	ApiVersion  APIVersion                 `json:"api_version"`
 	Disposition Disposition                `json:"disposition"`
@@ -1430,6 +1460,7 @@ type PolicyFeedbackHistoryCoverage string
 
 // PolicyFinding defines model for PolicyFinding.
 type PolicyFinding struct {
+	// Reason Local policy reason. none is used only for the NONE verification state, whose policy is never evaluated and always continues.
 	Reason   PolicyReason          `json:"reason"`
 	Sequence *CanonicalUint64      `json:"sequence,omitempty"`
 	Severity PolicyFindingSeverity `json:"severity"`
@@ -1438,14 +1469,16 @@ type PolicyFinding struct {
 // PolicyFindingSeverity defines model for PolicyFinding.Severity.
 type PolicyFindingSeverity string
 
-// PolicyReason defines model for PolicyReason.
+// PolicyReason Local policy reason. none is used only for the NONE verification state, whose policy is never evaluated and always continues.
 type PolicyReason string
 
 // PolicyResult defines model for PolicyResult.
 type PolicyResult struct {
-	Feedback      PolicyFeedback      `json:"feedback"`
-	Findings      []PolicyFinding     `json:"findings"`
-	Mode          PolicyResultMode    `json:"mode"`
+	Feedback PolicyFeedback   `json:"feedback"`
+	Findings []PolicyFinding  `json:"findings"`
+	Mode     PolicyResultMode `json:"mode"`
+
+	// PrimaryReason Local policy reason. none is used only for the NONE verification state, whose policy is never evaluated and always continues.
 	PrimaryReason PolicyReason        `json:"primary_reason"`
 	Verdict       PolicyResultVerdict `json:"verdict"`
 }
@@ -1475,9 +1508,9 @@ type ProcessRequest struct {
 	Smtp      SMTPInput         `json:"smtp"`
 }
 
-// ProcessResponse Applicable inbound processing result. Reject and tempfail carry no actions. Accept and non-terminal continue may carry the sole daemon-owned Authentication-Results reporting action.
+// ProcessResponse Inbound processing result. Reject and tempfail carry no actions. Accept and non-terminal continue may carry the sole daemon-owned Authentication-Results reporting action. A NONE result (no DKIM2 field of either family) always continues, carries replay not_checked, no verifier projection, no delivery-status projection, and at most the reasonless dkim2=none report.
 type ProcessResponse struct {
-	// Actions Ordered header actions for one hop. Array order is the top-down order of the hop's new fields: Message-Instance, then DKIM2-Signature, then any X-DKIM2-Info. Message-Instance and DKIM2-Signature are trace header fields (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6.7), so consumers SHOULD insert the whole block above the current topmost header field, keeping array order, and must not interleave it with other fields. Verification does not depend on this placement.
+	// Actions Ordered header actions for one hop. Array order is the top-down order of the hop's new fields: Message-Instance, then DKIM2-Signature, then any X-DKIM2-Info. Message-Instance and DKIM2-Signature are trace header fields (Draft-09 Sections 9 and 10, RFC 5322 Section 3.6.7), so consumers SHOULD insert the whole block above the current topmost header field, keeping array order, and must not interleave it with other fields. Verification does not depend on this placement.
 	Actions        ActionPlan           `json:"actions"`
 	ApiVersion     APIVersion           `json:"api_version"`
 	Authentication AuthenticationResult `json:"authentication"`
@@ -1508,11 +1541,11 @@ type ReadinessResponseStatus string
 
 // ReplayResult defines model for ReplayResult.
 type ReplayResult struct {
-	// Class Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-08 Section 15.1 replay counting does not apply.
+	// Class Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept, including the NONE state that is never verified. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-09 Section 15.1 replay counting does not apply.
 	Class ReplayResultClass `json:"class"`
 }
 
-// ReplayResultClass Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-08 Section 15.1 replay counting does not apply.
+// ReplayResultClass Local replay delivery-policy class. not_checked means replay was skipped because verification or policy did not reach PASS/accept, including the NONE state that is never verified. not_eligible means the message passed but carried only the originator's i=1 DKIM2-Signature, so no intermediary re-sent it and Draft-09 Section 15.1 replay counting does not apply.
 type ReplayResultClass string
 
 // ReportingContext defines model for ReportingContext.
@@ -1558,7 +1591,7 @@ type SignatureSetResult struct {
 	Algorithm SignatureSetResultAlgorithm `json:"algorithm"`
 	Reason    VerificationReason          `json:"reason"`
 
-	// Selector Draft-08 Section 14.6 step 8. The parsed, DNS-label-validated selector of every set whose status is not pass: fail, permerror (key errors and unknown or locally disabled algorithms, which are the Section 14.6 step 4 PERMERROR intermediate unsupported_algorithm), and temperror. Absent for pass and for an internal_contract fact that names no parsed set. Never copied from raw header bytes.
+	// Selector Draft-09 Section 14.6 step 8. The parsed, DNS-label-validated selector of every set whose status is not pass: fail, permerror (key errors and unknown or locally disabled algorithms, which are the Section 14.6 step 4 PERMERROR intermediate unsupported_algorithm), and temperror. Absent for pass and for an internal_contract fact that names no parsed set. Never copied from raw header bytes.
 	Selector *string                  `json:"selector,omitempty"`
 	Status   SignatureSetResultStatus `json:"status"`
 }
@@ -1592,14 +1625,14 @@ type VerificationResult struct {
 	Checks           []VerificationCheck                `json:"checks"`
 	CustodyStructure VerificationResultCustodyStructure `json:"custody_structure"`
 
-	// HistoricalContent Authenticated historical content coverage. Under Draft-08 Section 13 a history with a null body Recipe is not Fully Verified and is reported as FAIL body_history_unavailable, so a PASS reports complete; partial is retained in the closed vocabulary and is not produced.
+	// HistoricalContent Authenticated historical content coverage. Under Draft-09 Sections 13 and 14.2 a history with a null body Recipe is not Fully Verified and is reported as PERMERROR body_history_unavailable, so a PASS reports complete; partial is retained in the closed vocabulary and is not produced.
 	HistoricalContent    VerificationResultHistoricalContent    `json:"historical_content"`
 	HistoricalSignatures VerificationResultHistoricalSignatures `json:"historical_signatures"`
 	PrimaryReason        VerificationReason                     `json:"primary_reason"`
 	Scope                VerificationResultScope                `json:"scope"`
 	SignatureSets        []SignatureSetResult                   `json:"signature_sets"`
 
-	// State Draft-08 Section 14.1 verification state. PASS: the message is a Fully Verified DKIM2 Message. FAIL: verification completed and the message is not Fully Verified, reported with hash_mismatch, signature_mismatch, timestamp_invalid, envelope_mismatch, domain_alignment_mismatch, next_domain_mismatch, custody_mismatch, out_of_band_required, from_not_authentic, or body_history_unavailable. PERMERROR: an unrecoverable error such as malformed, missing, or duplicate protocol state, invalid sequencing, an unsupported algorithm, a key error, an invalid Recipe, or a local limit. TEMPERROR: a temporary inability to retrieve a public key.
+	// State Draft-09 Section 14.1 verification state. PASS: the message is a Fully Verified DKIM2 Message. FAIL: verification completed and the message is not Fully Verified, reported with hash_mismatch, signature_mismatch, timestamp_invalid, envelope_mismatch, domain_alignment_mismatch, next_domain_mismatch, custody_mismatch, out_of_band_required, from_not_authentic, or from_subdomain_forbidden (the From domain's Domain Policy Record carries f=strict, Sections 3.8 and 14.8). PERMERROR: an unrecoverable error such as malformed, missing, or duplicate protocol state, invalid sequencing, an unsupported algorithm, a key error, an invalid Recipe, a null body Recipe (body_history_unavailable, Section 14.2), multiple or invalid Domain Policy Records (domain_policy_ambiguous, domain_policy_invalid), or a local limit. TEMPERROR: a temporary inability to retrieve a DNS record, either a public key (provider_temporary) or a Domain Policy Record (domain_policy_temporary). NONE: the message does not contain any DKIM2-Signature or Message-Instance header field; it is classified before verification, always carries primary_reason none, and is never produced for a message carrying only one field family.
 	State  VerificationState   `json:"state"`
 	Target *VerificationTarget `json:"target,omitempty"`
 }
@@ -1607,7 +1640,7 @@ type VerificationResult struct {
 // VerificationResultCustodyStructure defines model for VerificationResult.CustodyStructure.
 type VerificationResultCustodyStructure string
 
-// VerificationResultHistoricalContent Authenticated historical content coverage. Under Draft-08 Section 13 a history with a null body Recipe is not Fully Verified and is reported as FAIL body_history_unavailable, so a PASS reports complete; partial is retained in the closed vocabulary and is not produced.
+// VerificationResultHistoricalContent Authenticated historical content coverage. Under Draft-09 Sections 13 and 14.2 a history with a null body Recipe is not Fully Verified and is reported as PERMERROR body_history_unavailable, so a PASS reports complete; partial is retained in the closed vocabulary and is not produced.
 type VerificationResultHistoricalContent string
 
 // VerificationResultHistoricalSignatures defines model for VerificationResult.HistoricalSignatures.
@@ -1616,7 +1649,7 @@ type VerificationResultHistoricalSignatures string
 // VerificationResultScope defines model for VerificationResult.Scope.
 type VerificationResultScope string
 
-// VerificationState Draft-08 Section 14.1 verification state. PASS: the message is a Fully Verified DKIM2 Message. FAIL: verification completed and the message is not Fully Verified, reported with hash_mismatch, signature_mismatch, timestamp_invalid, envelope_mismatch, domain_alignment_mismatch, next_domain_mismatch, custody_mismatch, out_of_band_required, from_not_authentic, or body_history_unavailable. PERMERROR: an unrecoverable error such as malformed, missing, or duplicate protocol state, invalid sequencing, an unsupported algorithm, a key error, an invalid Recipe, or a local limit. TEMPERROR: a temporary inability to retrieve a public key.
+// VerificationState Draft-09 Section 14.1 verification state. PASS: the message is a Fully Verified DKIM2 Message. FAIL: verification completed and the message is not Fully Verified, reported with hash_mismatch, signature_mismatch, timestamp_invalid, envelope_mismatch, domain_alignment_mismatch, next_domain_mismatch, custody_mismatch, out_of_band_required, from_not_authentic, or from_subdomain_forbidden (the From domain's Domain Policy Record carries f=strict, Sections 3.8 and 14.8). PERMERROR: an unrecoverable error such as malformed, missing, or duplicate protocol state, invalid sequencing, an unsupported algorithm, a key error, an invalid Recipe, a null body Recipe (body_history_unavailable, Section 14.2), multiple or invalid Domain Policy Records (domain_policy_ambiguous, domain_policy_invalid), or a local limit. TEMPERROR: a temporary inability to retrieve a DNS record, either a public key (provider_temporary) or a Domain Policy Record (domain_policy_temporary). NONE: the message does not contain any DKIM2-Signature or Message-Instance header field; it is classified before verification, always carries primary_reason none, and is never produced for a message carrying only one field family.
 type VerificationState string
 
 // VerificationTarget defines model for VerificationTarget.
@@ -1649,7 +1682,7 @@ type VerifierHop struct {
 	RecipeMode             VerifierHopRecipeMode        `json:"recipe_mode"`
 	Sequence               CanonicalUint64              `json:"sequence"`
 
-	// SignatureAlgorithms Sorted unique algorithms of the hop's passing signature sets. The vocabulary is exactly the Draft-08 Section 3 signature algorithms this verifier implements; DNS-02 registry entries without a Draft-08 signing definition never verify and are never listed.
+	// SignatureAlgorithms Sorted unique algorithms of the hop's passing signature sets. The vocabulary is exactly the Draft-09 Section 3 signature algorithms this verifier implements; DNS-02 registry entries without a Draft-09 signing definition never verify and are never listed.
 	SignatureAlgorithms []VerifierHopSignatureAlgorithms `json:"signature_algorithms"`
 	SignatureState      VerifierHopSignatureState        `json:"signature_state"`
 	SignerDomain        string                           `json:"signer_domain"`
@@ -3135,26 +3168,6 @@ func (response ProcessMessage200JSONResponse) VisitProcessMessageResponse(w http
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
-}
-
-type ProcessMessage204ResponseHeaders struct {
-	CacheControl string
-	Connection   string
-	Date         *string
-}
-
-type ProcessMessage204Response struct {
-	Headers ProcessMessage204ResponseHeaders
-}
-
-func (response ProcessMessage204Response) VisitProcessMessageResponse(w http.ResponseWriter) error {
-	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
-	w.Header().Set("Connection", fmt.Sprint(response.Headers.Connection))
-	if response.Headers.Date != nil {
-		w.Header().Set("Date", fmt.Sprint(*response.Headers.Date))
-	}
-	w.WriteHeader(204)
-	return nil
 }
 
 type ProcessMessage400JSONResponse struct{ BadRequestJSONResponse }

@@ -53,7 +53,7 @@ func NewQuery(signingDomain, selector string, algorithm Algorithm, limits Limits
 		return Query{}, newResolverError(ErrorClassPermanent)
 	}
 	absolute := presentation + "."
-	if !ValidAbsoluteOwner(absolute) {
+	if !OwnerKindSelector.ValidAbsoluteOwner(absolute) {
 		return Query{}, newResolverError(ErrorClassContract)
 	}
 	return Query{
@@ -84,26 +84,69 @@ func canonicalBoundedDNSName(value string, maxBytes, maxLabels int) (string, err
 	return domain, nil
 }
 
-// ValidAbsoluteOwner validates a canonical terminal-dot DKIM2 TXT owner using query grammar.
+// OwnerKind identifies the closed set of DKIM2 TXT owner shapes. The kind is
+// derived from the owner grammar once, so selector-key and Domain Policy
+// Record owners can never share validation drift or a cache key space.
+type OwnerKind string
+
+const (
+	// OwnerKindSelector identifies a key owner <selector>._domainkey.<domain>.
+	// (Draft-09 Section 3.7).
+	OwnerKindSelector OwnerKind = "selector"
+	// OwnerKindDomainPolicy identifies a Domain Policy Record owner
+	// _domainkey.<domain>. (Draft-09 Section 3.8).
+	OwnerKindDomainPolicy OwnerKind = "domain_policy"
+)
+
+// Known reports whether the kind belongs to the closed owner vocabulary.
+func (k OwnerKind) Known() bool { return k == OwnerKindSelector || k == OwnerKindDomainPolicy }
+
+// ValidAbsoluteOwner reports whether name is a canonical absolute owner of
+// exactly this kind.
+func (k OwnerKind) ValidAbsoluteOwner(name string) bool {
+	kind, ok := ClassifyAbsoluteOwner(name)
+	return ok && kind == k
+}
+
+// ValidAbsoluteOwner validates a canonical terminal-dot DKIM2 TXT owner of
+// either kind using the query grammar. Transports accept both kinds; callers
+// that need one kind use OwnerKind.ValidAbsoluteOwner.
 func ValidAbsoluteOwner(name string) bool {
+	_, ok := ClassifyAbsoluteOwner(name)
+	return ok
+}
+
+// ClassifyAbsoluteOwner validates a canonical terminal-dot DKIM2 TXT owner and
+// reports its kind. A selector owner has at least one label before the single
+// "_domainkey" label; a Domain Policy Record owner begins with it. Both need
+// at least one domain label after it, and every other label must be a
+// canonical lowercase ASCII DNS label.
+func ClassifyAbsoluteOwner(name string) (OwnerKind, bool) {
 	if len(name) < 3 || name[len(name)-1] != '.' || len(name)-1 > hardMaxNameBytes || strings.HasSuffix(name, "..") || name != strings.ToLower(name) {
-		return false
+		return "", false
 	}
 	labels := strings.Split(name[:len(name)-1], ".")
 	domainKeyIndex := -1
 	for index, label := range labels {
 		if label == "_domainkey" {
 			if domainKeyIndex >= 0 {
-				return false
+				return "", false
 			}
 			domainKeyIndex = index
 			continue
 		}
 		if !validDNSLabel(label) {
-			return false
+			return "", false
 		}
 	}
-	return domainKeyIndex > 0 && domainKeyIndex < len(labels)-1
+	switch {
+	case domainKeyIndex < 0 || domainKeyIndex >= len(labels)-1:
+		return "", false
+	case domainKeyIndex == 0:
+		return OwnerKindDomainPolicy, true
+	default:
+		return OwnerKindSelector, true
+	}
 }
 
 // SigningDomain returns the canonical ASCII signing domain.

@@ -16,7 +16,7 @@ import (
 func TestFacadeTransfersAndClonesSealedPolicyProjection(t *testing.T) {
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return MissingPublicKey(AlgorithmRSASHA256), nil
-	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -42,7 +42,7 @@ func TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade(t *testing.T
 	raw, key := signedPublicHistoriedMessage(t, timestamp)
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return FoundRSAPublicKey(key), nil
-	}), WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }))
+	}), WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -65,8 +65,8 @@ func TestMalformedHistoriedMessageFailsClosedAcrossServiceAndFacade(t *testing.T
 	}
 }
 
-// TestDraft08MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy proves parser failures keep exact fail-closed authority.
-func TestDraft08MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy(t *testing.T) {
+// TestDraft09MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy proves parser failures keep exact fail-closed authority.
+func TestDraft09MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy(t *testing.T) {
 	base := string(publicProviderFixture(t))
 	hashStart := strings.Index(base, "h=")
 	signatureStart := strings.Index(base, "s=")
@@ -107,7 +107,7 @@ func TestDraft08MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy(t *test
 			verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 				providerCalls++
 				return MissingPublicKey(AlgorithmRSASHA256), nil
-			}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+			}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -130,7 +130,7 @@ func TestDraft08MalformedFieldsRemainTargetUnavailableAcrossPublicPolicy(t *test
 func TestFacadeZerosMismatchedSelectedReasonWithoutRewritingVerification(t *testing.T) {
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return MissingPublicKey(AlgorithmRSASHA256), nil
-	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -195,7 +195,7 @@ func TestFacadeSealsSequenceFailuresAsUnavailableTargets(t *testing.T) {
 	}
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return MissingPublicKey(AlgorithmRSASHA256), nil
-	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -210,14 +210,14 @@ func TestFacadeSealsSequenceFailuresAsUnavailableTargets(t *testing.T) {
 	}
 }
 
-// TestFacadeReportsChainOfCustodyFailuresAsDraft08Fail reproduces Draft-08
+// TestFacadeReportsChainOfCustodyFailuresAsDraft09Fail reproduces Draft-09
 // Section 14.4: an mf= and d= that do not match the previous rt=, an nd=
 // that does not match the next d=, and an inherited signature whose MAIL
 // FROM and d= do not match are completed verifications of a message that is
 // not Fully Verified, so they are FAIL for the selected target with the
 // specific custody reason. The verifier stops before any key lookup, so the
 // sealed policy projection carries no signature facts and no hops.
-func TestFacadeReportsChainOfCustodyFailuresAsDraft08Fail(t *testing.T) {
+func TestFacadeReportsChainOfCustodyFailuresAsDraft09Fail(t *testing.T) {
 	digest := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("\x11", 32)))
 	signatureText := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("\x22", 128)))
 	ordinaryMismatch := "From: sender@example.test\r\n" +
@@ -236,7 +236,7 @@ func TestFacadeReportsChainOfCustodyFailuresAsDraft08Fail(t *testing.T) {
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		lookups++
 		return MissingPublicKey(AlgorithmRSASHA256), nil
-	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	}), WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -301,7 +301,7 @@ func TestFacadeRejectsUnavailableReasonMismatchWithoutRebuildingProvenance(t *te
 
 	verifier, err := NewVerifier(publicProviderFunc(func(context.Context, PublicKeyQuery) (PublicKeyResult, error) {
 		return MissingPublicKey(AlgorithmRSASHA256), nil
-	}))
+	}), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}

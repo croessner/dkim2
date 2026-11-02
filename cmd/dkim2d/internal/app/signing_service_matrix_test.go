@@ -713,7 +713,7 @@ func TestSigningServiceRevisesDistinctEximEnvelopeAfterReceivedAddition(t *testi
 		dkim2.NewRequestRouteAuthority(),
 		exactSigningAuthorizer{recipients: outgoingRecipients},
 		lease,
-		dkim2.WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+		dkim2.WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }), dkim2.WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)
@@ -817,7 +817,7 @@ func signSigningServiceOriginator(
 		dkim2.NewRequestRouteAuthority(),
 		authorizer,
 		lease,
-		dkim2.WithSigningClock(func() time.Time { return at }),
+		dkim2.WithSigningClock(func() time.Time { return at }), dkim2.WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)
@@ -1276,3 +1276,8 @@ func writeSigningServicePrivateKey(
 		t.Fatalf("os.WriteFile(private key) error = %v", err)
 	}
 }
+
+// AllowSubdomainFrom selects the explicit downward-only Draft-09 Section
+// 11.1 choice for signers built over this fixture key source, which
+// publishes no Domain Policy Records.
+func (p signingServicePublicKeys) AllowSubdomainFrom() bool { return false }

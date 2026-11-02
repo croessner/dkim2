@@ -129,15 +129,25 @@ func TestNewQueryHonorsExactLabelCount(t *testing.T) {
 	}
 }
 
-// TestValidAbsoluteOwnerUsesCanonicalQueryGrammar verifies transport owners share query validation.
+// TestValidAbsoluteOwnerUsesCanonicalQueryGrammar verifies transport owners
+// share query validation and that the owner kind is typed once: selector
+// owners never admit a policy owner and vice versa.
 func TestValidAbsoluteOwnerUsesCanonicalQueryGrammar(t *testing.T) {
-	valid := []string{"s._domainkey.example.test.", "a.b._domainkey.example.test."}
-	for _, owner := range valid {
-		if !ValidAbsoluteOwner(owner) {
-			t.Fatalf("ValidAbsoluteOwner(%q) = false", owner)
+	selectors := []string{"s._domainkey.example.test.", "a.b._domainkey.example.test."}
+	for _, owner := range selectors {
+		if kind, ok := ClassifyAbsoluteOwner(owner); !ok || kind != OwnerKindSelector || !ValidAbsoluteOwner(owner) ||
+			!OwnerKindSelector.ValidAbsoluteOwner(owner) || OwnerKindDomainPolicy.ValidAbsoluteOwner(owner) {
+			t.Fatalf("selector owner %q classified as %q/%v", owner, kind, ok)
 		}
 	}
-	invalid := []string{"", "relative.example", ".", "Bad._domainkey.example.test.", "s._domainkey.example..test.", "s._domainkey.exämple.test.", "s._domainkey.example.test..", "s.example.test.", "_domainkey.example.test."}
+	policies := []string{"_domainkey.example.test.", "_domainkey.test."}
+	for _, owner := range policies {
+		if kind, ok := ClassifyAbsoluteOwner(owner); !ok || kind != OwnerKindDomainPolicy || !ValidAbsoluteOwner(owner) ||
+			!OwnerKindDomainPolicy.ValidAbsoluteOwner(owner) || OwnerKindSelector.ValidAbsoluteOwner(owner) {
+			t.Fatalf("policy owner %q classified as %q/%v", owner, kind, ok)
+		}
+	}
+	invalid := []string{"", "relative.example", ".", "Bad._domainkey.example.test.", "s._domainkey.example..test.", "s._domainkey.exämple.test.", "s._domainkey.example.test..", "s.example.test.", "_domainkey.", "s._domainkey.", "_Domainkey.example.test.", "_domainkey._domainkey.example.test.", "_domainkey.Example.test."}
 	for _, owner := range invalid {
 		if ValidAbsoluteOwner(owner) {
 			t.Fatalf("ValidAbsoluteOwner(%q) = true", owner)

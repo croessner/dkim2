@@ -739,12 +739,16 @@ func (c Coordinator) prepareBranch(request SignFieldRequest, metadata EffectiveM
 	}, nil
 }
 
-// authenticFromForSigning applies Draft-08 Section 12.4: when an originator
+// authenticFromForSigning applies Draft-09 Section 12.4: when an originator
 // signs, or when a revision replaced the From header field relative to the
 // verified incoming message, the profile signing domain must make the
 // outgoing From header field Authentic. Otherwise the result would be an
 // invalid DKIM2 message, so signing fails as a chain failure. An unchanged
-// From was already proven Authentic by the incoming revision proof.
+// From was already proven Authentic by the incoming revision proof, which may
+// itself have used the Section 11.1 upward match. A replaced From uses the
+// downward match only: our Signers sign with keys at the correct level and
+// never rely on a subdomain d= or a Domain Policy Record (Sections 11.1 and
+// 12.4, local disposition D8).
 func authenticFromForSigning(request SignFieldRequest) bool {
 	outgoing := request.Message.Headers()
 	if request.Capability.Valid() {
@@ -756,7 +760,7 @@ func authenticFromForSigning(request SignFieldRequest) bool {
 			return true
 		}
 	}
-	return verify.FromAuthenticFor(outgoing, request.Profile.domain)
+	return verify.SignerFromAuthenticFor(outgoing, request.Profile.domain)
 }
 
 // requestEnvelopeForm derives the sole generated signature shape from closed request evidence.

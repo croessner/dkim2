@@ -28,7 +28,7 @@ const (
 	AlgorithmRSASHA256 Algorithm = "rsa-sha256"
 	// AlgorithmEd25519SHA256 identifies Ed25519-SHA256 verification.
 	AlgorithmEd25519SHA256 Algorithm = "ed25519-sha256"
-	// AlgorithmMLDSA44 identifies Draft-08 Section 3.4 pure ML-DSA-44
+	// AlgorithmMLDSA44 identifies Draft-09 Section 3.4 pure ML-DSA-44
 	// signing and verification with the "DKIM2" context string.
 	AlgorithmMLDSA44 Algorithm = "mldsa44"
 	// AlgorithmUnknown represents an unrecognized message-derived algorithm without retaining its spelling.

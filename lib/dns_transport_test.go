@@ -72,7 +72,9 @@ func TestPublicTXTResultConstructorsRejectInvalidForms(t *testing.T) {
 	}
 }
 
-// TestPublicFoundResultPreservesMultipleRecordBoundaries verifies no cross-RR concatenation.
+// TestPublicFoundResultPreservesMultipleRecordBoundaries verifies no cross-RR
+// concatenation and detached payloads up to the carry bound, so the Draft-09
+// Section 3.7 filter can inspect every record.
 func TestPublicFoundResultPreservesMultipleRecordBoundaries(t *testing.T) {
 	first := []byte(testTXTKeyRecord)
 	second := []byte("p=Qg==")
@@ -81,8 +83,17 @@ func TestPublicFoundResultPreservesMultipleRecordBoundaries(t *testing.T) {
 		t.Fatalf("NewFoundTXTLookupResult() error = %v", err)
 	}
 	first[0], second[0] = 'X', 'Y'
-	if result.RecordCount() != 2 || len(result.Records()) != 0 {
-		t.Fatalf("ambiguous record count was not preserved: count=%d records=%#v", result.RecordCount(), result.Records())
+	records := result.Records()
+	if result.RecordCount() != 2 || len(records) != 2 || string(records[0].Payload()) != testTXTKeyRecord || string(records[1].Payload()) != "p=Qg==" {
+		t.Fatalf("record boundaries were not preserved: count=%d records=%d", result.RecordCount(), len(records))
+	}
+	oversized := make([][]byte, MaxCarriedTXTRecords()+1)
+	for index := range oversized {
+		oversized[index] = []byte("p=QQ==")
+	}
+	countOnly, err := NewFoundTXTLookupResult(oversized, 0, DNSSECStatusUnavailable)
+	if err != nil || countOnly.RecordCount() != len(oversized) || len(countOnly.Records()) != 0 {
+		t.Fatalf("oversized answer count=%d records=%d error=%v", countOnly.RecordCount(), len(countOnly.Records()), err)
 	}
 }
 
@@ -168,7 +179,7 @@ func TestNetTXTTransportPreservesRecordsAndUsesZeroTTL(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := transport.LookupTXT(context.Background(), "s._domainkey.example.test.")
-	if err != nil || result.Status() != TXTLookupStatusFound || result.RecordCount() != 2 || len(result.Records()) != 0 {
+	if err != nil || result.Status() != TXTLookupStatusFound || result.RecordCount() != 2 || len(result.Records()) != 2 {
 		t.Fatalf("LookupTXT() result=%#v error=%v", result, err)
 	}
 

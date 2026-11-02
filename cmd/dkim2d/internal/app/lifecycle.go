@@ -307,7 +307,7 @@ func productionLifecycleDependencies() lifecycleDependencies {
 			preparation *config.RuntimePreparation,
 			runtime *observability.Runtime,
 		) (VerificationService, error) {
-			return NewDNSVerifier(parent, preparation.Snapshot().DNS(), runtime)
+			return NewDNSVerifier(parent, preparation.Snapshot().DNS(), preparation.Snapshot().Verification(), runtime)
 		},
 		newReplayRuntime: func(
 			ctx context.Context,

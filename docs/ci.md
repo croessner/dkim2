@@ -8,7 +8,7 @@ second build or test system.
 | Workflow | Purpose | Command |
 | --- | --- | --- |
 | `Guardrails` | Go quality, unit/race tests, tools-module runner tests, Rspamd fixture projection bindings, builds, generated files, direct vendor resolution and boundaries; a separate `redis-integration` job runs the real-server Redis replay harness | `make guardrails`, `make test-redis` |
-| `Conformance` | Portable Draft-08 protocol conformance | `make check-conformance`, `make conformance` |
+| `Conformance` | Portable Draft-09 protocol conformance | `make check-conformance`, `make conformance` |
 | `Public Mirror` | One-way branch and tag synchronization from the canonical repository | target-scoped GitHub App installation token |
 | `Release` | Stable quality gate and exact GHCR publication | `make release-guardrails` |
 

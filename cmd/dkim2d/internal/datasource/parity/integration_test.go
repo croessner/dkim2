@@ -230,7 +230,7 @@ func proveDisposableRuntimeSignature(
 		)
 	}
 	signed := insertDisposableRuntimeFields(result.Fields(), raw)
-	verifier, err := dkim2.NewVerifier(publicKeys)
+	verifier, err := dkim2.NewVerifier(publicKeys, dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("construct disposable runtime verifier")
 	}
@@ -279,7 +279,7 @@ func proveDisposableDirectSignature(
 		publicKeys,
 		dkim2.NewRequestRouteAuthority(),
 		disposableExactAuthorizer{recipients: recipients},
-		lease,
+		lease, dkim2.WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("direct runtime signer construction failed")

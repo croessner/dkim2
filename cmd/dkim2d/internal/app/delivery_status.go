@@ -71,7 +71,7 @@ func (r DeliveryStatusRequest) GoString() string { return r.String() }
 // without any DKIM2-Signature header field yields the unsigned assessment only
 // under the explicit continue compatibility policy; every other evidence
 // failure, and the default reject policy, keep the refusal. After the
-// evidence passed, a report that Draft-08 Section 16.2 or Sections 11 and
+// evidence passed, a report that Draft-09 Section 16.2 or Sections 11 and
 // 12.4 forbid signing yields the unsigned assessment with its closed reason.
 func (s *SigningService) SignDeliveryStatus(ctx context.Context, request DeliveryStatusRequest) (SigningAssessment, error) {
 	if s == nil || ctx == nil || s.store == nil || nilInterface(s.publicKeys) || s.clock == nil ||
@@ -89,12 +89,12 @@ func (s *SigningService) SignDeliveryStatus(ctx context.Context, request Deliver
 		return SigningAssessment{}, &DomainError{}
 	}
 	operationTime := s.clock().UTC()
-	evidenceSigner, err := dkim2.NewSigner(
+	evidenceSigner, err := newOperationSigner(
 		s.publicKeys,
 		dkim2.NewRequestRouteAuthority(),
 		exactSigningAuthorizer{recipients: request.OuterRecipients()},
 		deliveryStatusEvidencePrivateKeySigner{},
-		dkim2.WithSigningClock(func() time.Time { return operationTime }),
+		operationTime,
 	)
 	if err != nil {
 		s.observeDSNEvidence(dkim2.DSNEvidenceStagePreflight, telemetryResultInternal)
@@ -139,7 +139,7 @@ func deliveryStatusAssessment(result OperationResult, err error) (SigningAssessm
 }
 
 // deliveryStatusProfileSource exposes one pinned signing generation to the
-// library's Draft-08 Section 16.2 identity resolver. It answers only the
+// library's Draft-09 Section 16.2 identity resolver. It answers only the
 // delivery_status policy use of one tenant at one operation instant.
 type deliveryStatusProfileSource struct {
 	lease  SigningLease
@@ -169,7 +169,7 @@ func deliveryStatusProfileAbsent(err error) bool {
 	return permanentPolicyResolutionFailure(err) && provider.ErrorCodeOf(err) != provider.ErrorCodeMalformedData
 }
 
-// signAuthorizedDeliveryStatus resolves the Draft-08 Section 16.2 signing
+// signAuthorizedDeliveryStatus resolves the Draft-09 Section 16.2 signing
 // identity through the library resolver over the delivery_status profiles of
 // the pinned generation and signs the exact DSN. It runs only after the
 // library issued opaque evidence, so no profile or key is touched earlier.
@@ -186,12 +186,12 @@ func (s *SigningService) signAuthorizedDeliveryStatus(
 		return deliveryStatusAssessment(NewOperationResult(OperationDeliveryStatus, OperationTemperror, OperationTempfail, nil))
 	}
 	defer func() { _ = lease.Close() }()
-	signer, err := dkim2.NewSigner(
+	signer, err := newOperationSigner(
 		s.publicKeys,
 		dkim2.NewRequestRouteAuthority(),
 		exactSigningAuthorizer{recipients: request.OuterRecipients()},
 		lease,
-		dkim2.WithSigningClock(func() time.Time { return operationTime }),
+		operationTime,
 	)
 	if err != nil {
 		return SigningAssessment{}, &DomainError{}

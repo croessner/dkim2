@@ -8,7 +8,7 @@ import (
 )
 
 // TestGeneratedClientAdmitsMLDSA44Vocabulary proves the generated client
-// admits the Draft-08 Section 3.4 mldsa44 algorithm in both closed response
+// admits the Draft-09 Section 3.4 mldsa44 algorithm in both closed response
 // vocabularies (signature-set results and verifier-projection hops) while the
 // removed Draft-07 composite stays outside them.
 func TestGeneratedClientAdmitsMLDSA44Vocabulary(t *testing.T) {
@@ -40,7 +40,7 @@ func TestGeneratedClientAdmitsMLDSA44Vocabulary(t *testing.T) {
 }
 
 // TestGeneratedClientRejectsUnproducedSHA512Vocabulary proves the verifier
-// projection hop vocabulary is exactly the Draft-08 Section 3 signature
+// projection hop vocabulary is exactly the Draft-09 Section 3 signature
 // algorithms the daemon can verify. rsa-sha512 and ed25519-sha512 appear only
 // in the DNS-02 registry listing; no verifier projection can carry them.
 func TestGeneratedClientRejectsUnproducedSHA512Vocabulary(t *testing.T) {

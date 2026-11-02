@@ -1,4 +1,4 @@
-// Package combine owns the Draft-08 AND/OR group structure shared by the
+// Package combine owns the Draft-09 AND/OR group structure shared by the
 // Message-Instance h= (Section 9.3) and DKIM2-Signature s= (Section 10.9)
 // tags: an ordered list of groups separated by "|", each an ordered list of
 // sets separated by ",". A "," binds more tightly than "|".
@@ -26,7 +26,7 @@ type Layout struct {
 
 // NewLayout constructs a layout from ordered group sizes. It reports false
 // when there is no group, a group is empty, or more than MaxSets sets are
-// described, because Draft-08 grammar admits no empty group and the local
+// described, because Draft-09 grammar admits no empty group and the local
 // bound admits no larger value.
 func NewLayout(sizes ...int) (Layout, bool) {
 	if len(sizes) == 0 || len(sizes) > MaxSets {

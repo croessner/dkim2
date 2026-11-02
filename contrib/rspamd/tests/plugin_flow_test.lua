@@ -43,6 +43,11 @@ local eligible_response = {
   verification = { state = 'PASS', scope = 'chain' },
   verifier_projection = {}, replay = { class = 'first_seen' }, disposition = 'continue',
 }
+local none_response = {
+  verification = { state = 'NONE', scope = 'current' },
+  authentication = { state = 'NONE' },
+  replay = { class = 'not_checked' }, disposition = 'continue',
+}
 local ineligible_response = {
   verification = { state = 'FAIL', scope = 'current' },
   replay = { class = 'not_checked' }, disposition = 'reject',
@@ -50,7 +55,7 @@ local ineligible_response = {
 
 package.preload['dkim2.verifier'] = function()
   return {
-    draft = 'draft-ietf-dkim-dkim2-spec-08',
+    draft = 'draft-ietf-dkim-dkim2-spec-09',
     projection_schema = 'dkim2.verifier-projection.v1',
     symbols = { check = 'DKIM2_CHECK', not_applicable = 'DKIM2_NOT_APPLICABLE' },
     configure = function() return true end,
@@ -290,11 +295,13 @@ verifier_callback(task)
 assert(control.applied == 1 and task.cache['dkim2.retry_context'] and
   control.stored_payload == eligible_body)
 
+-- A daemon NONE result is applied through the verifier and never cached.
 reset_control()
-control.submit_response = false
+control.submit_response = none_response
 task = new_task()
 verifier_callback(task)
-assert(task.symbols.DKIM2_NOT_APPLICABLE and control.failures == 0 and control.applied == 0)
+assert(control.failures == 0 and control.applied == 1 and
+  task.cache['dkim2.retry_context'] == nil and control.stored_payload == nil)
 
 reset_control()
 control.submit_response = nil

@@ -9,7 +9,7 @@ type unsignedSetComponent struct {
 	algorithm string
 }
 
-// appendUnsignedSetList is the single owner of the Draft-08 Section 12.8
+// appendUnsignedSetList is the single owner of the Draft-09 Section 12.8
 // unsigned s= rendering shared by signer and verifier: every set keeps its
 // selector, algorithm name, and both colons, the signature value is the null
 // string, the "," and "|" separators stay exactly where the layout puts

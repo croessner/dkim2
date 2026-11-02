@@ -39,7 +39,7 @@ func candidateDomains(candidates []SigningIdentityCandidate) []string {
 	return names
 }
 
-// TestSigningIdentityCandidatesFollowRelaxedMatchDirection pins Draft-08
+// TestSigningIdentityCandidatesFollowRelaxedMatchDirection pins Draft-09
 // Section 7.2 with the rt= address as Parameter1: only the rt= domain and its
 // parents are candidates, never a child or a sibling.
 func TestSigningIdentityCandidatesFollowRelaxedMatchDirection(t *testing.T) {

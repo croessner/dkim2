@@ -78,7 +78,7 @@ header rejection remain independently tested.
 
 The transport filter prepends this hop's `Message-Instance` and
 `DKIM2-Signature` as one block, in action order, above Exim's own `Received`
-field (Draft-08 Sections 9 and 10 trace fields; RFC 5322 Section 3.6). Earlier
+field (Draft-09 Sections 9 and 10 trace fields; RFC 5322 Section 3.6). Earlier
 releases appended them before the header/body separator. Verification is
 placement-independent, so both forms verify; only the visible header order
 changed. Do not add a post-filter header rewrite that moves them.
@@ -107,9 +107,9 @@ the prior transport representation, and restarts in dependency order. Do not
 delete evidence during rollback. A stale socket is removed only after verifying
 that no prior service process owns it.
 
-The current capability is `unqualified_draft08`. The pinned upstream, Debian,
+The current capability is `unqualified_draft09`. The pinned upstream, Debian,
 and Ubuntu source-package matrix qualifies a release only when all five rows
-are freshly executed and imported against the exact unchanged Draft-08
+are freshly executed and imported against the exact unchanged Draft-09
 candidate snapshot. The historical Draft-04 matrix must not be relabeled or
 reused. The repository does not claim a published image, package, tag, or
 stable release until the separate release workflow creates it.

@@ -264,7 +264,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.ProcessMessageJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec08,
+				Draft:      generated.DraftIetfDkimDkim2Spec09,
 				Message:    request.message,
 				Reporting:  reporting,
 				Smtp:       request.smtp,
@@ -284,7 +284,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.SignMessageJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec08,
+				Draft:      generated.DraftIetfDkimDkim2Spec09,
 				Message:    request.message,
 				Smtp:       request.smtp,
 				Context: generated.SigningContext{
@@ -302,7 +302,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.ReviseMessageJSONRequestBody{
 				ApiVersion:   generated.V1,
-				Draft:        generated.DraftIetfDkimDkim2Spec08,
+				Draft:        generated.DraftIetfDkimDkim2Spec09,
 				Message:      request.message,
 				Smtp:         request.smtp,
 				IncomingSmtp: request.smtp,
@@ -328,7 +328,7 @@ func (h *Handler) Handle(
 			operationContext,
 			generated.SignDeliveryStatusJSONRequestBody{
 				ApiVersion: generated.V1,
-				Draft:      generated.DraftIetfDkimDkim2Spec08,
+				Draft:      generated.DraftIetfDkimDkim2Spec09,
 				Message:    request.dsnMessage,
 				OuterSmtp:  request.smtp,
 				Context: generated.DeliveryStatusContext{
@@ -597,11 +597,6 @@ func (guard *handlerGuard) mapProcess(response *generated.ProcessMessageResponse
 	if response != nil {
 		defer clear(response.Body)
 	}
-	if validNoContentProcessResponse(response) {
-		return milter.Result{
-			Operation: operationProcess, Result: verificationNone, Outcome: milter.DispositionContinue,
-		}, nil
-	}
 	if response == nil || !validJSONResponseShape(
 		response.HTTPResponse,
 		response.Body,
@@ -635,13 +630,6 @@ func (guard *handlerGuard) mapProcess(response *generated.ProcessMessageResponse
 			value.Authentication.State == generated.TEMPERROR &&
 			value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonProviderTemporary,
 	}, nil
-}
-
-// validNoContentProcessResponse validates the exact unsigned applicability response.
-func validNoContentProcessResponse(response *generated.ProcessMessageResponse) bool {
-	return response != nil && validNoContentRouteResponse(
-		response.HTTPResponse, response.Body, response.JSON200 != nil, routeProcess,
-	) && !headerNamePresent(response.HTTPResponse.Header, unsignedReasonHeader)
 }
 
 // mapOperationResponse validates one sign response including its raw JSON envelope.
@@ -691,7 +679,7 @@ const unsignedReasonHeader = "X-DKIM2-Unsigned-Reason"
 // "not DKIM2 signed" response bound to the dedicated DSN route: the exact 204
 // envelope plus exactly one X-DKIM2-Unsigned-Reason from the closed OpenAPI
 // vocabulary (the unsigned-original compatibility policy, or a report that
-// Draft-08 Section 16.2 or Sections 11 and 12.4 forbid signing).
+// Draft-09 Section 16.2 or Sections 11 and 12.4 forbid signing).
 func validNoContentDeliveryStatusResponse(response *generated.SignDeliveryStatusResponse) bool {
 	if response == nil || !validNoContentRouteResponse(
 		response.HTTPResponse, response.Body, response.JSON200 != nil, routeDeliveryStatus,
@@ -794,7 +782,7 @@ func mapRevisionResponse(
 // its exact generated-client HTTP envelope. A valid 204 means the daemon
 // decided the report cannot be DKIM2 signed for one closed reason: Postfix
 // continues without any mutation and delivers the report unsigned. This is
-// never a tempfail, so a Draft-08 identity outcome cannot queue a bounce.
+// never a tempfail, so a Draft-09 identity outcome cannot queue a bounce.
 func mapDeliveryStatusResponse(
 	response *generated.SignDeliveryStatusResponse,
 ) (milter.Result, error) {
@@ -998,7 +986,7 @@ func mapOperation(
 ) (milter.Result, error) {
 	if value == nil ||
 		value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		string(value.Operation) != operation ||
 		!value.Operation.Valid() || !value.Result.Valid() ||
 		!value.Disposition.Valid() || value.Actions == nil ||
@@ -1117,17 +1105,63 @@ func consumeJSONValue(decoder *json.Decoder, depth int) bool {
 // validProcessContract validates every closed nested response fact and bound.
 func validProcessContract(value *generated.ProcessResponse, authservID string) bool {
 	if value == nil || value.ApiVersion != generated.V1 ||
-		value.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+		value.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		!value.Disposition.Valid() || value.Actions == nil ||
 		!validProcessReportAction(value, authservID) ||
 		!validAuthenticationContract(value.Authentication) ||
 		!validVerificationContract(value.Verification) ||
 		!validPolicyContract(value.Policy) || !value.Replay.Class.Valid() ||
 		!validDeliveryStatusContract(value.DeliveryStatus) ||
-		!validProcessOutcomeMatrix(value) {
+		!validProcessOutcomeMatrix(value) || !validNoneContract(value) {
 		return false
 	}
 	return true
+}
+
+// validNoneContract admits the Draft-09 Section 14.1 NONE state (no DKIM2
+// field of either family) only in its exact closed shape: no verification
+// evidence, a non-terminal continue policy with reason none, replay
+// not_checked, and no projection. Any member that claims NONE without the
+// complete shape fails closed. The report action is bound separately by
+// validProcessReportAction.
+func validNoneContract(value *generated.ProcessResponse) bool {
+	marked := value.Verification.State == generated.NONE || value.Authentication.State == generated.NONE ||
+		value.Policy.PrimaryReason == generated.PolicyReasonNone
+	for _, finding := range value.Policy.Findings {
+		marked = marked || finding.Reason == generated.PolicyReasonNone
+	}
+	if !marked {
+		return true
+	}
+	return noneVerificationShape(value.Verification) && nonePolicyShape(value.Policy) &&
+		value.Authentication.State == generated.NONE &&
+		value.Authentication.PrimaryReason == generated.AuthenticationResultPrimaryReasonNone &&
+		value.Replay.Class == generated.NotChecked && value.Disposition == generated.DispositionContinue &&
+		value.VerifierProjection == nil && value.DeliveryStatus == nil
+}
+
+// noneVerificationShape reports whether a verification object carries no
+// evidence beyond the single protocol classification fact of the NONE state.
+func noneVerificationShape(verification generated.VerificationResult) bool {
+	return verification.State == generated.NONE && verification.PrimaryReason == generated.VerificationReasonNone &&
+		verification.Scope == generated.Current &&
+		verification.HistoricalContent == generated.VerificationResultHistoricalContentNotEvaluated &&
+		verification.HistoricalSignatures == generated.VerificationResultHistoricalSignaturesNotEvaluated &&
+		verification.CustodyStructure == generated.VerificationResultCustodyStructureNotEvaluated &&
+		len(verification.Checks) == 1 && verification.Checks[0].Class == generated.VerificationCheckClassProtocol &&
+		verification.Checks[0].Reason == generated.VerificationReasonNone &&
+		len(verification.SignatureSets) == 0 && verification.Target == nil
+}
+
+// nonePolicyShape reports whether a policy object is the fixed non-terminal
+// continue/none object of the NONE state, which is never policy-evaluated.
+func nonePolicyShape(policy generated.PolicyResult) bool {
+	return policy.Mode.Valid() && policy.Verdict == generated.PolicyResultVerdictContinue &&
+		policy.PrimaryReason == generated.PolicyReasonNone &&
+		!policy.Feedback.Requested && !policy.Feedback.RelayRequired && policy.Feedback.RelaySequence == nil &&
+		policy.Feedback.HistoryCoverage == generated.PolicyFeedbackHistoryCoverageNotEvaluated &&
+		len(policy.Findings) == 1 && policy.Findings[0].Reason == generated.PolicyReasonNone &&
+		policy.Findings[0].Severity == generated.Info && policy.Findings[0].Sequence == nil
 }
 
 // validDeliveryStatusContract validates the optional received delivery-status
@@ -1232,7 +1266,7 @@ func validVerificationContract(value generated.VerificationResult) bool {
 }
 
 // validSignatureSelector admits a bounded selector exactly for every
-// non-passing set except an internal-contract fact (Draft-08 Section 14.6
+// non-passing set except an internal-contract fact (Draft-09 Section 14.6
 // step 8).
 func validSignatureSelector(status generated.SignatureSetResultStatus, reason generated.VerificationReason, selector *string) bool {
 	if status == generated.SignatureSetResultStatusPass || reason == generated.VerificationReasonInternalContract {
@@ -1277,7 +1311,8 @@ func canonicalUint64(value generated.CanonicalUint64) bool {
 	return err == nil
 }
 
-// verificationResult maps the daemon's closed uppercase vocabulary.
+// verificationResult maps the daemon's closed uppercase vocabulary,
+// including the Draft-09 NONE state, to the lowercase report results.
 func verificationResult(value generated.VerificationState) (string, bool) {
 	switch value {
 	case generated.PASS:
@@ -1288,6 +1323,8 @@ func verificationResult(value generated.VerificationState) (string, bool) {
 		return "permerror", true
 	case generated.TEMPERROR:
 		return "temperror", true
+	case generated.NONE:
+		return verificationNone, true
 	default:
 		return "", false
 	}

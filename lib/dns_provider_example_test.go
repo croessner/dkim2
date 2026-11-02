@@ -47,7 +47,7 @@ func ExampleNewDNSPublicKeyProvider() {
 		fmt.Println("provider error")
 		return
 	}
-	verifier, err := dkim2.NewVerifier(provider, dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	verifier, err := dkim2.NewVerifier(provider, dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		fmt.Println("verifier error")
 		return
@@ -85,7 +85,7 @@ func ExampleDNSProviderConfig() {
 		fmt.Println("provider error")
 		return
 	}
-	verifier, err := dkim2.NewVerifier(provider, dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	verifier, err := dkim2.NewVerifier(provider, dkim2.WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		fmt.Println("verifier error")
 		return

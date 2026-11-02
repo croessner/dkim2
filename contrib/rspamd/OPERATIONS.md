@@ -217,7 +217,7 @@ The following minimum matrix must pass through the actual Milter listener:
 
 | Scenario | Required Rspamd result |
 | --- | --- |
-| No `Message-Instance` and no `DKIM2-Signature` | `DKIM2_NOT_APPLICABLE`; no daemon request |
+| No `Message-Instance` and no `DKIM2-Signature` | `DKIM2_NOT_APPLICABLE`; no daemon request and therefore no `dkim2=none` report |
 | Valid first observation | `DKIM2_PASS`, `DKIM2_REPLAY_FIRST_SEEN`, and the daemon policy/compliance symbols |
 | Accepted exploded copy | `DKIM2_PASS`, `DKIM2_REPLAY_EXPLODED` |
 | Duplicate without authenticated exploded exemption | `DKIM2_FAIL`, `DKIM2_REPLAYED`, policy reject, SMTP 5xx |
@@ -432,7 +432,7 @@ reload after `SCRIPT FLUSH`; do not grant broad keyspace access.
 
 The cache identity is a versioned HMAC over length-prefixed exact inputs: SMTP
 peer, message bytes, sender path, recipient count and original ordered recipient
-paths including duplicates, Draft-08 identifier, and verifier projection
+paths including duplicates, Draft-09 identifier, and verifier projection
 schema, plus the immutable configured authority generation. Do not replace it
 with the Rspamd task digest or greylist hashes. Rotate the authority generation
 before activating any authority change; old entries then become unreachable

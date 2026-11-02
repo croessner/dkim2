@@ -1,7 +1,7 @@
 # Security Testing And Evidence
 
 DKIM2 security evidence is a repository-owned local security profile. It does
-not add requirements to `draft-ietf-dkim-dkim2-spec-08`, the historical
+not add requirements to `draft-ietf-dkim-dkim2-spec-09`, the historical
 `draft-ietf-dkim-dkim2-dns-02` behavior baseline, or the incorporated RFCs.
 Normative, documented-interpretation, OpenAPI, adapter, and local-policy
 assertions remain separately classified.
@@ -74,7 +74,7 @@ The complete report binds:
 - two current real-Postfix qualification reports, including the
   delivery-status propagation lane;
 - zero unresolved findings; and
-- the exact `unqualified_draft08` Exim capability through the candidate-bound
+- the exact `unqualified_draft09` Exim capability through the candidate-bound
   full conformance report, with no Exim suite, case, or evidence import.
 
 Evidence readers reject duplicate JSON members, symlinked paths, partial
@@ -129,7 +129,7 @@ make guardrails
 ```
 
 The security runner does not execute or import Exim while
-`unqualified_draft08` is active. It requires the current evidence-free full
+`unqualified_draft09` is active. It requires the current evidence-free full
 conformance report and rejects `qualified_linux`, an Exim result, or imported
 matrix evidence. The historical Draft-04 five-row report remains a dated
-record, not Draft-08 security evidence.
+record, not Draft-09 security evidence.

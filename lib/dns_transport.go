@@ -130,24 +130,39 @@ type txtLookupResultState struct {
 	dnssec                   DNSSECStatus
 }
 
-// NewFoundTXTLookupResult constructs found state from raw payloads using count-first validation.
+// MaxCarriedTXTRecords returns how many TXT resource records of one answer a
+// transport hands over with their payloads. Draft-09 Sections 3.7 and 3.8
+// ignore records that begin with a foreign v= tag before deciding
+// uniqueness, so every record up to this bound must be inspectable; a larger
+// answer is reported count-only and stays ambiguous.
+func MaxCarriedTXTRecords() int { return keyresolver.HardLimits().MaxTXTRecords }
+
+// NewFoundTXTLookupResult constructs found state from raw payloads using
+// count-first validation: up to MaxCarriedTXTRecords payloads are kept, a
+// larger answer becomes count-only ambiguity without payload traversal.
 func NewFoundTXTLookupResult(payloads [][]byte, ttl time.Duration, dnssec DNSSECStatus) (TXTLookupResult, error) {
 	if len(payloads) == 0 || !dnssec.Known() {
 		return TXTLookupResult{}, newAPIError(APIErrorCodeInvalidRequest)
 	}
-	if len(payloads) > 1 {
+	if len(payloads) > MaxCarriedTXTRecords() {
 		return NewAmbiguousTXTLookupResult(len(payloads), ttl, dnssec)
 	}
-	if len(payloads[0]) > hardMaxTXTRecordPayloadBytes {
-		return TXTLookupResult{}, newAPIError(APIErrorCodeInvalidRequest)
+	records := make([]TXTRecord, 0, len(payloads))
+	for _, payload := range payloads {
+		if len(payload) > hardMaxTXTRecordPayloadBytes {
+			return TXTLookupResult{}, newAPIError(APIErrorCodeInvalidRequest)
+		}
+		records = append(records, newTXTRecord(payload))
 	}
 	return TXTLookupResult{state: &txtLookupResultState{
-		status: TXTLookupStatusFound, records: []TXTRecord{newTXTRecord(payloads[0])},
-		recordCount: 1, positiveTTL: ttl, dnssec: dnssec,
+		status: TXTLookupStatusFound, records: records,
+		recordCount: len(records), positiveTTL: ttl, dnssec: dnssec,
 	}}, nil
 }
 
-// NewAmbiguousTXTLookupResult constructs count-only ambiguity without payload traversal.
+// NewAmbiguousTXTLookupResult constructs count-only ambiguity without payload
+// traversal. The Section 3.7 filter cannot inspect such an answer, so it
+// resolves as an ambiguous key.
 func NewAmbiguousTXTLookupResult(recordCount int, ttl time.Duration, dnssec DNSSECStatus) (TXTLookupResult, error) {
 	if recordCount <= 1 || !dnssec.Known() {
 		return TXTLookupResult{}, newAPIError(APIErrorCodeInvalidRequest)
@@ -185,7 +200,7 @@ func (r TXTLookupResult) RecordCount() int {
 	return r.state.recordCount
 }
 
-// Records returns the unique detached TXT payload or nil when absent or ambiguous.
+// Records returns the detached TXT payloads, or nil when absent or count-only ambiguous.
 func (r TXTLookupResult) Records() []TXTRecord {
 	if r.state == nil {
 		return nil
@@ -338,16 +353,20 @@ func (t *NetTXTTransport) LookupTXT(ctx context.Context, absoluteName string) (T
 		}
 		return TXTLookupResult{}, newAPIError(APIErrorCodeInvalidProvider)
 	}
-	if len(records) > 1 {
+	if len(records) > MaxCarriedTXTRecords() {
 		return NewAmbiguousTXTLookupResult(len(records), 0, DNSSECStatusUnavailable)
 	}
 	if len(records) == 0 {
 		return TXTLookupResult{}, newAPIError(APIErrorCodeInvalidProvider)
 	}
-	if len(records[0]) > hardMaxTXTRecordPayloadBytes {
-		return TXTLookupResult{}, newAPIError(APIErrorCodeInvalidProvider)
+	payloads := make([][]byte, 0, len(records))
+	for _, record := range records {
+		if len(record) > hardMaxTXTRecordPayloadBytes {
+			return TXTLookupResult{}, newAPIError(APIErrorCodeInvalidProvider)
+		}
+		payloads = append(payloads, []byte(record))
 	}
-	return NewFoundTXTLookupResult([][]byte{[]byte(records[0])}, 0, DNSSECStatusUnavailable)
+	return NewFoundTXTLookupResult(payloads, 0, DNSSECStatusUnavailable)
 }
 
 // String returns a constant representation without retained resolver state.

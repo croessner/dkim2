@@ -123,6 +123,7 @@ func TestDKIM2ctlGeneratedClientAgainstProductionBoundary(t *testing.T) {
 		"fixture",
 		"run",
 		filepath.Join(fixtures, "process-report.json"),
+		filepath.Join(fixtures, "process-none.json"),
 		filepath.Join(fixtures, "sign.json"),
 		filepath.Join(fixtures, "revise.json"),
 	)
@@ -144,7 +145,8 @@ func TestDKIM2ctlGeneratedClientAgainstProductionBoundary(t *testing.T) {
 			boundaryFacts.reviseCalls.Load(),
 		)
 	}
-	if stderr.Len() != 0 || strings.Count(stdout.String(), "\n") != 5 {
+	if stderr.Len() != 0 || strings.Count(stdout.String(), "\n") != 6 ||
+		strings.Count(stdout.String(), `"operation":"process","outcome":"match"`) != 2 {
 		t.Fatalf(
 			"dkim2ctl subprocess output shape: stdout_bytes=%d stderr_bytes=%d records=%d",
 			stdout.Len(),
@@ -296,7 +298,7 @@ func probeDKIM2ctlProductionBoundary(
 	signSecret []byte,
 ) dkim2ctlProbeFacts {
 	t.Helper()
-	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08",` +
+	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-09",` +
 		`"message":{"raw_rfc5322_base64":"U3ViamVjdDogdGVzdA0KDQpib2R5DQo=",` +
 		`"fidelity":"raw_rfc5322"},"smtp":{"mail_from":"<sender@example.test>",` +
 		`"rcpt_to":["<recipient@example.test>"]},"context":{"tenant":"tenant-a",` +
@@ -435,7 +437,7 @@ func newDKIM2ctlInboundProcessor(
 		},
 		dkim2.WithVerificationClock(
 			func() time.Time { return time.Unix(1_700_000_000, 0) },
-		),
+		), dkim2.WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("construct authentic verifier: %v", err)

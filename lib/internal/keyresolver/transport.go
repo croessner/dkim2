@@ -79,21 +79,30 @@ type LookupResult struct {
 	dnssec      DNSSECStatus
 }
 
-// NewFoundResult constructs found state from raw payloads using count-first validation.
+// NewFoundResult constructs found state from raw payloads using count-first
+// validation. Up to the hard carry bound every payload is kept, because the
+// Draft-09 Section 3.7 version filter must inspect each record before
+// uniqueness is decided; a larger answer is count-only ambiguity.
 func NewFoundResult(payloads [][]byte, ttl time.Duration, dnssec DNSSECStatus) (LookupResult, error) {
 	if len(payloads) == 0 || !dnssec.Known() {
 		return LookupResult{}, newResolverError(ErrorClassContract)
 	}
-	if len(payloads) > 1 {
+	if len(payloads) > hardMaxTXTRecords {
 		return NewAmbiguousResult(len(payloads), ttl, dnssec)
 	}
-	if len(payloads[0]) > hardMaxTXTRecordBytes {
-		return LookupResult{}, newResolverError(ErrorClassContract)
+	records := make([]TXTRecord, 0, len(payloads))
+	for _, payload := range payloads {
+		if len(payload) > hardMaxTXTRecordBytes {
+			return LookupResult{}, newResolverError(ErrorClassContract)
+		}
+		records = append(records, newTXTRecord(payload))
 	}
-	return LookupResult{status: LookupStatusFound, records: []TXTRecord{newTXTRecord(payloads[0])}, recordCount: 1, positiveTTL: ttl, dnssec: dnssec}, nil
+	return LookupResult{status: LookupStatusFound, records: records, recordCount: len(records), positiveTTL: ttl, dnssec: dnssec}, nil
 }
 
-// NewAmbiguousResult constructs count-only ambiguity without payload traversal.
+// NewAmbiguousResult constructs count-only ambiguity without payload
+// traversal. Without payloads the Section 3.7 filter cannot run, so the
+// resolver reports such an answer as ambiguous.
 func NewAmbiguousResult(recordCount int, ttl time.Duration, dnssec DNSSECStatus) (LookupResult, error) {
 	if recordCount <= 1 || !dnssec.Known() {
 		return LookupResult{}, newResolverError(ErrorClassContract)
@@ -115,7 +124,7 @@ func (r LookupResult) Status() LookupStatus { return r.status }
 // RecordCount returns the exact RR count without requiring ambiguous payload traversal.
 func (r LookupResult) RecordCount() int { return r.recordCount }
 
-// Records returns the unique immutable TXT payload or nil when absent or ambiguous.
+// Records returns the immutable TXT payloads, or nil when absent or count-only ambiguous.
 func (r LookupResult) Records() []TXTRecord { return cloneTXTRecords(r.records) }
 
 // Absence returns the authoritative negative class when absent.

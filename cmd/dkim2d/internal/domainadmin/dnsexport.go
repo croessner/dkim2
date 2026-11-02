@@ -36,6 +36,73 @@ type DNSRecord struct {
 	algorithm  provider.Algorithm
 }
 
+// DNSExportOptions selects optional records of one domain DNS export. The
+// zero value exports only the staged key records.
+type DNSExportOptions struct {
+	// DomainPolicyStrict adds, for every exported domain, the Draft-09
+	// Section 3.8 Domain Policy Record _domainkey.<domain>. TXT
+	// "v=DKIM1; f=strict", which forbids subdomains from making From header
+	// fields of that domain Authentic (Sections 11.1 and 20).
+	DomainPolicyStrict bool
+}
+
+// domainPolicyStrictPayload is the exact exported strict Domain Policy Record.
+const domainPolicyStrictPayload = "v=DKIM1; f=strict"
+
+// domainPolicyRecord owns one exported Draft-09 Section 3.8 record.
+type domainPolicyRecord struct {
+	owner   []byte
+	payload []byte
+}
+
+// newStrictDomainPolicyRecord builds the strict Domain Policy Record of one
+// canonical A-label domain and proves it through the production policy
+// parser: the record must resolve as strict at exactly its owner.
+func newStrictDomainPolicyRecord(ctx context.Context, domain []byte) (domainPolicyRecord, error) {
+	if ctx == nil || ctx.Err() != nil {
+		return domainPolicyRecord{}, newError(CodeUnavailable)
+	}
+	query, err := dkim2.NewDomainPolicyQuery(string(domain))
+	if err != nil {
+		return domainPolicyRecord{}, newError(CodeDNSInvalid)
+	}
+	record := domainPolicyRecord{
+		owner:   []byte("_domainkey." + query.Domain() + "."),
+		payload: []byte(domainPolicyStrictPayload),
+	}
+	providerValue, err := dkim2.NewDNSPublicKeyProvider(exactRecordTransport{owner: string(record.owner), payload: record.payload})
+	if err != nil {
+		return domainPolicyRecord{}, newError(CodeDNSInvalid)
+	}
+	status, err := providerValue.LookupDomainPolicy(ctx, query)
+	if err != nil || status != dkim2.DomainPolicyStrict {
+		return domainPolicyRecord{}, newError(CodeDNSInvalid)
+	}
+	return record, nil
+}
+
+// strictDomainPolicyRecords derives one strict Domain Policy Record per
+// distinct exported key-record domain, in key-record order.
+func strictDomainPolicyRecords(ctx context.Context, records []DNSRecord, options DNSExportOptions) ([]domainPolicyRecord, error) {
+	if !options.DomainPolicyStrict {
+		return nil, nil
+	}
+	policies := make([]domainPolicyRecord, 0, 1)
+	seen := make([][]byte, 0, 1)
+	for _, record := range records {
+		if slices.ContainsFunc(seen, func(domain []byte) bool { return bytes.Equal(domain, record.domain) }) {
+			continue
+		}
+		seen = append(seen, record.domain)
+		policy, err := newStrictDomainPolicyRecord(ctx, record.domain)
+		if err != nil {
+			return nil, err
+		}
+		policies = append(policies, policy)
+	}
+	return policies, nil
+}
+
 // StagedDNSSet owns the bounded DNS proof projection of one exact staged candidate.
 type StagedDNSSet struct {
 	mu      sync.Mutex
@@ -323,7 +390,7 @@ func FormatCanonicalDNSRecord(
 		return nil, err
 	}
 	defer clearDNSRecord(&record)
-	return formatDNSExport([]DNSRecord{record}, ttl, int(DefaultLimits().MaxDocumentBytes))
+	return formatDNSExport([]DNSRecord{record}, nil, ttl, int(DefaultLimits().MaxDocumentBytes))
 }
 
 // dnsKeyValue derives the DNS-02 key-record k= token and raw p= bytes from
@@ -543,7 +610,7 @@ func ExportCanonicalDNSBatch(ctx context.Context, path string, inputs []DNSProof
 		records = append(records, record)
 	}
 	defer clearDNSRecords(records)
-	document, err := formatDNSExport(records, ttl, int(limits.MaxDNSExportBytes))
+	document, err := formatDNSExport(records, nil, ttl, int(limits.MaxDNSExportBytes))
 	if err != nil {
 		return DNSExportResult{}, err
 	}
@@ -566,8 +633,11 @@ func ExportCanonicalDNSBatch(ctx context.Context, path string, inputs []DNSProof
 	return result, nil
 }
 
-// ExportDNS atomically writes one explicit owner-only deterministic zone-file artifact.
-func ExportDNS(ctx context.Context, path string, set *StagedDNSSet, limits Limits) (DNSExportResult, error) {
+// ExportDNS atomically writes one explicit owner-only deterministic zone-file
+// artifact. options selects the optional strict Domain Policy Record per
+// exported domain; a retry must repeat the same options, because the
+// create-only artifact is compared byte for byte.
+func ExportDNS(ctx context.Context, path string, set *StagedDNSSet, options DNSExportOptions, limits Limits) (DNSExportResult, error) {
 	if ctx == nil || ctx.Err() != nil || set == nil || limits.Validate() != nil {
 		return DNSExportResult{}, newError(CodeProtectedInput)
 	}
@@ -580,12 +650,19 @@ func ExportDNS(ctx context.Context, path string, set *StagedDNSSet, limits Limit
 	ttl := set.policy.ExportTTLSeconds
 	set.mu.Unlock()
 	defer clearDNSRecords(records)
-	document, err := formatDNSExport(records, ttl, int(limits.MaxDNSExportBytes))
+	policies, err := strictDomainPolicyRecords(ctx, records, options)
+	if err != nil {
+		return DNSExportResult{}, err
+	}
+	if len(records)+len(policies) > int(limits.MaxDNSRecords) {
+		return DNSExportResult{}, newError(CodeDNSLimitExceeded)
+	}
+	document, err := formatDNSExport(records, policies, ttl, int(limits.MaxDNSExportBytes))
 	if err != nil {
 		return DNSExportResult{}, err
 	}
 	defer clear(document)
-	result := DNSExportResult{Records: uint32(len(records)), Bytes: uint32(len(document))}
+	result := DNSExportResult{Records: uint32(len(records) + len(policies)), Bytes: uint32(len(document))}
 	existing, exists, err := config.ReadProtectedDocumentIfExists(path, int(limits.MaxDNSExportBytes))
 	if err != nil {
 		return DNSExportResult{}, mapDNSStoreError(err)
@@ -619,8 +696,9 @@ func ExportDNS(ctx context.Context, path string, set *StagedDNSSet, limits Limit
 	return result, nil
 }
 
-// formatDNSExport emits deterministic RFC 1035 TXT presentation with fixed chunks.
-func formatDNSExport(records []DNSRecord, ttl uint64, maximum int) ([]byte, error) {
+// formatDNSExport emits deterministic RFC 1035 TXT presentation with fixed
+// chunks: every key record, then every optional Domain Policy Record.
+func formatDNSExport(records []DNSRecord, policies []domainPolicyRecord, ttl uint64, maximum int) ([]byte, error) {
 	if len(records) == 0 || ttl == 0 || maximum <= 0 {
 		return nil, newError(CodeDNSInvalid)
 	}
@@ -651,6 +729,21 @@ func formatDNSExport(records []DNSRecord, ttl uint64, maximum int) ([]byte, erro
 			output.WriteByte('"')
 		}
 		output.WriteByte('\n')
+		if output.Len() > maximum {
+			return nil, newError(CodeDNSLimitExceeded)
+		}
+	}
+	for _, policy := range policies {
+		if len(policy.owner) == 0 || len(policy.payload) == 0 {
+			return nil, newError(CodeDNSInvalid)
+		}
+		output.WriteString("; domain-policy flags=strict\n")
+		output.Write(policy.owner)
+		output.WriteByte(' ')
+		output.WriteString(strconv.FormatUint(ttl, 10))
+		output.WriteString(" IN TXT \"")
+		output.Write(policy.payload)
+		output.WriteString("\"\n")
 		if output.Len() > maximum {
 			return nil, newError(CodeDNSLimitExceeded)
 		}

@@ -1,5 +1,5 @@
 // Package dkim2 provides verification and signing for
-// draft-ietf-dkim-dkim2-spec-08.
+// draft-ietf-dkim-dkim2-spec-09.
 //
 // A Verifier requires an injected PublicKeyProvider. VerifyRequest owns cloned
 // raw RFC 5322 bytes; those bytes are the sole authority for message and DKIM2
@@ -60,8 +60,20 @@
 // provider cache. TTL-aware injected transports may enable bounded positive,
 // authoritative-negative, and stable-error caching.
 //
+// Draft-09 Sections 7.1 item 3 and 11.1 also make a From header field
+// Authentic when d= is a subdomain of the From domain, unless the From domain
+// publishes a Section 3.8 Domain Policy Record with f=strict at
+// _domainkey.<domain>. NewVerifier and NewSigner therefore require an explicit
+// choice: a key provider that also implements DomainPolicyProvider (as
+// DNSPublicKeyProvider does through the same resolver, cache, and limits),
+// WithDomainPolicyProvider / WithSignerDomainPolicyProvider, or the
+// documented downward-only WithoutSubdomainFromAuthorization /
+// WithoutSignerSubdomainFromAuthorization. Policy records are queried only
+// after every signature proof passed. Signers themselves choose d= downward
+// only and never query a Domain Policy Record.
+//
 // DNS key records use PKCS#1 RSAPublicKey DER for RSA and exactly 32 raw bytes
-// for Ed25519. The post-quantum Draft-08 Section 3.4 mldsa44-ed25519-sha512
+// for Ed25519. The post-quantum Draft-09 Section 3.4 mldsa44-ed25519-sha512
 // composite is deliberately not implemented while the working group has not
 // settled its construction: such signature sets are ignored as unsupported
 // algorithms and k=mldsa44-ed25519-sha512 records are unsupported key types,
@@ -130,7 +142,7 @@
 // bounded versioned JSON, publishes complete snapshots atomically, and stops
 // serving after a failed reload until explicit recovery.
 //
-// Verifier.EvaluateReceivedDSN exposes the read-only Draft-08 Section 16.4
+// Verifier.EvaluateReceivedDSN exposes the read-only Draft-09 Section 16.4
 // evaluation of an inbound DKIM2-signed delivery-status notification after the
 // caller verified the outer message as an ordinary message with the same
 // verifier. It takes the exact outer bytes, the observed null reverse path and
@@ -156,7 +168,7 @@
 // state other than PASS keeps the outer policy unchanged.
 //
 // Signer.RebuildDSNForPropagation and Signer.SignPropagatedDSN implement
-// Draft-08 Section 16.3 propagation of a received DSN to the previous hop.
+// Draft-09 Section 16.3 propagation of a received DSN to the previous hop.
 // The signer re-runs the received-DSN evaluation on the exact request bytes
 // with the mandatory tenant-bound LocalAuthority, and only an eligible
 // evaluation is rebuilt: the local hop run's DKIM2-Signature fields and every

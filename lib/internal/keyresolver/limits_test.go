@@ -10,7 +10,7 @@ func TestDefaultLimitsMatchClosedDNSBounds(t *testing.T) {
 	limits := DefaultLimits()
 	if limits.MaxSelectorBytes != 253 || limits.MaxSelectorLabels != 127 ||
 		limits.MaxSigningDomainBytes != 253 || limits.MaxSigningDomainLabels != 127 ||
-		limits.MaxOwnerBytes != 253 || limits.MaxTXTRecords != 1 ||
+		limits.MaxOwnerBytes != 253 || limits.MaxTXTRecords != 8 ||
 		limits.MaxTXTRecordBytes != 8<<10 || limits.MaxTags != 32 ||
 		limits.MaxTagNameBytes != 63 || limits.MaxTagValueBytes != 8<<10 ||
 		limits.MaxDecodedKeyBytes != 8<<10 || limits.MaxCacheEntries != 1_024 ||
@@ -69,7 +69,7 @@ func TestLimitsRejectZeroNegativeAndWidenedValues(t *testing.T) {
 		{name: "owner zero", mutate: func(l *Limits) { l.MaxOwnerBytes = 0 }},
 		{name: "owner wide", mutate: func(l *Limits) { l.MaxOwnerBytes = 254 }},
 		{name: "records zero", mutate: func(l *Limits) { l.MaxTXTRecords = 0 }},
-		{name: "records wide", mutate: func(l *Limits) { l.MaxTXTRecords = 2 }},
+		{name: "records wide", mutate: func(l *Limits) { l.MaxTXTRecords = 9 }},
 		{name: "record bytes zero", mutate: func(l *Limits) { l.MaxTXTRecordBytes = 0 }},
 		{name: "record bytes wide", mutate: func(l *Limits) { l.MaxTXTRecordBytes = (64 << 10) + 1 }},
 		{name: "tags zero", mutate: func(l *Limits) { l.MaxTags = 0 }},

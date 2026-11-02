@@ -224,7 +224,7 @@ func TestLocalScanRequestLimits(t *testing.T) {
 }
 
 // TestEnvelopeContractsPreserveInboundAndOutboundUTF8 proves authority rules:
-// SMTPUTF8 envelopes are valid in both directions (Draft-08 Section 18), while
+// SMTPUTF8 envelopes are valid in both directions (Draft-09 Section 18), while
 // invalid UTF-8 and framing bytes fail closed.
 func TestEnvelopeContractsPreserveInboundAndOutboundUTF8(t *testing.T) {
 	incoming, err := NewIncomingEvidence(
@@ -514,6 +514,41 @@ func TestNotApplicablePlansRemainOperationBound(t *testing.T) {
 	}
 	if _, err = NewPlan(ResultNone, DispositionContinue, []Action{action}); err == nil {
 		t.Fatal("mutating process not-applicable plan succeeded")
+	}
+}
+
+// TestNonePlanAdmitsOnlyTheNoneReport proves the Draft-09 NONE process plan
+// continues with at most the reasonless dkim2=none report and never with a
+// signing field, a second action, a diagnostic, or a terminal disposition.
+func TestNonePlanAdmitsOnlyTheNoneReport(t *testing.T) {
+	report, err := NewAction(ActionAddHeader, headerAuthenticationResults, "mx.example; dkim2=none")
+	if err != nil {
+		t.Fatal("none report action construction failed")
+	}
+	plan, err := NewPlan(ResultNone, DispositionContinue, []Action{report})
+	if err != nil || plan.Result() != ResultNone || plan.Disposition() != DispositionContinue ||
+		len(plan.Actions()) != 1 || plan.Actions()[0].Value() != "mx.example; dkim2=none" {
+		t.Fatal("none report plan was not admitted exactly")
+	}
+	diagnostic, _ := NewAction(ActionAddHeader, headerAuthenticationResults, "mx.example; dkim2=none (reason=missing_protocol)")
+	signature, _ := NewAction(ActionAddHeader, headerDKIM2Signature, " i=1")
+	for name, candidate := range map[string]struct {
+		disposition Disposition
+		actions     []Action
+	}{
+		"accept":        {DispositionAccept, []Action{report}},
+		"reject":        {DispositionReject, nil},
+		"tempfail":      {DispositionTempfail, nil},
+		"diagnostic":    {DispositionContinue, []Action{diagnostic}},
+		"signing field": {DispositionContinue, []Action{signature}},
+		"two reports":   {DispositionContinue, []Action{report, report}},
+	} {
+		if _, candidateErr := NewPlan(ResultNone, candidate.disposition, candidate.actions); candidateErr == nil {
+			t.Fatalf("invalid none plan %q succeeded", name)
+		}
+	}
+	if _, err = NewFilterPlan(FilterSign, ResultNone, DispositionContinue, []Action{report}); err == nil {
+		t.Fatal("sign not-applicable plan admitted a none report")
 	}
 }
 

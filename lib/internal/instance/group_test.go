@@ -6,11 +6,12 @@ import (
 	"testing"
 )
 
-// TestHashSetFWSPositions pins every Draft-08 Section 9.3 white-space
-// position of mi-h-tag: [FWS] after "=", around hash-name, before and inside
-// both base64string hashes, and around "," separators are accepted; white
-// space inside hash-name and between header-hash padding and the second
-// colon is rejected because no production admits it there.
+// TestHashSetFWSPositions pins every Draft-09 Section 9.3 white-space
+// position of mi-h-tag: [FWS] after "=", around hash-name, inside both
+// base64string hashes, and around "," separators are accepted. White space
+// inside hash-name, directly after either hash colon, or directly before the
+// second colon is rejected: hash-set has no [FWS] there and the Section 2.14
+// base64string neither begins nor ends with FWS.
 func TestHashSetFWSPositions(t *testing.T) {
 	header := base64OfByte(0x11, 32)
 	body := base64OfByte(0x22, 32)
@@ -21,11 +22,8 @@ func TestHashSetFWSPositions(t *testing.T) {
 	accepted := map[string]string{
 		"after equals":              " \tsha256:" + header + ":" + body,
 		"before hash-name colon":    "sha256 \t:" + header + ":" + body,
-		"before header-hash":        "sha256: \t" + header + ":" + body,
 		"inside header-hash":        "sha256:" + header[:8] + " \t" + header[8:] + ":" + body,
 		"inside header padding":     "sha256:" + header[:len(header)-1] + " =" + ":" + body,
-		"unpadded header then wsp":  "future:" + base64OfByte(0x55, 66) + " :" + base64OfByte(0x66, 66),
-		"before body-hash":          "sha256:" + header + ": \t" + body,
 		"inside body-hash":          "sha256:" + header + ":" + body[:8] + "\t" + body[8:],
 		"after body padding":        "sha256:" + header + ":" + body + " \t",
 		"around comma":              "sha256:" + header + ":" + body + " \t, \t" + second,
@@ -43,6 +41,9 @@ func TestHashSetFWSPositions(t *testing.T) {
 		})
 	}
 	rejected := map[string]string{
+		"before header-hash":          "sha256: \t" + header + ":" + body,
+		"unpadded header then wsp":    "future:" + base64OfByte(0x55, 66) + " :" + base64OfByte(0x66, 66),
+		"before body-hash":            "sha256:" + header + ": \t" + body,
 		"inside hash-name":            "sha 256:" + header + ":" + body,
 		"after header padding":        "sha256:" + header + " :" + body,
 		"tab after header padding":    "sha256:" + header + "\t:" + body,

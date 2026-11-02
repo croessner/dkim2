@@ -85,17 +85,22 @@ func TestResultConstructorsRejectInvalidForms(t *testing.T) {
 	}
 }
 
-// TestFoundResultPreservesMultipleRecordBoundaries verifies ambiguity remains classifiable later.
+// testKeyRecordA is a minimal key record payload shared by transport tests.
+const testKeyRecordA = "p=QQ=="
+
+// TestFoundResultPreservesMultipleRecordBoundaries verifies that records up to
+// the carry bound keep detached payloads for the Draft-09 Section 3.7 filter.
 func TestFoundResultPreservesMultipleRecordBoundaries(t *testing.T) {
-	first := []byte("p=QQ==")
+	first := []byte(testKeyRecordA)
 	second := []byte("p=Qg==")
 	result, err := NewFoundResult([][]byte{first, second}, 0, DNSSECStatusUnavailable)
 	if err != nil {
 		t.Fatalf("NewFoundResult() error = %v", err)
 	}
 	first[0], second[0] = 'X', 'Y'
-	if result.RecordCount() != 2 || len(result.Records()) != 0 {
-		t.Fatalf("ambiguous record count was not preserved: count=%d records=%#v", result.RecordCount(), result.Records())
+	records := result.Records()
+	if result.RecordCount() != 2 || len(records) != 2 || string(records[0].Payload()) != testKeyRecordA || string(records[1].Payload()) != "p=Qg==" {
+		t.Fatalf("record boundaries were not preserved: count=%d records=%d", result.RecordCount(), len(records))
 	}
 }
 
@@ -140,19 +145,19 @@ func (f *fakeTXTTransport) Queries() []string {
 
 // TestFakeTransportIsDeterministicContextAwareAndImmutable proves the test transport contract.
 func TestFakeTransportIsDeterministicContextAwareAndImmutable(t *testing.T) {
-	answer, err := NewFoundResult([][]byte{[]byte("p=QQ==")}, 0, DNSSECStatusUnavailable)
+	answer, err := NewFoundResult([][]byte{[]byte(testKeyRecordA)}, 0, DNSSECStatusUnavailable)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fake := &fakeTXTTransport{results: map[string]LookupResult{"s._domainkey.example.test.": answer}, errors: map[string]error{}}
 	result, err := fake.LookupTXT(context.Background(), "s._domainkey.example.test.")
-	if err != nil || string(result.Records()[0].Payload()) != "p=QQ==" {
+	if err != nil || string(result.Records()[0].Payload()) != testKeyRecordA {
 		t.Fatalf("LookupTXT() result=%#v error=%v", result, err)
 	}
 	copyResult := result.Records()[0].Payload()
 	copyResult[0] = 'X'
 	second, err := fake.LookupTXT(context.Background(), "s._domainkey.example.test.")
-	if err != nil || string(second.Records()[0].Payload()) != "p=QQ==" || len(fake.Queries()) != 2 {
+	if err != nil || string(second.Records()[0].Payload()) != testKeyRecordA || len(fake.Queries()) != 2 {
 		t.Fatalf("second LookupTXT() result=%#v error=%v queries=%v", second, err, fake.Queries())
 	}
 	canceled, cancel := context.WithCancel(context.Background())

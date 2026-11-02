@@ -223,14 +223,15 @@ func (a publicTXTTransportAdapter) LookupTXT(ctx context.Context, owner string) 
 	}
 	switch result.Status() {
 	case TXTLookupStatusFound:
-		if result.RecordCount() > 1 {
+		records := result.Records()
+		if len(records) == 0 {
 			return keyresolver.NewAmbiguousResult(result.RecordCount(), result.PositiveTTL(), dnssec)
 		}
-		records := result.Records()
-		if result.RecordCount() != 1 || len(records) != 1 {
-			return keyresolver.LookupResult{}, publicTXTContractError{}
+		payloads := make([][]byte, 0, len(records))
+		for _, record := range records {
+			payloads = append(payloads, record.Payload())
 		}
-		return keyresolver.NewFoundResult([][]byte{records[0].Payload()}, result.PositiveTTL(), dnssec)
+		return keyresolver.NewFoundResult(payloads, result.PositiveTTL(), dnssec)
 	case TXTLookupStatusAbsent:
 		absence, ok := resolverAbsenceClass(result.Absence())
 		if !ok {
@@ -250,7 +251,7 @@ func publicTXTLookupShapeValid(result TXTLookupResult) bool {
 			return false
 		}
 		return result.RecordCount() > 1 && result.recordStorageCount() == 0 ||
-			result.RecordCount() == 1 && result.recordStorageCount() == 1
+			result.RecordCount() <= MaxCarriedTXTRecords() && result.recordStorageCount() == result.RecordCount()
 	case TXTLookupStatusAbsent:
 		return result.Absence().Known() && result.RecordCount() == 0 &&
 			result.recordStorageCount() == 0 && result.PositiveTTL() == 0

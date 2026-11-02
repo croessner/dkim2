@@ -58,7 +58,7 @@ func (p *selectorRecordingProvider) LookupKey(_ context.Context, query KeyQuery)
 func TestVerifierChecksSameAlgorithmSignaturesPositionally(t *testing.T) {
 	fixture := newSameAlgorithmFixture(t)
 	provider := &selectorRecordingProvider{keys: map[string]any{testSelector: fixture.firstKey, secondRSASelector: fixture.secondKey}}
-	verifier, err := NewVerifier(provider, testClockOption())
+	verifier, err := NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,12 +73,12 @@ func TestVerifierChecksSameAlgorithmSignaturesPositionally(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider = &selectorRecordingProvider{keys: map[string]any{testSelector: fixture.firstKey, secondRSASelector: &wrong.PublicKey}}
-	verifier, err = NewVerifier(provider, testClockOption())
+	verifier, err = NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatal(err)
 	}
 	result, err = verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
-	// Draft-08 Section 14.6 step 6: a sig-all group with one FAIL is FAIL.
+	// Draft-09 Section 14.6 step 6: a sig-all group with one FAIL is FAIL.
 	requireSameAlgorithmResult(t, "wrong second RSA material", result, err, TargetStatusFail, SignatureSetStatusFail)
 	if !orderedSameAlgorithmQueries(provider.queries) {
 		t.Fatalf("crypto-mismatch key queries = %#v", provider.queries)
@@ -88,12 +88,12 @@ func TestVerifierChecksSameAlgorithmSignaturesPositionally(t *testing.T) {
 		keys:     map[string]any{testSelector: fixture.firstKey},
 		statuses: map[string]KeyStatus{secondRSASelector: KeyStatusAlgorithmMismatch},
 	}
-	verifier, err = NewVerifier(provider, testClockOption())
+	verifier, err = NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatal(err)
 	}
 	result, err = verifier.Verify(context.Background(), Request{Message: fixture.message, Envelope: matchingEnvelope()})
-	// Draft-08 Section 14.6 steps 3 and 6: a key error is a PERMERROR
+	// Draft-09 Section 14.6 steps 3 and 6: a key error is a PERMERROR
 	// intermediate, so the sig-all group is PERMERROR (unsupported).
 	requireSameAlgorithmResult(t, "second k= algorithm mismatch", result, err, TargetStatusUnsupported, SignatureSetStatusKeyAlgorithmMismatch)
 	if !orderedSameAlgorithmQueries(provider.queries) {
@@ -135,7 +135,7 @@ func TestVerifierAggregatesMultipleSignatureSets(t *testing.T) {
 			wantEd:     SignatureSetStatusPass,
 		},
 		{
-			// Draft-08 Section 14.6 step 6: one FAIL in the sig-all group is FAIL.
+			// Draft-09 Section 14.6 step 6: one FAIL in the sig-all group is FAIL.
 			name: "mixed crypto failure",
 			keys: []StaticKey{
 				{Domain: testDomain, Selector: testSelector, Algorithm: AlgorithmRSASHA256, Material: fixture.rsaKey},
@@ -146,7 +146,7 @@ func TestVerifierAggregatesMultipleSignatureSets(t *testing.T) {
 			wantEd:     SignatureSetStatusFail,
 		},
 		{
-			// Draft-08 Section 14.6 steps 3 and 6: a missing key is a
+			// Draft-09 Section 14.6 steps 3 and 6: a missing key is a
 			// PERMERROR intermediate, so the sig-all group is PERMERROR.
 			name: "missing key mixed state",
 			keys: []StaticKey{
@@ -195,7 +195,7 @@ func TestVerifierReportsUnknownOnlySignatureSets(t *testing.T) {
 }
 
 // TestVerifierRejectsUnknownSignatureSetInsideSupportedGroup pins the
-// Draft-08 change from the removed Section 3.5 "disregard" rule: an
+// Draft-09 change from the removed Section 3.5 "disregard" rule: an
 // unimplemented algorithm is a PERMERROR intermediate (Section 14.6 step 4),
 // so a sig-all group holding it cannot pass even beside a supported PASS.
 func TestVerifierRejectsUnknownSignatureSetInsideSupportedGroup(t *testing.T) {
@@ -248,7 +248,7 @@ func TestVerifierRejectsCustodyBeforeProviderLookup(t *testing.T) {
 	raw := strings.Replace(fixture.raw, "mf=PHNlbmRlckBleGFtcGxlLnRlc3Q+", "mf=PHNlbmRlckBldmlsLnRlc3Q+", 1)
 	message := mustParseVerificationMessage(t, raw)
 	provider := &countingMissingProvider{}
-	verifier, err := NewVerifier(provider, testClockOption())
+	verifier, err := NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -264,7 +264,7 @@ func TestVerifierDoesNotExemptCurrentMismatchForHistoricalSelection(t *testing.T
 	raw := strings.Replace(fixture.raw, "mf=PHNlbmRlckBleGFtcGxlLnRlc3Q+", "mf=PHNlbmRlckBldmlsLnRlc3Q+", 1)
 	message := mustParseVerificationMessage(t, raw)
 	provider := &countingMissingProvider{}
-	verifier, err := NewVerifier(provider, testClockOption())
+	verifier, err := NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}

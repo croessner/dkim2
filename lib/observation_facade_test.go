@@ -38,7 +38,7 @@ func TestVerifierObservationBridgeEmitsDNSAndVerify(t *testing.T) {
 			return providerResult, nil
 		}),
 		WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }),
-		WithObservationSink(collector),
+		WithObservationSink(collector), WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("verifier construction failed")
@@ -70,7 +70,7 @@ func TestVerifierAssessmentObservesOnlyApplicableVerification(t *testing.T) {
 			return FoundEd25519PublicKey(publicKey), nil
 		}),
 		WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }),
-		WithObservationSink(collector),
+		WithObservationSink(collector), WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("verifier construction failed")
@@ -137,7 +137,7 @@ func TestVerifierAssessmentObservesInterruptedApplicableVerification(t *testing.
 					return PublicKeyResult{}, providerContext.Err()
 				}),
 				WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }),
-				WithObservationSink(collector),
+				WithObservationSink(collector), WithoutSubdomainFromAuthorization(),
 			)
 			if err != nil {
 				t.Fatal("verifier construction failed")
@@ -178,7 +178,7 @@ func TestVerifierAssessmentLeavesUnsignedInputUnobserved(t *testing.T) {
 			t.Fatal("unsigned assessment reached the public-key provider")
 			return PublicKeyResult{}, nil
 		}),
-		WithObservationSink(collector),
+		WithObservationSink(collector), WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("verifier construction failed")

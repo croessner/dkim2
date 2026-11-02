@@ -319,7 +319,7 @@ func TestOnboardingCompletesRestartableHappyPathWithFreshActivationProof(t *test
 		t.Fatalf("persisted plan was not independently staged and released: code=%s state=%s failure=%s stage=%d inspect=%d release=%d current=%d collisions=%d", CodeOf(err), result.State, result.Failure, backend.stageCalls, backend.inspectCalls, backend.releaseCalls, backend.readCurrentCalls, backend.collisionCalls)
 	}
 	exportPath := protectedOnboardingPath(t, "dns.txt")
-	if result, err := onboarding.DNSExport(t.Context(), store, exportPath); err != nil || result.State != StateDNSExported {
+	if result, err := onboarding.DNSExport(t.Context(), store, exportPath, DNSExportOptions{}); err != nil || result.State != StateDNSExported {
 		t.Fatalf("exact staged DNS artifact was not exported: code=%s state=%s failure=%s", CodeOf(err), result.State, result.Failure)
 	}
 	if result, err := onboarding.Prove(t.Context(), store); err != nil || result.State != StateDNSProven || *proofCalls != 1 {
@@ -351,7 +351,7 @@ func TestOnboardingDNSExportConflictLeavesForeignFileAndJournalUnchanged(t *test
 	intentPath := writeIntentFixture(t, "version: dkim2-domain-intent-v1\ndomain: example.test\ntenant_id: outbound\nprofile_use: originator\nalgorithms: [ed25519-sha256]\nrollout: enforce\ncompatibility: strict\n")
 	journalBefore, journalInfoBefore, _ := protectedArtifactSnapshot(t, store.path)
 	intentBefore, intentInfoBefore, intentEntriesBefore := protectedArtifactSnapshot(t, intentPath)
-	result, err := onboarding.DNSExport(t.Context(), store, intentPath)
+	result, err := onboarding.DNSExport(t.Context(), store, intentPath, DNSExportOptions{})
 	if CodeOf(err) != CodeConflict || result.State != StateStaged || result.Failure != CodeConflict {
 		t.Fatal("foreign DNS artifact did not fail closed from staged state")
 	}
@@ -960,7 +960,7 @@ func onboardingReadyToActivateFixture(
 		t.Fatal("prepare activation fixture")
 	}
 	path := protectedOnboardingPath(t, "dns.txt")
-	if _, err := onboarding.DNSExport(t.Context(), store, path); err != nil {
+	if _, err := onboarding.DNSExport(t.Context(), store, path, DNSExportOptions{}); err != nil {
 		t.Fatal("export activation fixture")
 	}
 	if _, err := onboarding.Prove(t.Context(), store); err != nil {

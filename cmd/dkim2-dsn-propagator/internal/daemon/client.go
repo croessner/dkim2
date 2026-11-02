@@ -51,7 +51,7 @@ const (
 	// DiscardNullPreviousSender marks a forbidden null previous sender.
 	DiscardNullPreviousSender DiscardReason = "null_previous_sender"
 	// DiscardIdentityMisaligned marks a propagation whose signing domain does
-	// not relaxed-match the previous hop's rt= (Draft-08 Section 16.2).
+	// not relaxed-match the previous hop's rt= (Draft-09 Section 16.2).
 	DiscardIdentityMisaligned DiscardReason = "identity_misaligned"
 	// DiscardUnsupportedChain marks a chain this implementation cannot descend.
 	DiscardUnsupportedChain DiscardReason = "unsupported_chain"
@@ -297,7 +297,7 @@ func (c *Client) Propagate(
 		callContext,
 		generated.PropagateDeliveryStatusJSONRequestBody{
 			ApiVersion: generated.V1,
-			Draft:      generated.DraftIetfDkimDkim2Spec08,
+			Draft:      generated.DraftIetfDkimDkim2Spec09,
 			Message: generated.PropagationMessageInput{
 				Fidelity:         generated.PropagationFidelityLMTPDeliveredCRLF,
 				RawRfc5322Base64: rawMessage,
@@ -330,7 +330,7 @@ func (guard *clientGuard) mapPropagationResponse(
 	}
 	body := response.JSON200
 	if body.ApiVersion != generated.V1 ||
-		body.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+		body.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		body.Operation != generated.PropagationOperationDeliveryStatusPropagation ||
 		!body.Result.Valid() || !body.Disposition.Valid() ||
 		!body.Replay.Class.Valid() {
@@ -520,7 +520,7 @@ func (c *Client) Commit(ctx context.Context, result Result) error {
 		callContext,
 		generated.CommitDeliveryStatusPropagationJSONRequestBody{
 			ApiVersion:  generated.V1,
-			Draft:       generated.DraftIetfDkimDkim2Spec08,
+			Draft:       generated.DraftIetfDkimDkim2Spec09,
 			CommitToken: result.state.commitToken,
 		},
 	)
@@ -530,7 +530,7 @@ func (c *Client) Commit(ctx context.Context, result Result) error {
 	}
 	body := response.JSON200
 	if body.ApiVersion != generated.V1 ||
-		body.Draft != generated.DraftIetfDkimDkim2Spec08 ||
+		body.Draft != generated.DraftIetfDkimDkim2Spec09 ||
 		body.State != generated.PropagationStateCommitted {
 		return &Error{}
 	}

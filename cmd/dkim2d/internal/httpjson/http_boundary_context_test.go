@@ -399,7 +399,7 @@ func contextGoldenInboundProcessor(
 		contextGoldenProvider{key: key},
 		dkim2.WithVerificationClock(func() time.Time {
 			return time.Unix(1_700_000_000, 0)
-		}),
+		}), dkim2.WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("context verifier construction failed")

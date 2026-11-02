@@ -139,7 +139,7 @@ func (e Evidence) RecipientDomains() []string {
 	return append([]string(nil), e.recipientDomains...)
 }
 
-// EvidenceEvaluator owns the narrow Draft-08 Section 16 embedded-original verification boundary.
+// EvidenceEvaluator owns the narrow Draft-09 Section 16 embedded-original verification boundary.
 type EvidenceEvaluator struct {
 	verifier verify.Verifier
 }
@@ -271,7 +271,7 @@ const (
 
 // deliveryStatusArrival returns the per-message Arrival-Date of the local
 // MTA's RFC 3464 report, the instant the reported message was delivered.
-// Draft-08 Section 14.3 evaluates signature windows at delivery, so a DSN
+// Draft-09 Section 14.3 evaluates signature windows at delivery, so a DSN
 // generated after a long queue lifetime must not judge the original at bounce
 // time. The body is parsed with the same profiles as recipient linkage.
 func deliveryStatusArrival(report Report, postfixBounceOrder bool) (time.Time, bool) {
@@ -295,7 +295,7 @@ func deliveryStatusArrival(report Report, postfixBounceOrder bool) (time.Time, b
 
 // withDeliveryStatusLinkage requires one complete RFC 3464 recipient group to
 // name an authenticated highest-signature rt= path and records, per rt= path,
-// whether it is linked. The per-path flags let the Draft-08 Section 16.2
+// whether it is linked. The per-path flags let the Draft-09 Section 16.2
 // identity order prefer RFC 3464-linked recipients.
 func withDeliveryStatusLinkage(request EvidenceRequest, evidence Evidence) (Evidence, error) {
 	linked, ok := deliveryStatusLinkedRecipients(request.Report, evidence.recipientPaths, request.PostfixBounceOrder)

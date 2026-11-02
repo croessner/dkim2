@@ -242,7 +242,7 @@ func TestMapReviseRequestPreservesDistinctEnvelopeEvidence(t *testing.T) {
 }
 
 // TestMapOperationRequestAdmitsSMTPUTF8Signing proves SMTPUTF8 envelopes
-// reach the signing service byte-exact (Draft-08 Section 18), while NUL and
+// reach the signing service byte-exact (Draft-09 Section 18), while NUL and
 // CR/LF framing bytes still fail closed.
 func TestMapOperationRequestAdmitsSMTPUTF8Signing(t *testing.T) {
 	request := operationRequestFixture(t, []byte("From: sender@example.test\r\n\r\n"))
@@ -365,7 +365,7 @@ func TestStrictAdapterReturnsBodylessOriginatorNotApplicable(t *testing.T) {
 func TestStrictAdapterReturnsBodylessDeliveryStatusNotApplicable(t *testing.T) {
 	raw := base64.StdEncoding.EncodeToString([]byte("From: postmaster@example.test\r\n\r\nreport\r\n"))
 	request := generated.DSNSignRequest{
-		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec08,
+		ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec09,
 		Message: generated.DSNMessageInput{RawRfc5322Base64: mustProtectedString(t, raw)},
 		OuterSmtp: generated.SMTPInput{
 			MailFrom: mustProtectedString(t, "<>"),
@@ -419,11 +419,11 @@ func (foreignDeliveryStatusService) SignDeliveryStatus(
 }
 
 // TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses crosses the
-// real HTTP transport for the inbound, originator, and delivery-status
-// applicability variants.
+// real HTTP transport for the originator and delivery-status applicability
+// variants. The inbound NONE state is a 200 response covered separately.
 func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T) {
 	provider := &noOperationPublicKeyProvider{}
-	verifier, err := dkim2.NewVerifier(provider)
+	verifier, err := dkim2.NewVerifier(provider, dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -449,14 +449,11 @@ func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T
 	raw := base64.StdEncoding.EncodeToString(
 		[]byte("From: sender@example.test\r\nSubject: unsigned\r\n\r\nbody\r\n"),
 	)
-	processBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08",` +
-		`"message":{"raw_rfc5322_base64":"` + raw + `","fidelity":"milter_reconstructed_crlf"},` +
-		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<recipient@example.test>"]}}`
-	signBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08",` +
+	signBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-09",` +
 		`"message":{"raw_rfc5322_base64":"` + raw + `","fidelity":"milter_reconstructed_crlf"},` +
 		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<recipient@example.test>"]},` +
 		`"context":{"tenant":"tenant-a","domain":"example.test"}}`
-	dsnBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08",` +
+	dsnBody := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-09",` +
 		`"message":{"raw_rfc5322_base64":"` + raw + `"},` +
 		`"outer_smtp":{"mail_from":"<>","rcpt_to":["<sender@example.test>"]},` +
 		`"context":{"tenant":"tenant-a"}}`
@@ -465,7 +462,6 @@ func TestGeneratedStrictHandlerWritesBodylessNotApplicableResponses(t *testing.T
 		path string
 		body string
 	}{
-		{name: "inbound", path: "/v1/process", body: processBody},
 		{name: "originator", path: "/v1/sign", body: signBody},
 		{name: "delivery status unsigned original", path: "/v1/dsn/sign", body: dsnBody},
 	} {
@@ -640,7 +636,7 @@ func operationRequestFixture(t *testing.T, raw []byte) generated.SignRequest {
 	fidelity := generated.MilterReconstructedCrlf
 	return generated.SignRequest{
 		ApiVersion: generated.V1,
-		Draft:      generated.DraftIetfDkimDkim2Spec08,
+		Draft:      generated.DraftIetfDkimDkim2Spec09,
 		Message: generated.MessageInput{
 			RawRfc5322Base64: message,
 			Fidelity:         &fidelity,

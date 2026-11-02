@@ -91,7 +91,7 @@ func TestStoreParsesAndSignsWithEd25519(t *testing.T) {
 		ed25519SigningStorePublicKeys{key: publicKey},
 		dkim2.NewRequestRouteAuthority(),
 		signingStoreAuthorizer{},
-		store,
+		store, dkim2.WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)

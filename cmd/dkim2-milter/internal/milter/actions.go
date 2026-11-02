@@ -132,9 +132,12 @@ func validActions(result Result) bool {
 }
 
 // validInboundResult enforces the optional single authoritative report action.
+// The Draft-09 NONE state (no DKIM2 field of either family) always continues
+// and admits the same single report, bound to dkim2=none, under the same
+// authority rules as every other inbound result.
 func validInboundResult(result Result, authservID string) bool {
-	if result.Result == resultNone {
-		return result.Outcome == DispositionContinue && len(result.Actions) == 0
+	if result.Result == resultNone && result.Outcome != DispositionContinue {
+		return false
 	}
 	if authservID == "" ||
 		(result.Outcome != DispositionAccept &&

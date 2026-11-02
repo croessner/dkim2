@@ -47,9 +47,9 @@ func TestMapVerificationResultAppliesBindingPrecedence(t *testing.T) {
 	}{
 		{name: "passing target", status: verify.TargetStatusPass, checks: passChecks, sets: []verify.SignatureSetResult{passSet}, want: StatePASS, reason: ReasonNone},
 		{name: "supported failure outranks temporary", status: verify.TargetStatusMixed, checks: failAndTemporaryChecks, sets: []verify.SignatureSetResult{temporarySet, failSet}, want: StateFAIL, reason: ReasonSignatureMismatch},
-		// Draft-08 Section 14.3: an expired timestamp is a FAIL, which ranks
+		// Draft-09 Section 14.3: an expired timestamp is a FAIL, which ranks
 		// before the signature mismatch and outranks the temporary set.
-		{name: "Draft-08 timestamp failure outranks signature failure and temporary", status: verify.TargetStatusFail, checks: timestampChecks, sets: []verify.SignatureSetResult{temporarySet, failSet}, want: StateFAIL, reason: ReasonTimestampInvalid},
+		{name: "Draft-09 timestamp failure outranks signature failure and temporary", status: verify.TargetStatusFail, checks: timestampChecks, sets: []verify.SignatureSetResult{temporarySet, failSet}, want: StateFAIL, reason: ReasonTimestampInvalid},
 		{name: "permanent outranks failure and temporary", status: verify.TargetStatusFail, checks: permanentChecks, sets: []verify.SignatureSetResult{temporarySet, failSet}, want: StatePERMERROR, reason: ReasonMalformedProtocol},
 		{name: "temporary without higher fact", status: verify.TargetStatusIndeterminate, checks: temporaryChecks, sets: []verify.SignatureSetResult{temporarySet}, want: StateTEMPERROR, reason: ReasonProviderTemporary},
 	}
@@ -133,7 +133,7 @@ func TestMapVerificationResultFailsClosedOnUnknownFacts(t *testing.T) {
 }
 
 // TestMapVerificationResultHandlesUnknownAlgorithmCombinations pins the
-// Draft-08 Section 14.6 step 4 rule: an unknown algorithm is a PERMERROR
+// Draft-09 Section 14.6 step 4 rule: an unknown algorithm is a PERMERROR
 // intermediate, so it blocks its own sig-all group but not a passing
 // alternative "|" group.
 func TestMapVerificationResultHandlesUnknownAlgorithmCombinations(t *testing.T) {
@@ -190,7 +190,7 @@ func TestMapVerificationResultReportsAllCustodyStates(t *testing.T) {
 			terminalChecks[index].DomainAlignmentStatus = verify.DomainAlignmentStatusNotApplicable
 		}
 	}
-	// Draft-08 Sections 13.2 and 14.4: a terminal nd= without an out-of-band
+	// Draft-09 Sections 13.2 and 14.4: a terminal nd= without an out-of-band
 	// arrangement is a completed verification that is not Fully Verified,
 	// so the core reports a failing target and the service FAIL.
 	terminal := mapVerificationResult(verify.NewResultWithCustody(target, verify.TargetStatusFail, terminalChecks, passSet, verify.CustodyStatusTerminalNDRequiresOOB), DefaultLimits())

@@ -21,6 +21,10 @@ const (
 	VerificationReasonInvalidRecipeJSON       VerificationReason = "invalid_recipe_json"
 	VerificationReasonInvalidRecipe           VerificationReason = "invalid_recipe"
 	VerificationReasonFromNotAuthentic        VerificationReason = "from_not_authentic"
+	VerificationReasonFromSubdomainForbidden  VerificationReason = "from_subdomain_forbidden"
+	VerificationReasonDomainPolicyTemporary   VerificationReason = "domain_policy_temporary"
+	VerificationReasonDomainPolicyAmbiguous   VerificationReason = "domain_policy_ambiguous"
+	VerificationReasonDomainPolicyInvalid     VerificationReason = "domain_policy_invalid"
 	VerificationReasonDuplicateSelector       VerificationReason = "duplicate_selector"
 	VerificationReasonMissingProtocol         VerificationReason = "missing_protocol"
 	VerificationReasonSequenceInvalid         VerificationReason = "sequence_invalid"
@@ -51,7 +55,8 @@ func (r VerificationReason) Known() bool {
 	switch r {
 	case VerificationReasonNone, VerificationReasonLimitExceeded, VerificationReasonMalformedMessage,
 		VerificationReasonMalformedProtocol, VerificationReasonDuplicateHashAlgorithm, VerificationReasonInvalidRecipeJSON,
-		VerificationReasonInvalidRecipe, VerificationReasonFromNotAuthentic,
+		VerificationReasonInvalidRecipe, VerificationReasonFromNotAuthentic, VerificationReasonFromSubdomainForbidden,
+		VerificationReasonDomainPolicyTemporary, VerificationReasonDomainPolicyAmbiguous, VerificationReasonDomainPolicyInvalid,
 		VerificationReasonDuplicateSelector, VerificationReasonMissingProtocol, VerificationReasonSequenceInvalid,
 		VerificationReasonUnsupportedAlgorithm, VerificationReasonHashMismatch, VerificationReasonSignatureMismatch,
 		VerificationReasonMissingKey, VerificationReasonInvalidKey, VerificationReasonAmbiguousKey,
@@ -66,17 +71,22 @@ func (r VerificationReason) Known() bool {
 	}
 }
 
-// ProtocolForVerificationReason is the single owner of the Draft-08 Section
+// ProtocolForVerificationReason is the single owner of the Draft-09 Section
 // 14.1 state of every verification reason. PASS carries only none. FAIL means
 // verification completed and the message is not a Fully Verified DKIM2
 // Message: hash and signature mismatches (Sections 14.6 and 14.7), timestamp
 // failures (14.3), Chain of Custody failures including the envelope, MAIL
 // FROM and d= alignment, next-domain, custody adjacency, and unmet
-// out-of-band arrangements (14.4 and 13.2), an inauthentic From (14.8), and
-// a history whose body cannot be checked below a null Recipe (13).
-// TEMPERROR carries only a temporary key-provider failure. Every other
-// reason, including malformed, missing, duplicate, sequence, algorithm, key,
-// Recipe, limit, and internal failures (14.2 and 14.5), is PERMERROR.
+// out-of-band arrangements (14.4 and 13.2), an inauthentic From, and a From
+// whose strict Domain Policy Record forbids subdomain signing (14.8 and 3.8).
+// TEMPERROR is a temporary inability to retrieve a DNS record (14.1): a
+// temporary key-provider failure or an unavailable Domain Policy Record
+// (3.8). Every other reason, including malformed, missing, duplicate,
+// sequence, algorithm, key, Recipe, limit, and internal failures (14.2 and
+// 14.5), multiple Domain Policy Records (3.8), and an invalid Domain Policy
+// Record (local interpretation D1), is PERMERROR; a history whose body cannot
+// be checked below a null Recipe is the Section 14.2 "has a null recipe"
+// PERMERROR.
 func ProtocolForVerificationReason(reason VerificationReason) (ProtocolClass, bool) {
 	switch reason {
 	case VerificationReasonNone:
@@ -85,9 +95,9 @@ func ProtocolForVerificationReason(reason VerificationReason) (ProtocolClass, bo
 		VerificationReasonTimestampInvalid, VerificationReasonEnvelopeMismatch,
 		VerificationReasonDomainAlignmentMismatch, VerificationReasonNextDomainMismatch,
 		VerificationReasonCustodyMismatch, VerificationReasonOutOfBandRequired,
-		VerificationReasonFromNotAuthentic, VerificationReasonBodyHistoryUnavailable:
+		VerificationReasonFromNotAuthentic, VerificationReasonFromSubdomainForbidden:
 		return ProtocolFAIL, true
-	case VerificationReasonProviderTemporary:
+	case VerificationReasonProviderTemporary, VerificationReasonDomainPolicyTemporary:
 		return ProtocolTEMPERROR, true
 	default:
 		if !reason.Known() {
@@ -248,7 +258,7 @@ func (f SignatureFact) Valid() bool {
 	case SetStatusTemperror:
 		return f.reason == SetReasonProviderTemporary && f.algorithm != SetAlgorithmUnknown
 	case SetStatusPermerror:
-		// Draft-08 Section 14.6 step 4: unsupported_algorithm is the
+		// Draft-09 Section 14.6 step 4: unsupported_algorithm is the
 		// PERMERROR of an unknown or locally disabled algorithm; an unknown
 		// algorithm has no key, so it admits no other set reason.
 		return f.reason != SetReasonNone && f.reason != SetReasonSignatureMismatch && f.reason != SetReasonProviderTemporary &&
@@ -332,7 +342,7 @@ func NewSelectedProjection(protocol ProtocolClass, reason VerificationReason, ta
 }
 
 // NewGroupedSelectedProjection seals a selected target whose signature facts
-// are in field order under the parsed Draft-08 sig-any/sig-all layout. The
+// are in field order under the parsed Draft-09 sig-any/sig-all layout. The
 // layout lets validation recompute the Section 14.6 combination exactly. The
 // target hash combination is recorded as checkable, so an
 // unsupported_algorithm reason must come from the decisive set.
@@ -340,7 +350,7 @@ func NewGroupedSelectedProjection(protocol ProtocolClass, reason VerificationRea
 	return NewGroupedSelectedTargetProjection(protocol, reason, target, hops, signatures, layout, TargetHashCheckable, limits)
 }
 
-// TargetHash is the sealed class of the selected target's Draft-08 Section
+// TargetHash is the sealed class of the selected target's Draft-09 Section
 // 14.7 hash combination as far as the aggregate reason depends on it.
 type TargetHash string
 
@@ -397,6 +407,8 @@ func revisionFailureProtocolReasonAllowed(protocol ProtocolClass, reason Verific
 		VerificationReasonProviderContract, VerificationReasonLimitExceeded,
 		VerificationReasonOutOfBandRequired, VerificationReasonInvalidRecipeJSON, VerificationReasonInvalidRecipe,
 		VerificationReasonFromNotAuthentic, VerificationReasonBodyHistoryUnavailable,
+		VerificationReasonFromSubdomainForbidden, VerificationReasonDomainPolicyTemporary,
+		VerificationReasonDomainPolicyAmbiguous, VerificationReasonDomainPolicyInvalid,
 		VerificationReasonMalformedProtocol, VerificationReasonInternalContract:
 		want, ok := ProtocolForVerificationReason(reason)
 		return ok && want == protocol
@@ -405,7 +417,7 @@ func revisionFailureProtocolReasonAllowed(protocol ProtocolClass, reason Verific
 	}
 }
 
-// NewChainFailureProjection seals a selected target whose Draft-08 Section
+// NewChainFailureProjection seals a selected target whose Draft-09 Section
 // 14.4 Chain of Custody check failed before any signature was evaluated. The
 // result is FAIL with custody_mismatch, next_domain_mismatch, or
 // domain_alignment_mismatch; it carries no signature facts and no
@@ -569,7 +581,7 @@ func (p Projection) validateChainFailure() error {
 	return nil
 }
 
-// signatureOutcome recomputes the Draft-08 Section 14.6 combination of the
+// signatureOutcome recomputes the Draft-09 Section 14.6 combination of the
 // sealed set facts under their layout: PASS, FAIL, TEMPERROR, or PERMERROR
 // (a permanent error, including an unknown or disabled algorithm).
 func (p Projection) signatureOutcome() combine.Outcome {

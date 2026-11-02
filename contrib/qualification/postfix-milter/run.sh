@@ -16,7 +16,7 @@ compose_file=contrib/qualification/postfix-milter/compose.yaml
 # ordinary-transit forwarder, the delivery-status signer, the forwarder's
 # reserved return path (mf=), and the destination that refuses the message
 # all share one domain, origin.example.test, while only the simulated
-# previous hop is foreign. Draft-08 Section 16.4 item 1, the alignment of
+# previous hop is foreign. Draft-09 Section 16.4 item 1, the alignment of
 # the outer notification signer with the completion signature's rt= domain,
 # is therefore exercised on real Postfix only in the equal-domain case; the
 # directed parent-domain case is covered by the library golden vectors alone.
@@ -24,7 +24,7 @@ compose_file=contrib/qualification/postfix-milter/compose.yaml
 # delivery-status route under the foreign tenant, because Postfix itself can
 # only produce notifications the local delivery-status Milter signs. The
 # reported foreign message is addressed under the foreign domain, because
-# Draft-08 Section 16.2 admits a notification d= only when it relaxed-matches
+# Draft-09 Section 16.2 admits a notification d= only when it relaxed-matches
 # an rt= recipient of the reported message.
 #
 # DKIM2_DEBUG_KEEP_STACK is a debugging knob: when it is set to any non-empty
@@ -299,7 +299,7 @@ run_once() {
     '{
       schema: "dkim2.postfix-qualification-report.v1",
       lane: $lane,
-      message_draft: "draft-ietf-dkim-dkim2-spec-08",
+      message_draft: "draft-ietf-dkim-dkim2-spec-09",
       dns_draft: "draft-ietf-dkim-dkim2-dns-02",
       base_revision: $base_revision,
       candidate_snapshot_sha256: $candidate,

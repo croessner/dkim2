@@ -7,12 +7,12 @@ import (
 
 const (
 	// MLDSA44PublicKeyBytes is the exact FIPS 204 ML-DSA-44 public-key size.
-	// Draft-08 Section 14.5: any other length is a malformed key.
+	// Draft-09 Section 14.5: any other length is a malformed key.
 	MLDSA44PublicKeyBytes = mldsa.MLDSA44PublicKeySize
 	// MLDSA44SignatureBytes is the exact FIPS 204 ML-DSA-44 signature size
-	// (3228 base64 characters, Draft-08 Section 3.4).
+	// (3228 base64 characters, Draft-09 Section 3.4).
 	MLDSA44SignatureBytes = mldsa.MLDSA44SignatureSize
-	// MLDSA44Context is the Draft-08 Section 3.4 ML-DSA context string: the
+	// MLDSA44Context is the Draft-09 Section 3.4 ML-DSA context string: the
 	// five ASCII octets "DKIM2" without terminator, used for signing and
 	// verifying.
 	MLDSA44Context = "DKIM2"
@@ -66,7 +66,7 @@ func ParseMLDSA44PublicKey(raw []byte) (*mldsa.PublicKey, error) {
 }
 
 // MLDSA44SignerOptions returns the signing options every mldsa44 signer uses:
-// pure ML-DSA.Sign over the message representative with the Draft-08
+// pure ML-DSA.Sign over the message representative with the Draft-09
 // Section 3.4 context string "DKIM2". A custody signer passes them to the
 // hedged (randomized) crypto/mldsa PrivateKey.Sign; the deterministic variant
 // is not used in production.

@@ -7,14 +7,24 @@ import (
 	"time"
 )
 
+// cacheKey identifies one cached lookup. The owner grammar separates the
+// selector-key and Domain Policy Record key spaces; a policy key carries no
+// algorithm.
 type cacheKey struct {
 	owner     string
 	algorithm Algorithm
 }
 
+// cacheValue holds the detached outcome of the kind the cache key names.
+type cacheValue struct {
+	key    KeyOutcome
+	policy DomainPolicyOutcome
+}
+
 type cacheEntry struct {
 	key         cacheKey
 	outcome     KeyOutcome
+	policy      DomainPolicyOutcome
 	expiry      time.Time
 	recency     *list.Element
 	expiryIndex int
@@ -23,10 +33,10 @@ type cacheEntry struct {
 type expiryQueue []*cacheEntry
 
 type cacheAdmission struct {
-	key     cacheKey
-	outcome KeyOutcome
-	expiry  time.Time
-	now     time.Time
+	key    cacheKey
+	value  cacheValue
+	expiry time.Time
+	now    time.Time
 }
 
 // outcomeCache owns a bounded deterministic TTL/LRU result cache.
@@ -47,39 +57,58 @@ func newOutcomeCache(capacity int, clock func() time.Time) *outcomeCache {
 	return &outcomeCache{entries: make(map[cacheKey]*cacheEntry, capacity), capacity: capacity, clock: clock}
 }
 
-// get returns a detached live entry or reports detected internal corruption.
+// get returns a detached live key entry or reports detected internal corruption.
 func (c *outcomeCache) get(key cacheKey) (KeyOutcome, bool, bool) {
+	value, hit, corrupt := c.lookup(key)
+	return value.key, hit, corrupt
+}
+
+// getPolicy returns a detached live Domain Policy Record entry or reports
+// detected internal corruption.
+func (c *outcomeCache) getPolicy(key cacheKey) (DomainPolicyOutcome, bool, bool) {
+	value, hit, corrupt := c.lookup(key)
+	return value.policy, hit, corrupt
+}
+
+// lookup returns a detached live entry of either kind or reports detected internal corruption.
+func (c *outcomeCache) lookup(key cacheKey) (cacheValue, bool, bool) {
 	if c == nil || c.capacity == 0 || c.clock == nil {
-		return KeyOutcome{}, false, false
+		return cacheValue{}, false, false
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	entry, ok := c.entries[key]
 	if !ok {
-		return KeyOutcome{}, false, false
+		return cacheValue{}, false, false
 	}
 	if entry == nil {
 		delete(c.entries, key)
-		return KeyOutcome{}, false, true
+		return cacheValue{}, false, true
 	}
 	now := c.clock()
-	if entry.key != key || !cacheKeyValid(key) || !cacheOutcomeValidForKey(entry.outcome, key) ||
+	value := cacheValue{key: entry.outcome, policy: entry.policy}
+	if entry.key != key || !cacheKeyValid(key) || !cacheValueValidForKey(value, key) ||
 		entry.expiry.IsZero() || entry.recency == nil {
 		c.removeEntryLocked(key, entry)
-		return KeyOutcome{}, false, true
+		return cacheValue{}, false, true
 	}
 	if !now.Before(entry.expiry) {
 		c.removeEntryLocked(key, entry)
-		return KeyOutcome{}, false, false
+		return cacheValue{}, false, false
 	}
 	c.recency.MoveToBack(entry.recency)
-	return cloneKeyOutcome(entry.outcome), true, false
+	return cloneCacheValue(value), true, false
 }
 
-// put stores a detached stable outcome only for a bounded trustworthy lifetime.
+// put stores a detached stable key outcome only for a bounded trustworthy lifetime.
 func (c *outcomeCache) put(key cacheKey, outcome KeyOutcome, ttl time.Duration) bool {
+	return c.putValue(key, cacheValue{key: outcome}, ttl)
+}
+
+// putValue stores a detached stable outcome of either kind only for a bounded trustworthy lifetime.
+func (c *outcomeCache) putValue(key cacheKey, value cacheValue, ttl time.Duration) bool {
 	if c == nil || c.capacity == 0 || c.clock == nil || ttl <= 0 || ttl > 24*time.Hour ||
-		!cacheKeyValid(key) || !cacheOutcomeValidForKey(outcome, key) {
+		!cacheKeyValid(key) || !cacheValueValidForKey(value, key) {
 		return false
 	}
 	c.mu.Lock()
@@ -89,35 +118,35 @@ func (c *outcomeCache) put(key cacheKey, outcome KeyOutcome, ttl time.Duration) 
 	if !expiry.After(now) || expiry.Year() > 9999 {
 		return false
 	}
-	return c.putLocked(key, cloneKeyOutcome(outcome), expiry, now)
+	return c.putLocked(key, cloneCacheValue(value), expiry, now)
 }
 
 // prepareAdmission validates and clones cache state without making it visible.
-func (c *outcomeCache) prepareAdmission(key cacheKey, outcome KeyOutcome, expiry time.Time) (cacheAdmission, bool) {
+func (c *outcomeCache) prepareAdmission(key cacheKey, value cacheValue, expiry time.Time) (cacheAdmission, bool) {
 	if c == nil || c.capacity == 0 || c.clock == nil || expiry.IsZero() ||
-		!cacheKeyValid(key) || !cacheOutcomeValidForKey(outcome, key) {
+		!cacheKeyValid(key) || !cacheValueValidForKey(value, key) {
 		return cacheAdmission{}, false
 	}
 	now := c.clock()
 	if !expiry.After(now) || expiry.Year() > 9999 {
 		return cacheAdmission{}, false
 	}
-	return cacheAdmission{key: key, outcome: cloneKeyOutcome(outcome), expiry: expiry, now: now}, true
+	return cacheAdmission{key: key, value: cloneCacheValue(value), expiry: expiry, now: now}, true
 }
 
 // commitAdmission makes one prepared entry visible without invoking external callbacks.
 func (c *outcomeCache) commitAdmission(admission cacheAdmission) bool {
-	if c == nil || !cacheKeyValid(admission.key) || !cacheOutcomeValidForKey(admission.outcome, admission.key) ||
+	if c == nil || !cacheKeyValid(admission.key) || !cacheValueValidForKey(admission.value, admission.key) ||
 		admission.expiry.IsZero() || !admission.expiry.After(admission.now) {
 		return false
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.putLocked(admission.key, admission.outcome, admission.expiry, admission.now)
+	return c.putLocked(admission.key, admission.value, admission.expiry, admission.now)
 }
 
 // putLocked inserts or replaces one already-cloned live entry.
-func (c *outcomeCache) putLocked(key cacheKey, outcome KeyOutcome, expiry, now time.Time) bool {
+func (c *outcomeCache) putLocked(key cacheKey, value cacheValue, expiry, now time.Time) bool {
 	c.purgeExpiredLocked(now)
 	if len(c.entries) != c.recency.Len() || len(c.entries) != len(c.expiries) {
 		c.repairCorruptEntriesLocked()
@@ -126,7 +155,8 @@ func (c *outcomeCache) putLocked(key cacheKey, outcome KeyOutcome, expiry, now t
 		if existing == nil || existing.key != key || existing.recency == nil {
 			c.removeEntryLocked(key, existing)
 		} else {
-			existing.outcome = outcome
+			existing.outcome = value.key
+			existing.policy = value.policy
 			existing.expiry = expiry
 			c.recency.MoveToBack(existing.recency)
 			if c.expiryEntryIndexed(existing) {
@@ -140,7 +170,7 @@ func (c *outcomeCache) putLocked(key cacheKey, outcome KeyOutcome, expiry, now t
 	if len(c.entries) >= c.capacity {
 		c.evictLeastRecentLocked()
 	}
-	entry := &cacheEntry{key: key, outcome: outcome, expiry: expiry, expiryIndex: -1}
+	entry := &cacheEntry{key: key, outcome: value.key, policy: value.policy, expiry: expiry, expiryIndex: -1}
 	entry.recency = c.recency.PushBack(entry)
 	c.entries[key] = entry
 	heap.Push(&c.expiries, entry)
@@ -240,9 +270,32 @@ func (q *expiryQueue) Pop() any {
 	return entry
 }
 
-// cacheKeyValid checks bounded internal key identity without exposing its value.
+// cacheKeyValid checks bounded internal key identity without exposing its
+// value: a selector owner requires a known algorithm and a Domain Policy
+// Record owner requires none.
 func cacheKeyValid(key cacheKey) bool {
-	return ValidAbsoluteOwner(key.owner) && key.algorithm.Known()
+	kind, ok := ClassifyAbsoluteOwner(key.owner)
+	if !ok {
+		return false
+	}
+	if kind == OwnerKindDomainPolicy {
+		return key.algorithm == ""
+	}
+	return key.algorithm.Known()
+}
+
+// cacheValueValidForKey validates that exactly the outcome of the key's kind
+// is present and admissible.
+func cacheValueValidForKey(value cacheValue, key cacheKey) bool {
+	if OwnerKindDomainPolicy.ValidAbsoluteOwner(key.owner) {
+		return value.key.IsZero() && value.policy.cacheable()
+	}
+	return value.policy == (DomainPolicyOutcome{}) && cacheOutcomeValidForKey(value.key, key)
+}
+
+// cloneCacheValue detaches key material; policy outcomes carry no references.
+func cloneCacheValue(value cacheValue) cacheValue {
+	return cacheValue{key: cloneKeyOutcome(value.key), policy: value.policy}
 }
 
 // cacheOutcomeValidForKey validates admission and lookup state coherence.

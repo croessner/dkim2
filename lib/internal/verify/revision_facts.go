@@ -20,7 +20,7 @@ const (
 	// RevisionSetSupportedPass reports one known supported passing set.
 	RevisionSetSupportedPass RevisionSetState = "supported_pass"
 	// RevisionSetIgnoredUnknown reports one unknown-algorithm set in a field
-	// that passed through another Draft-08 sig-all group.
+	// that passed through another Draft-09 sig-all group.
 	RevisionSetIgnoredUnknown RevisionSetState = "ignored_unknown"
 	// RevisionSetAlternativeNotPassed reports one implemented-algorithm set
 	// whose intermediate was not PASS (mismatch, key error, or locally
@@ -369,6 +369,7 @@ func (f RevisionHistoryFacts) Valid() bool {
 // RevisionUsage stores aggregate all-hop proof work.
 type RevisionUsage struct {
 	protocolFields, signatureSets, keyLookups, providerCalls       int
+	domainPolicyLookups                                            int
 	canonicalBytes, currentCanonicalBytes, signatureCanonicalBytes int
 	history                                                        HistoryUsage
 }
@@ -393,8 +394,13 @@ func (u RevisionUsage) SignatureSets() int { return u.signatureSets }
 // KeyLookups returns supported-set lookup count.
 func (u RevisionUsage) KeyLookups() int { return u.keyLookups }
 
-// ProviderCalls returns actual provider callback count.
+// ProviderCalls returns actual provider callback count: key lookups plus
+// Domain Policy Record lookups.
 func (u RevisionUsage) ProviderCalls() int { return u.providerCalls }
+
+// DomainPolicyLookups returns the Draft-09 Section 3.8 Domain Policy Record
+// lookups made for deduplicated upward From candidates.
+func (u RevisionUsage) DomainPolicyLookups() int { return u.domainPolicyLookups }
 
 // CanonicalBytes returns aggregate Section 6 and Section 12.8 input bytes.
 func (u RevisionUsage) CanonicalBytes() int { return u.canonicalBytes }
@@ -410,7 +416,8 @@ func (u RevisionUsage) History() HistoryUsage { return u.history }
 
 // Valid reports whether aggregate counts are nonnegative and callback-exact.
 func (u RevisionUsage) Valid() bool {
-	return u.protocolFields > 0 && u.signatureSets > 0 && u.keyLookups > 0 && u.providerCalls == u.keyLookups &&
+	return u.protocolFields > 0 && u.signatureSets > 0 && u.keyLookups > 0 && u.domainPolicyLookups >= 0 &&
+		u.providerCalls == u.keyLookups+u.domainPolicyLookups &&
 		u.currentCanonicalBytes > 0 && u.signatureCanonicalBytes > 0 && u.history.Valid() &&
 		u.canonicalBytes == u.currentCanonicalBytes+u.signatureCanonicalBytes+u.history.CanonicalBytes()
 }

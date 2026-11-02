@@ -733,11 +733,13 @@ func (o *Onboarding) stagePreparedCandidate(
 	return o.success(ctx, CommandPrepare, journal, false)
 }
 
-// DNSExport writes one protected deterministic artifact from exact committed readback.
+// DNSExport writes one protected deterministic artifact from exact committed
+// readback, with the optional records options selects.
 func (o *Onboarding) DNSExport(
 	ctx context.Context,
 	store *JournalStore,
 	path string,
+	options DNSExportOptions,
 ) (OnboardingResult, error) {
 	ctx, cancel, err := o.commandContext(ctx)
 	if err != nil {
@@ -766,7 +768,7 @@ func (o *Onboarding) DNSExport(
 	defer set.Close()       //nolint:errcheck // Command cleanup has no recovery action.
 	defer candidate.Close() //nolint:errcheck // Command cleanup has no recovery action.
 	defer plan.Close()      //nolint:errcheck // Command cleanup has no recovery action.
-	if _, err := ExportDNS(ctx, path, set, o.limits); err != nil {
+	if _, err := ExportDNS(ctx, path, set, options, o.limits); err != nil {
 		return o.failureForJournal(ctx, CommandDNSExport, journal, CodeOf(err))
 	}
 	if err := journal.RecordDNSExported(); err != nil {

@@ -2,7 +2,7 @@
 
 Status: repository qualification, 2026-09-14. This is not a production deployment
 receipt or a claim that every recommendation is implemented. The message
-baseline remains `draft-ietf-dkim-dkim2-spec-08`. The DNS baseline is
+baseline remains `draft-ietf-dkim-dkim2-spec-09`. The DNS baseline is
 `draft-ietf-dkim-dkim2-dns-02`. The individual Sender Policy
 proposal is outside this change and supplies no behavior or configuration.
 
@@ -17,10 +17,11 @@ This evidence does not establish full production compliance.
 
 | Document | Version | Disposition |
 | --- | --- | --- |
-| [Message specification](https://datatracker.ietf.org/doc/draft-ietf-dkim-dkim2-spec/06/) | 2026-08-28, `-06` | Existing behavior baseline |
-| [DNS specification](https://datatracker.ietf.org/doc/draft-ietf-dkim-dkim2-dns/00/) | 2026-07-20, `-00` | Active identifiers and vectors migrated; no DNS behavior change |
+| [Message specification](https://datatracker.ietf.org/doc/draft-ietf-dkim-dkim2-spec/09/) | 2026-11-01, `-09` | Behavior baseline; see `docs/specs/draft-09-migration-disposition.md` |
+| [DNS specification](https://datatracker.ietf.org/doc/draft-ietf-dkim-dkim2-dns/02/) | 2026-10-21, `-02` | Behavior baseline; unchanged by the Draft-09 migration |
 | [Best Practices](https://datatracker.ietf.org/doc/draft-ietf-dkim-dkim2-bcp/01/) | 2026-09-09, `-01` | Section matrix below; deployment evidence remains separate |
-| [Authentication-Results](https://datatracker.ietf.org/doc/draft-gondwana-dkim2-authres/00/) | individual `-00`, announced 2026-09-05 | Bounded implementation profile below; not a claim of WG adoption |
+| [Authentication-Results](https://datatracker.ietf.org/doc/draft-gondwana-dkim2-authres/01/) | individual `-01`, 2026-10-28 | Bounded implementation profile below, including `dkim2=none`; not a claim of WG adoption |
+| [Debug header](https://datatracker.ietf.org/doc/draft-gondwana-dkim2-debug-header/02/) | individual `-02`, 2026-10-28 | Optional `X-DKIM2-Info` emission in `dkim2d`; behavior-date `date=`; hop block order kept (see the Draft-09 disposition) |
 
 ## DNS migration evidence
 
@@ -78,7 +79,7 @@ addresses, selectors, message content, or credentials in diagnostics.
 | --- | --- |
 | 3, single result | One daemon-owned action for eligible inbound accept/continue results. Authentication is separate from local delivery policy. |
 | 3.1, four states | Existing final authentication/replay mapping retained; lowercase wire spelling. |
-| 3.1, `none` recommendation | **Documented exception:** both protocol families absent keep the stable bodyless HTTP 204 and no mutation. Adapters can distinguish this from an unexecuted call via HTTP status. A partial claim still undergoes verification and cannot become unsigned. Changing this would require a separately versioned applicability/action contract. |
+| 3.1, `none` recommendation | Implemented with the Draft-09 contract: a message with neither protocol family returns HTTP 200 with verification and authentication state `NONE`, policy `continue`/`none`, replay `not_checked`, and, when a reporting authority is configured, exactly one `<authserv-id>; dkim2=none` action without a comment. No verification, policy evaluation, replay, DNS, or signing work runs. A partial claim still undergoes verification and is never `none`. |
 | 3.2.1, optional origin | Omitted. This profile does not disclose a historical identity or assert that current-only verification authenticated the origin. No highest-hop-to-origin substitution. |
 | 3.2.2, optional failure index | Omitted. Public presentation caps and message-wide failures do not always identify a unique signature; the current target must not be substituted for a historical failure. |
 | 3.3, diagnostics | Bounded closed reason comments added to delivered failures. **Documented exception:** substituted verbatim failure text and hop/domain lists are omitted to preserve repository privacy rules. Structured protected diagnostics remain separate. |
@@ -109,7 +110,7 @@ labels alone proves a production installation complies.
 
 | BCP section | Status | Repository evidence and remaining work |
 | --- | --- | --- |
-| 1–2, terminology | covered | Architecture pins Draft-08; no second protocol model introduced. |
+| 1–2, terminology | covered | Architecture pins Draft-09; no second protocol model introduced. |
 | 3.1, key size | covered/operator | `lib/internal/keyresolver`, signing tests, native onboarding. Verify deployed profiles independently. |
 | 3.2, multiple algorithms | covered/operator | `lib/signing_facade_test.go`, `lib/signing_datasource_integration_test.go`; actual selected profiles need inspection. |
 | 3.3, DKIM1 coexistence | operator | DKIM1 is explicitly outside the library. Prove both signatures after the final filter in the owning mailstack. |
@@ -119,7 +120,7 @@ labels alone proves a production installation complies.
 | 4.1, flags | covered/operator | Signing profiles and `lib/internal/policy/compliance_test.go`. Select flags per workload; defaults are not rewritten here. |
 | 5.1, inbound checks | partial/operator | DKIM2 verifier exists. DKIM1 verification and ordering belong to the surrounding mail pipeline. |
 | 5.2, unchanged forwarding | covered/operator | Signing/revision supports unchanged instances; `lib/signing_facade_test.go`. Prove every forwarding route invokes it. |
-| 5.3, From handling | operator | Revision records header changes; DMARC lookup and automatic From rewriting are outside this library. Existing modification prohibitions remain intact. |
+| 5.3, From handling | covered/operator | Revision records header changes; DMARC lookup and automatic From rewriting are outside this library. Existing modification prohibitions remain intact. Draft-09 Domain Policy Records: verifier evaluation in `lib/internal/verify` and `f=strict` export through `dkim2d datasource domain dns export --domain-policy-strict`; publication is an operator decision. |
 | 5.4, recipient privacy | partial/operator | `feedhere` intent exists. Per-subscriber recipient alias provisioning is not implemented in this repository. Never describe normal `rt=` emission as anonymous. |
 | 5.5, request enforcement | covered/operator | Policy compliance and signing/revision tests; prove the outbound route cannot bypass enforcement. |
 | 5.6, imaginary hops | covered/operator | `lib/internal/signature/custody_test.go`, `lib/signing_next_domain_regression_test.go`; out-of-band business authority requires documentation. |
@@ -127,7 +128,7 @@ labels alone proves a production installation complies.
 | 5.8, DSN rebuild | covered/operator | `lib/dsn_propagation_test.go`, `lib/internal/dsn/rebuild_test.go`; deployment and private-route proof remain necessary. |
 | 6.1.1, continuous chain | covered | Chain scope, historical coverage, custody and replay remain separate authenticated facts. |
 | 6.1.2, interrupted chain | partial/open | No automatic DKIM1 bridge or inferred trust from missing hops. Local policy owns any explicit compatibility decision. |
-| 6.1.3, unsigned | covered/operator | Existing HTTP 204 applicability contract; independent spam/SPF/DKIM1 policy must still run. |
+| 6.1.3, unsigned | covered/operator | HTTP 200 `NONE` applicability result with the optional `dkim2=none` report; independent spam/SPF/DKIM1 policy must still run. |
 | 6.2, result handling | covered/operator | Daemon outcome matrix, Milter EOM and Exim admission; verify SMTP replies on the deployed adapters. |
 | 6.3, inbound DSNs | covered/operator | `lib/received_dsn_policy_test.go`, `lib/received_dsn_vector_test.go`; locality and production routing require external evidence. |
 | 7.1, coexistence | operator | Same mailstack-owned DKIM1 and DKIM2 proof as 3.3 and 5.1. |

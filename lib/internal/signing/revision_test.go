@@ -74,7 +74,7 @@ func TestVerifyForRevisionOutcomeCapabilityErrorMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("verify.NewStaticKeyProvider(nil) error = %v", err)
 	}
-	missingVerifier, err := verify.NewVerifier(missingProvider, revisionTestClockOption())
+	missingVerifier, err := verify.NewVerifier(missingProvider, revisionTestClockOption(), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()))
 	if err != nil {
 		t.Fatalf("verify.NewVerifier(missing) error = %v", err)
 	}
@@ -83,7 +83,7 @@ func TestVerifyForRevisionOutcomeCapabilityErrorMatrix(t *testing.T) {
 	temporaryProvider := revisionProviderFunc(func(context.Context, verify.KeyQuery) (verify.PublicKey, error) {
 		return verify.PublicKey{}, verify.NewProviderFailure(verify.ProviderFailureTemporary)
 	})
-	temporaryVerifier, err := verify.NewVerifier(temporaryProvider, revisionTestClockOption())
+	temporaryVerifier, err := verify.NewVerifier(temporaryProvider, revisionTestClockOption(), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()))
 	if err != nil {
 		t.Fatalf("verify.NewVerifier(temporary) error = %v", err)
 	}
@@ -92,7 +92,7 @@ func TestVerifyForRevisionOutcomeCapabilityErrorMatrix(t *testing.T) {
 	contractProvider := revisionProviderFunc(func(_ context.Context, query verify.KeyQuery) (verify.PublicKey, error) {
 		return verify.PublicKey{Algorithm: query.Algorithm, Material: fixture.publicKey, Metadata: verify.KeyMetadata{Status: verify.KeyStatusFound, Source: "unsafe/source"}}, nil
 	})
-	contractVerifier, err := verify.NewVerifier(contractProvider, revisionTestClockOption())
+	contractVerifier, err := verify.NewVerifier(contractProvider, revisionTestClockOption(), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()))
 	if err != nil {
 		t.Fatalf("verify.NewVerifier(contract) error = %v", err)
 	}
@@ -103,7 +103,7 @@ func TestVerifyForRevisionOutcomeCapabilityErrorMatrix(t *testing.T) {
 	limitedProof, err := verify.NewVerifier(
 		mustRevisionStaticProvider(t, fixture),
 		revisionTestClockOption(),
-		verify.WithRevisionLimits(limitedOptions),
+		verify.WithRevisionLimits(limitedOptions), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()),
 	)
 	if err != nil {
 		t.Fatalf("verify.NewVerifier(limited) error = %v", err)
@@ -280,7 +280,7 @@ func TestVerifiedRevisionInputSealsExactEvidenceAndPreservesRevisedContent(t *te
 	}
 }
 
-// TestVerifyForRevisionRefusesExplicitNullBodyHistory reproduces Draft-08
+// TestVerifyForRevisionRefusesExplicitNullBodyHistory reproduces Draft-09
 // Sections 12 and 13: a history with a "b":null Recipe is not a Fully
 // Verified DKIM2 Message, so the revision gate issues no signing capability
 // and the message cannot be signed again as transit or revision.
@@ -314,7 +314,7 @@ func TestVerifyForRevisionRefusesExplicitNullBodyHistory(t *testing.T) {
 	}
 }
 
-// TestRevisionProofChecksFromRewriteAcrossNullBodyHistory reproduces Draft-08
+// TestRevisionProofChecksFromRewriteAcrossNullBodyHistory reproduces Draft-09
 // Sections 11 and 14.8 across a b:null transition: the header state is still
 // reconstructed, so a From rewrite at m=2 must be Authentic for the reviser's
 // d=. An aligned rewrite reaches the Section 13 null-body decision instead;
@@ -346,7 +346,7 @@ func TestVerifiedRevisionInputRechecksFourteenDayExpiryAtConsumption(t *testing.
 	now := time.Unix(int64(revisionTestTimestamp), 0).Add(time.Hour)
 	proof, err := verify.NewVerifier(
 		mustRevisionStaticProvider(t, fixture),
-		verify.WithClock(func() time.Time { return now }),
+		verify.WithClock(func() time.Time { return now }), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()),
 	)
 	if err != nil {
 		t.Fatalf("verify.NewVerifier() error = %v", err)
@@ -381,7 +381,7 @@ func TestPreparedSigningRevalidationSharesOneInstantAndDefersProviderCalls(t *te
 		verify.WithClock(func() time.Time {
 			clockCalls++
 			return time.Unix(int64(revisionTestTimestamp), 0).Add(time.Hour)
-		}),
+		}), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()),
 	)
 	if err != nil {
 		t.Fatalf("verify.NewVerifier() error = %v", err)
@@ -543,7 +543,7 @@ func TestRevisionPreflightRejectsInherentlyUnextendableEvidenceBeforeKeyLookup(t
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			provider := &countingPlanKeyProvider{delegate: mustRevisionStaticProvider(t, fixture)}
-			proof, err := verify.NewVerifier(provider, revisionTestClockOption())
+			proof, err := verify.NewVerifier(provider, revisionTestClockOption(), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()))
 			if err != nil {
 				t.Fatalf("verify.NewVerifier() error = %v", err)
 			}
@@ -791,7 +791,7 @@ func mustRevisionStaticProvider(t *testing.T, fixture revisionTestFixture) verif
 // newRevisionTestVerifier constructs a deterministic sealed revision verifier.
 func newRevisionTestVerifier(t *testing.T, fixture revisionTestFixture, entropy *bytes.Reader) RevisionVerifier {
 	t.Helper()
-	proof, err := verify.NewVerifier(mustRevisionStaticProvider(t, fixture), revisionTestClockOption())
+	proof, err := verify.NewVerifier(mustRevisionStaticProvider(t, fixture), revisionTestClockOption(), verify.WithFromAuthorization(verify.DownwardOnlyFromAuthorization()))
 	if err != nil {
 		t.Fatalf("verify.NewVerifier() error = %v", err)
 	}

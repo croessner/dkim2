@@ -11,7 +11,7 @@ import (
 	"github.com/croessner/dkim2/internal/rawmsg"
 )
 
-// TestHeaderHashInputExcludesDraftHeaderClasses verifies Draft-08 Section 4 and Section 6.2 exclusions.
+// TestHeaderHashInputExcludesDraftHeaderClasses verifies Draft-09 Section 4 and Section 6.2 exclusions.
 func TestHeaderHashInputExcludesDraftHeaderClasses(t *testing.T) {
 	msg := mustParseHeaderMessage(t, []byte(
 		"Received: by mx.example\r\n"+
@@ -52,8 +52,8 @@ func TestHeaderHashInputExcludesDraftHeaderClasses(t *testing.T) {
 	}
 }
 
-// TestHeaderRelevanceDraft08UnsignedSet proves every exact and patterned Draft-08 exclusion and ARC near miss.
-func TestHeaderRelevanceDraft08UnsignedSet(t *testing.T) {
+// TestHeaderRelevanceDraft09UnsignedSet proves every exact and patterned Draft-09 exclusion and ARC near miss.
+func TestHeaderRelevanceDraft09UnsignedSet(t *testing.T) {
 	relevance := NewHeaderRelevance()
 	tests := []struct {
 		name     string
@@ -86,10 +86,10 @@ func TestHeaderRelevanceDraft08UnsignedSet(t *testing.T) {
 	}
 }
 
-// TestHeaderHashInputAppliesDraft08UnsignedSet proves canonical bytes and
-// bounded categories, including the Draft-08 Section 4 removal of
+// TestHeaderHashInputAppliesDraft09UnsignedSet proves canonical bytes and
+// bounded categories, including the Draft-09 Section 4 removal of
 // Auto-Submitted and VBR-Info from the unsigned set.
-func TestHeaderHashInputAppliesDraft08UnsignedSet(t *testing.T) {
+func TestHeaderHashInputAppliesDraft09UnsignedSet(t *testing.T) {
 	msg := mustParseHeaderMessage(t, []byte(
 		"Apparently-To: excluded\r\n"+
 			"Auto-Submitted: signed\r\n"+
@@ -120,8 +120,8 @@ func TestHeaderHashInputAppliesDraft08UnsignedSet(t *testing.T) {
 }
 
 // TestDraft07SignatureFailsUnderDraft08HeaderRules proves the Draft-07 to
-// Draft-08 PASS-to-FAIL hash boundary: Draft-07 Section 4 ignored
-// Auto-Submitted and VBR-Info, while Draft-08 Section 4 signs both again, as
+// Draft-09 PASS-to-FAIL hash boundary: Draft-07 Section 4 ignored
+// Auto-Submitted and VBR-Info, while Draft-09 Section 4 signs both again, as
 // Draft-04 already did.
 func TestDraft07SignatureFailsUnderDraft08HeaderRules(t *testing.T) {
 	msg := mustParseHeaderMessage(t, []byte(
@@ -132,61 +132,61 @@ func TestDraft07SignatureFailsUnderDraft08HeaderRules(t *testing.T) {
 
 	draft07Canonical := retiredHeaderHashInputOracle(msg, draft07UnsignedHeaderName)
 	draft04Canonical := retiredHeaderHashInputOracle(msg, draft04UnsignedHeaderName)
-	draft08Result, err := mustCanonicalizer(t).HeaderHashFromMessage(msg)
+	draft09Result, err := mustCanonicalizer(t).HeaderHashFromMessage(msg)
 	if err != nil {
 		t.Fatalf("HeaderHashFromMessage() error = %v", err)
 	}
-	draft08Canonical := draft08Result.CanonicalBytes().Bytes()
+	draft09Canonical := draft09Result.CanonicalBytes().Bytes()
 
-	const draft08SignedCanonical = "auto-submitted:auto-generated\r\nfrom:sender@example.test\r\n" +
+	const draft09SignedCanonical = "auto-submitted:auto-generated\r\nfrom:sender@example.test\r\n" +
 		"subject:draft-07 signer\r\nvbr-info:md=example.test; mc=all; mv=vouch.example\r\n"
 	wireDigest := mustDecodeHeaderBoundaryDigest(t, "BfqIDwNincoe860MpYhWJSUxgug7n8N+V+6W4uUh6oc=")
 	draft07Digest := assertHeaderBoundaryOracle(t, "Draft-07", draft07Canonical,
 		"from:sender@example.test\r\nsubject:draft-07 signer\r\n",
 		"BfqIDwNincoe860MpYhWJSUxgug7n8N+V+6W4uUh6oc=")
-	draft08Digest := assertHeaderBoundaryOracle(t, "Draft-08", draft08Canonical, draft08SignedCanonical, "cNJsNoGDkW42v2ccAziR4YU0HbBUYjL9zKiQx7SRsCM=")
-	draft04Digest := assertHeaderBoundaryOracle(t, "Draft-04", draft04Canonical, draft08SignedCanonical, "cNJsNoGDkW42v2ccAziR4YU0HbBUYjL9zKiQx7SRsCM=")
-	assertDraft08ResultDigest(t, draft08Result, draft08Digest)
+	draft09Digest := assertHeaderBoundaryOracle(t, "Draft-09", draft09Canonical, draft09SignedCanonical, "cNJsNoGDkW42v2ccAziR4YU0HbBUYjL9zKiQx7SRsCM=")
+	draft04Digest := assertHeaderBoundaryOracle(t, "Draft-04", draft04Canonical, draft09SignedCanonical, "cNJsNoGDkW42v2ccAziR4YU0HbBUYjL9zKiQx7SRsCM=")
+	assertDraft09ResultDigest(t, draft09Result, draft09Digest)
 
 	if sameDraftPass := bytes.Equal(wireDigest, draft07Digest[:]); !sameDraftPass {
 		t.Fatal("Draft-07 wire digest did not PASS under Draft-07 header rules")
 	}
-	if crossDraftPass := bytes.Equal(wireDigest, draft08Digest[:]); crossDraftPass {
-		t.Fatal("Draft-07 wire digest did not FAIL under Draft-08 header rules")
+	if crossDraftPass := bytes.Equal(wireDigest, draft09Digest[:]); crossDraftPass {
+		t.Fatal("Draft-07 wire digest did not FAIL under Draft-09 header rules")
 	}
-	if draft04Digest != draft08Digest {
-		t.Fatal("Draft-08 did not sign Auto-Submitted and VBR-Info as Draft-04 did")
+	if draft04Digest != draft09Digest {
+		t.Fatal("Draft-09 did not sign Auto-Submitted and VBR-Info as Draft-04 did")
 	}
 }
 
-// TestDraft08SignatureFailsUnderDraft04HeaderRules proves the current-to-legacy PASS-to-FAIL hash boundary.
-func TestDraft08SignatureFailsUnderDraft04HeaderRules(t *testing.T) {
+// TestDraft09SignatureFailsUnderDraft04HeaderRules proves the current-to-legacy PASS-to-FAIL hash boundary.
+func TestDraft09SignatureFailsUnderDraft04HeaderRules(t *testing.T) {
 	msg := mustParseHeaderMessage(t, []byte(
 		"From: sender@example.test\r\n"+
 			"Apparently-To: recipient@example.test\r\n"+
 			"Subject: current signer\r\n"))
 
-	draft08Result, err := mustCanonicalizer(t).HeaderHashFromMessage(msg)
+	draft09Result, err := mustCanonicalizer(t).HeaderHashFromMessage(msg)
 	if err != nil {
 		t.Fatalf("HeaderHashFromMessage() error = %v", err)
 	}
-	draft08Canonical := draft08Result.CanonicalBytes().Bytes()
+	draft09Canonical := draft09Result.CanonicalBytes().Bytes()
 	draft04Canonical := retiredHeaderHashInputOracle(msg, draft04UnsignedHeaderName)
 
 	wireDigest := mustDecodeHeaderBoundaryDigest(t, "2yds7Wq4hBcmcIL4vWoD6vPB3UBVBJMvkkhAWqpYxD0=")
-	draft08Digest := assertHeaderBoundaryOracle(t, "Draft-08", draft08Canonical,
+	draft09Digest := assertHeaderBoundaryOracle(t, "Draft-09", draft09Canonical,
 		"from:sender@example.test\r\nsubject:current signer\r\n",
 		"2yds7Wq4hBcmcIL4vWoD6vPB3UBVBJMvkkhAWqpYxD0=")
 	draft04Digest := assertHeaderBoundaryOracle(t, "Draft-04", draft04Canonical,
 		"apparently-to:recipient@example.test\r\nfrom:sender@example.test\r\nsubject:current signer\r\n",
 		"lbD4XmQeNiOdO2URVEVkDPnJCgskeYos8iVd+9TX0JU=")
-	assertDraft08ResultDigest(t, draft08Result, draft08Digest)
+	assertDraft09ResultDigest(t, draft09Result, draft09Digest)
 
-	if sameDraftPass := bytes.Equal(wireDigest, draft08Digest[:]); !sameDraftPass {
-		t.Fatal("Draft-08 wire digest did not PASS under Draft-08 header rules")
+	if sameDraftPass := bytes.Equal(wireDigest, draft09Digest[:]); !sameDraftPass {
+		t.Fatal("Draft-09 wire digest did not PASS under Draft-09 header rules")
 	}
 	if crossDraftPass := bytes.Equal(wireDigest, draft04Digest[:]); crossDraftPass {
-		t.Fatal("Draft-08 wire digest did not FAIL under Draft-04 header rules")
+		t.Fatal("Draft-09 wire digest did not FAIL under Draft-04 header rules")
 	}
 }
 
@@ -256,12 +256,12 @@ func assertHeaderBoundaryOracle(t *testing.T, draft string, canonical []byte, wa
 	return digest
 }
 
-// assertDraft08ResultDigest verifies that production hashing matches the fixed Draft-08 oracle.
-func assertDraft08ResultDigest(t *testing.T, result Result, want [sha256.Size]byte) {
+// assertDraft09ResultDigest verifies that production hashing matches the fixed Draft-09 oracle.
+func assertDraft09ResultDigest(t *testing.T, result Result, want [sha256.Size]byte) {
 	t.Helper()
 	digest, ok := result.Digest()
 	if !ok || digest.Algorithm() != HashAlgorithmSHA256 || !bytes.Equal(digest.Bytes(), want[:]) {
-		t.Fatalf("Draft-08 result digest present=%t algorithm=%q bytes_match=%t", ok, digest.Algorithm(), bytes.Equal(digest.Bytes(), want[:]))
+		t.Fatalf("Draft-09 result digest present=%t algorithm=%q bytes_match=%t", ok, digest.Algorithm(), bytes.Equal(digest.Bytes(), want[:]))
 	}
 }
 
@@ -324,7 +324,7 @@ func TestHeaderHashInputSortsDuplicatesByReverseOccurrence(t *testing.T) {
 	}
 }
 
-// TestHeaderHashInputSortsByLowercaseNameOctets pins the Draft-08 Section 6.2
+// TestHeaderHashInputSortsByLowercaseNameOctets pins the Draft-09 Section 6.2
 // order: ascending octet value of the lower-cased field names. The fixture
 // separates that rule from near misses: sorting by original case would put
 // "Z" before "_x" and "B" before "a", and sorting whole canonical lines would

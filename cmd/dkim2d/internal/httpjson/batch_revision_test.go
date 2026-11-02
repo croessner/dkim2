@@ -105,7 +105,7 @@ func newBatchBoundaryFixtureWith(t *testing.T, messageBody []byte, externalCopie
 	}
 	original = append(original, raw[offset:]...)
 	current := append([]byte("Received: by queue.hosted.test\r\n"), original...)
-	request := generated.BatchRevisionRequest{ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec08, Binding: strings.Repeat("a", 64),
+	request := generated.BatchRevisionRequest{ApiVersion: generated.V1, Draft: generated.DraftIetfDkimDkim2Spec09, Binding: strings.Repeat("a", 64),
 		Original: generated.BatchRevisionOriginal{Message: batchWireMessage(t, original), Smtp: batchWireSMTP(t, "<sender@hosted.test>", "<alias@hosted.test>")}}
 	request.Copies = []generated.BatchRevisionCopy{
 		{Id: "local", Delivery: generated.Local, Message: batchWireMessage(t, current), Smtp: batchWireSMTP(t, "<sender@hosted.test>", "<local@hosted.test>")},
@@ -217,7 +217,7 @@ func TestBatchRevisionHTTPRealCrypto(t *testing.T) {
 	if status != 200 || result.Result != generated.BatchRevisionResponseResultPass || len(result.Outputs) != 2 {
 		t.Fatalf("HTTP batch status=%d result=%s outputs=%d", status, result.Result, len(result.Outputs))
 	}
-	verifier, err := dkim2.NewVerifier(f.provider)
+	verifier, err := dkim2.NewVerifier(f.provider, dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatal("verifier failed")
 	}

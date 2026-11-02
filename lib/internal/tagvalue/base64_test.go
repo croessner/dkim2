@@ -10,6 +10,7 @@ import (
 const (
 	encodedMa  = "TWE="
 	encodedMan = "TWFu"
+	encodedM   = "TQ=="
 )
 
 // TestParseBase64StringAcceptsCanonicalValues verifies strict padded decoding.
@@ -22,9 +23,10 @@ func TestParseBase64StringAcceptsCanonicalValues(t *testing.T) {
 	}{
 		{name: "no padding needed", input: []byte(encodedMan), wantEncoded: encodedMan, wantDecoded: []byte("Man")},
 		{name: "one padding byte", input: []byte(encodedMa), wantEncoded: encodedMa, wantDecoded: []byte("Ma")},
-		{name: "two padding bytes", input: []byte("TQ=="), wantEncoded: "TQ==", wantDecoded: []byte("M")},
-		{name: "space and tab stripped", input: []byte(" T\tW F\tu "), wantEncoded: encodedMan, wantDecoded: []byte("Man")},
-		{name: "padding with fws", input: []byte("\tT W E = "), wantEncoded: encodedMa, wantDecoded: []byte("Ma")},
+		{name: "two padding bytes", input: []byte(encodedM), wantEncoded: encodedM, wantDecoded: []byte("M")},
+		{name: "interior space and tab stripped", input: []byte("T\tW F\tu"), wantEncoded: encodedMan, wantDecoded: []byte("Man")},
+		{name: "fws before padding", input: []byte("T W E ="), wantEncoded: encodedMa, wantDecoded: []byte("Ma")},
+		{name: "fws between padding", input: []byte("TQ= ="), wantEncoded: encodedM, wantDecoded: []byte("M")},
 	}
 
 	for _, tt := range tests {
@@ -55,7 +57,7 @@ func TestParseOptionalPaddingBase64StringAcceptsDNSValues(t *testing.T) {
 		input, encoded, decoded string
 	}{
 		{input: "TWE", encoded: encodedMa, decoded: "Ma"},
-		{input: "TQ", encoded: "TQ==", decoded: "M"},
+		{input: "TQ", encoded: encodedM, decoded: "M"},
 		{input: " T\tW E ", encoded: encodedMa, decoded: "Ma"},
 		{input: encodedMa, encoded: encodedMa, decoded: "Ma"},
 	} {
@@ -94,6 +96,10 @@ func TestParseBase64StringRejectsMalformedInput(t *testing.T) {
 		{name: "cr not fws", in: "TW\rFu", code: ErrorCodeInvalidBase64Alphabet},
 		{name: "lf not fws", in: "TW\nFu", code: ErrorCodeInvalidBase64Alphabet},
 		{name: "non zero pad bits", in: "/x==", code: ErrorCodeInvalidBase64PadBits},
+		{name: "leading space", in: " TWFu", code: ErrorCodeInvalidBase64Whitespace},
+		{name: "leading tab", in: "\tTWFu", code: ErrorCodeInvalidBase64Whitespace},
+		{name: "trailing space unpadded", in: "TWFu ", code: ErrorCodeInvalidBase64Whitespace},
+		{name: "trailing tab after padding", in: "TWE=\t", code: ErrorCodeInvalidBase64Whitespace},
 	}
 
 	for _, tt := range tests {

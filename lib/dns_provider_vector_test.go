@@ -461,7 +461,7 @@ func verifyDNSVectorResult(ctx context.Context, t *testing.T, corpus publicGolde
 	raw := decodeGoldenBytes(t, vector.Raw)
 	reverse := decodeGoldenBytes(t, vector.Reverse)
 	forward := decodeGoldenPaths(t, vector.Forward)
-	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		return VerifyResult{}, err
 	}

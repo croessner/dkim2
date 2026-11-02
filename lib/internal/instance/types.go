@@ -98,7 +98,7 @@ func (m MessageInstance) HashSets() []HashSet {
 	return cloneHashSets(m.hashes)
 }
 
-// HashLayout returns the Draft-08 Section 9.3 hash-any/hash-all group
+// HashLayout returns the Draft-09 Section 9.3 hash-any/hash-all group
 // structure of HashSets.
 func (m MessageInstance) HashLayout() combine.Layout {
 	return m.hashLayout

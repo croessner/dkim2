@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	// compositeTestToken is the Draft-08 Section 3.4 post-quantum composite
+	// compositeTestToken is the Draft-09 Section 3.4 post-quantum composite
 	// algorithm and DNS-02 key type this implementation deliberately does
 	// not support while its construction is unsettled.
 	compositeTestToken = "mldsa44-ed25519-sha512"
@@ -121,7 +121,7 @@ func verifyWithCompositeDNS(t *testing.T, transport *compositeDNSTransport, raw 
 	if err != nil {
 		t.Fatalf("NewDNSPublicKeyProvider() error = %v", err)
 	}
-	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }))
+	verifier, err := NewVerifier(provider, WithVerificationClock(func() time.Time { return time.Unix(1700000000, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -133,7 +133,7 @@ func verifyWithCompositeDNS(t *testing.T, transport *compositeDNSTransport, raw 
 }
 
 // TestVerifierCompositeBesideEd25519DependsOnSeparator re-derives the
-// Draft-07 "composite plus ed25519 set passes" case under Draft-08. The
+// Draft-07 "composite plus ed25519 set passes" case under Draft-09. The
 // composite mldsa44-ed25519-sha512 token is an unimplemented algorithm, a
 // PERMERROR intermediate decided without fetching its key (Section 14.6 step
 // 4). Joined by "|" the Ed25519 group passes on its own (step 7); joined by

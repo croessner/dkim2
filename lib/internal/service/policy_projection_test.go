@@ -51,7 +51,7 @@ func TestServiceAloneUpgradesPassingCandidateAndDiscardsNonPassFlags(t *testing.
 	raw := strings.Replace(string(syntheticCurrentMessage(t, timestamp, 1, 1)), "; d=example.test;", "; f=donotmodify,donotexplode,feedback,feedhere,TOXIC-UNKNOWN; d=example.test;", 1)
 	config := DefaultConfig()
 	config.Clock = func() time.Time { return time.Unix(int64(timestamp), 0) }
-	coordinator, err := NewVerifier(&countingProvider{}, config)
+	coordinator, err := NewVerifier(&countingProvider{}, verify.DownwardOnlyFromAuthorization(), config)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -65,7 +65,7 @@ func TestServiceAloneUpgradesPassingCandidateAndDiscardsNonPassFlags(t *testing.
 	}
 
 	passingRaw, key := signedFlaggedPolicyMessage(t, timestamp)
-	passingCoordinator, err := NewVerifier(passingPolicyProvider{key: key}, config)
+	passingCoordinator, err := NewVerifier(passingPolicyProvider{key: key}, verify.DownwardOnlyFromAuthorization(), config)
 	if err != nil {
 		t.Fatalf("NewVerifier(passing) error = %v", err)
 	}
@@ -89,7 +89,7 @@ func TestPolicyProjectionPreservesPreRetentionSignatureFacts(t *testing.T) {
 	config.Limits.MaxSignatureFacts = 1
 	config.Limits.MaxSignatureSets = 2
 	raw, provider := signedMixedPolicyMessage(t, timestamp)
-	coordinator, err := NewVerifier(provider, config)
+	coordinator, err := NewVerifier(provider, verify.DownwardOnlyFromAuthorization(), config)
 	if err != nil {
 		t.Fatalf("NewVerifier(passing) error = %v", err)
 	}

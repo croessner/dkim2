@@ -323,3 +323,75 @@ func mustAmbiguousLookup(t *testing.T, count int) LookupResult {
 	}
 	return result
 }
+
+// TestResolverAppliesSection37VersionFilterBeforeUniqueness reproduces
+// Draft-09 Section 3.7: TXT records that begin with a v= tag whose value is
+// not DKIM1 are ignored first, and only then is more than one remaining
+// record an error. A record without a v= tag is a key record candidate.
+func TestResolverAppliesSection37VersionFilterBeforeUniqueness(t *testing.T) {
+	edKey := base64.StdEncoding.EncodeToString(make([]byte, ed25519.PublicKeySize))
+	key := "v=DKIM1; k=ed25519; p=" + edKey
+	tests := []struct {
+		name     string
+		payloads []string
+		want     KeyOutcomeStatus
+	}{
+		{name: "foreign version and key", payloads: []string{"v=spf1 -all", key}, want: KeyOutcomeFound},
+		{name: "foreign version with fws", payloads: []string{" v = DKIM2 ; p=" + edKey, key}, want: KeyOutcomeFound},
+		{name: "only foreign versions", payloads: []string{"v=DKIM2; p=" + edKey, "v=spf1 -all"}, want: KeyOutcomeMissing},
+		{name: "single foreign version", payloads: []string{"v=DKIM2; k=ed25519; p=" + edKey}, want: KeyOutcomeMissing},
+		{name: "two DKIM1 records", payloads: []string{key, key}, want: KeyOutcomeAmbiguous},
+		{name: "unversioned and DKIM1", payloads: []string{"k=ed25519; p=" + edKey, key}, want: KeyOutcomeAmbiguous},
+		{name: "version not first stays", payloads: []string{"k=ed25519; v=DKIM2; p=" + edKey, key}, want: KeyOutcomeAmbiguous},
+		{name: "lowercase dkim1 is foreign", payloads: []string{"v=dkim1; k=ed25519; p=" + edKey, key}, want: KeyOutcomeFound},
+		{name: "oversized foreign version ignored", payloads: []string{string(oversizedForeignTXT()), key}, want: KeyOutcomeFound},
+		{name: "oversized key record invalid", payloads: []string{key + "; x=" + string(oversizedForeignTXT())}, want: KeyOutcomeInvalid},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payloads := make([][]byte, 0, len(tt.payloads))
+			for _, payload := range tt.payloads {
+				payloads = append(payloads, []byte(payload))
+			}
+			lookup, err := NewFoundResult(payloads, time.Minute, DNSSECStatusUnavailable)
+			if err != nil {
+				t.Fatalf("NewFoundResult() error = %v", err)
+			}
+			resolver, err := NewResolver(resolverTransportFunc(func(context.Context, string) (LookupResult, error) {
+				return lookup, nil
+			}), DefaultLimits())
+			if err != nil {
+				t.Fatalf("NewResolver() error = %v", err)
+			}
+			outcome, err := resolver.Resolve(context.Background(), "example.test", testSelector, AlgorithmEd25519SHA256)
+			if err != nil || outcome.Status() != tt.want {
+				t.Fatalf("Resolve() = %q error=%v, want %q", outcome.Status(), err, tt.want)
+			}
+		})
+	}
+}
+
+// TestResolverKeepsCountOnlyAmbiguityAboveTheCarryBound proves that an answer
+// with more records than the transport carry bound stays count-only
+// ambiguity: the Section 3.7 filter needs payloads, so the outcome fails
+// closed without traversal.
+func TestResolverKeepsCountOnlyAmbiguityAboveTheCarryBound(t *testing.T) {
+	payloads := make([][]byte, HardLimits().MaxTXTRecords+1)
+	for index := range payloads {
+		payloads[index] = []byte("v=spf1 -all")
+	}
+	lookup, err := NewFoundResult(payloads, time.Minute, DNSSECStatusUnavailable)
+	if err != nil || len(lookup.Records()) != 0 || lookup.RecordCount() != len(payloads) {
+		t.Fatalf("NewFoundResult() records=%d count=%d error=%v", len(lookup.Records()), lookup.RecordCount(), err)
+	}
+	resolver, err := NewResolver(resolverTransportFunc(func(context.Context, string) (LookupResult, error) {
+		return lookup, nil
+	}), DefaultLimits())
+	if err != nil {
+		t.Fatalf("NewResolver() error = %v", err)
+	}
+	outcome, err := resolver.Resolve(context.Background(), "example.test", testSelector, AlgorithmEd25519SHA256)
+	if err != nil || outcome.Status() != KeyOutcomeAmbiguous {
+		t.Fatalf("Resolve() = %q error=%v, want ambiguous", outcome.Status(), err)
+	}
+}

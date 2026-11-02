@@ -107,12 +107,10 @@ func (p *Processor) Process(ctx context.Context, input adapter.LocalScanRequest)
 	if err != nil {
 		return ipc.Response{}, err
 	}
-	var plan adapter.Plan
 	if notApplicable {
-		plan, err = adapter.NewPlan(adapter.ResultNone, adapter.DispositionContinue, nil)
-	} else {
-		plan, err = AdmitProcessJSON(body, p.authservID)
+		return ipc.Response{}, adapter.NewError(adapter.FailureContract)
 	}
+	plan, err := AdmitProcessJSON(body, p.authservID)
 	clear(body)
 	if err != nil {
 		return ipc.Response{}, err
@@ -291,14 +289,16 @@ func readOperationResponse(response *http.Response, operation string) ([]byte, b
 	return body, false, nil
 }
 
-// validNoContentResponse enforces the exact operation-owned OpenAPI 204 envelope.
+// validNoContentResponse enforces the exact operation-owned OpenAPI 204
+// envelope. Only sign owns a bodyless not-applicable result; process reports
+// the Draft-09 NONE state as a 200 document.
 func validNoContentResponse(response *http.Response, body []byte, operation string) bool {
 	if response == nil || response.StatusCode != http.StatusNoContent || len(body) != 0 ||
 		response.ContentLength != 0 || !response.Close || len(response.TransferEncoding) != 0 ||
 		len(response.Trailer) != 0 || !validNoContentRequest(response.Request, operation) {
 		return false
 	}
-	if operation != daemonOperationProcess && operation != daemonOperationSign ||
+	if operation != daemonOperationSign ||
 		!exactResponseHeader(response.Header, "Cache-Control", "no-store") ||
 		!validConnectionCloseProjection(response) ||
 		responseHeaderPresent(response.Header, "Content-Length") ||
@@ -395,7 +395,16 @@ func responseFromPlan(
 			return ipc.Response{}, adapter.NewError(adapter.FailureContract)
 		}
 	case adapter.DispositionContinue:
-		// Continue preserves adapter-local RFC 8601 removals without adding a field.
+		// Continue preserves adapter-local RFC 8601 removals. Only the
+		// Draft-09 NONE plan may add its admitted dkim2=none report.
+		actions := plan.Actions()
+		if len(actions) == 1 && plan.Result() == adapter.ResultNone &&
+			actions[0].Name() == authenticationResultsHeader {
+			addName = ipc.AddAuthenticationResults
+			addValue = []byte(actions[0].Value())
+		} else if len(actions) != 0 {
+			return ipc.Response{}, adapter.NewError(adapter.FailureContract)
+		}
 	case adapter.DispositionReject:
 		decision, reason, removals = ipc.DecisionReject, ipc.ReasonPolicyReject, nil
 	case adapter.DispositionTempfail:

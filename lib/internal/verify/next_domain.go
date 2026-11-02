@@ -52,7 +52,7 @@ func validateCustodyChain(signatures []signature.Signature, allowedDirectSequenc
 		}
 		if typed.TagName() == string(signature.TagNameMailFrom) && result.Evaluated() {
 			// The complete chain evaluated and only an inherited signature's
-			// MAIL FROM and d= are not aligned (Draft-08 Section 14.4).
+			// MAIL FROM and d= are not aligned (Draft-09 Section 14.4).
 			return signature.CustodyResult{}, inheritedAlignmentError(sequence)
 		}
 		code := ErrorCodeCustodyMismatch

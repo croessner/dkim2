@@ -16,7 +16,7 @@ type supportedHashAlgorithm struct {
 	digestBytes int
 }
 
-// parseHashSets parses the Draft-08 Section 9.3 h= value
+// parseHashSets parses the Draft-09 Section 9.3 h= value
 // (hash-any of hash-all groups of hash-set) into hash sets in field order and
 // their group layout. The max_hash_sets bound counts sets across all groups
 // and is enforced before any set content is parsed; a hash algorithm name
@@ -61,10 +61,11 @@ func parseHashSets(value string, limits Limits, fieldIndex int) ([]HashSet, comb
 
 // parseHashSet parses one hash-set = hash-name [FWS] ":" header-hash ":"
 // body-hash. White space may surround hash-name (the [FWS] around separators
-// and the textstring FWS) and may appear inside both base64string values,
-// including before their first character; it may not follow the "=" padding
-// of header-hash, because the base64string production ends at the padding
-// and the grammar admits no FWS before the second colon.
+// and the textstring FWS) and may appear inside both base64string values, but
+// Draft-09 Section 2.14 forbids it at either end of a base64string and the
+// production has no [FWS] next to the hash colons. The only trailing white
+// space admitted after body-hash belongs to the following separator or tag
+// terminator.
 func parseHashSet(input []byte, tagLimits tagvalue.Limits, fieldIndex int, hashIndex int) (HashSet, error) {
 	components := bytes.Split(input, []byte{':'})
 	if len(components) != 3 {
@@ -72,10 +73,10 @@ func parseHashSet(input []byte, tagLimits tagvalue.Limits, fieldIndex int, hashI
 	}
 
 	rawName, _ := trimWSP(components[0])
-	rawHeaderHash, _ := trimWSP(components[1])
-	rawBodyHash, _ := trimWSP(components[2])
+	rawHeaderHash := components[1]
+	rawBodyHash := trimTrailingWSP(components[2])
 	name, ok := tagvalue.ParseTextstring(rawName)
-	if !ok || len(rawHeaderHash) == 0 || len(rawBodyHash) == 0 || paddedBase64FollowedByWSP(components[1]) {
+	if !ok || !base64Edges(rawHeaderHash) || !base64Edges(rawBodyHash) {
 		return HashSet{}, malformedHashSetError(fieldIndex, hashIndex)
 	}
 	if !validUnknownHashComponent(rawHeaderHash) || !validUnknownHashComponent(rawBodyHash) {
@@ -132,7 +133,7 @@ func invalidHashLengthError(fieldIndex int, hashIndex int, expectedLength int, d
 	}, nil)
 }
 
-// supportedHashAlgorithmForName resolves the fixed Draft-08 digest-size invariant.
+// supportedHashAlgorithmForName resolves the fixed Draft-09 digest-size invariant.
 func supportedHashAlgorithmForName(name string) (supportedHashAlgorithm, bool) {
 	switch name {
 	case HashAlgorithmSHA256:
@@ -144,15 +145,20 @@ func supportedHashAlgorithmForName(name string) (supportedHashAlgorithm, bool) {
 	}
 }
 
-// paddedBase64FollowedByWSP reports whether a raw base64string component
-// ends in "=" padding followed by white space, which the Section 2.14
-// base64string production does not admit.
-func paddedBase64FollowedByWSP(component []byte) bool {
-	end := len(component)
-	for end > 0 && isWSP(component[end-1]) {
+// base64Edges reports whether a raw base64string component is non-empty and
+// neither begins nor ends with white space (Draft-09 Section 2.14).
+func base64Edges(component []byte) bool {
+	return len(component) > 0 && !isWSP(component[0]) && !isWSP(component[len(component)-1])
+}
+
+// trimTrailingWSP removes the separator or terminator white space that may
+// follow the last component of one hash-set.
+func trimTrailingWSP(input []byte) []byte {
+	end := len(input)
+	for end > 0 && isWSP(input[end-1]) {
 		end--
 	}
-	return end > 0 && end < len(component) && component[end-1] == '='
+	return input[:end]
 }
 
 // malformedHashSetError constructs a bounded h= syntax error.
@@ -163,8 +169,8 @@ func malformedHashSetError(fieldIndex int, hashIndex int) *Error {
 }
 
 // validUnknownHashComponent rejects control-bearing hash components while permitting WSP.
-// Draft-08 admits FWS inside base64string values; alphabet and padding remain
-// owned by tagvalue.ParseBase64String after it strips WSP.
+// Draft-09 admits FWS inside base64string values; alphabet and padding remain
+// owned by tagvalue.ParseBase64String after it strips interior WSP.
 func validUnknownHashComponent(input []byte) bool {
 	for _, b := range input {
 		if (b < 32 && !isWSP(b)) || b == 127 {

@@ -40,7 +40,7 @@ var allowedSpanNames = []string{
 var allowedSpanValues = map[string][]string{
 	"dkim2.result":        {valueSuccess, valueFailure, valueTemporary, valueInternal},
 	"dkim2.policy_mode":   {valueStrict, valuePermissive, valueTesting},
-	"dkim2.verdict":       {valuePass, valueFail, valueNeutral, valueTemperror, valuePermerror},
+	"dkim2.verdict":       {valuePass, valueFail, valueNeutral, valueTemperror, valuePermerror, valueNone},
 	"dkim2.replay_state":  {valueNotChecked, valueNotEligible, valueDisabled, valueFirstSeen, valueReplayed, valueIndeterminate},
 	"dkim2.reason_class":  {valueNone, valueProtocol, valuePolicy, valueAvailability, valueInternal},
 	"dkim2.error_class":   {valueNone, "canceled", "deadline", valueTemporary, valueInternal},

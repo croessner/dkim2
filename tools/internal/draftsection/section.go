@@ -1,18 +1,18 @@
-// Package draftsection validates citations against the pinned DKIM2 Draft-08 structure.
+// Package draftsection validates citations against the pinned DKIM2 Draft-09 structure.
 package draftsection
 
 import "strings"
 
 const (
-	fullDraft  = "draft-ietf-dkim-dkim2-spec-08"
-	shortDraft = "Draft-08"
+	fullDraft  = "draft-ietf-dkim-dkim2-spec-09"
+	shortDraft = "Draft-09"
 )
 
 var sectionOrder = func() map[string]int {
 	sections := []string{
 		"1", "1.1",
 		"2", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", "2.12", "2.13", "2.14",
-		"3", "3.1", "3.2", "3.3", "3.4", "3.5", "3.6", "3.7",
+		"3", "3.1", "3.2", "3.3", "3.4", "3.5", "3.6", "3.7", "3.8",
 		"4", "4.1",
 		"5", "5.1", "5.2",
 		"6", "6.1", "6.2",
@@ -20,7 +20,7 @@ var sectionOrder = func() map[string]int {
 		"8",
 		"9", "9.1", "9.2", "9.3",
 		"10", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9", "10.10",
-		"11",
+		"11", "11.1",
 		"12", "12.1", "12.2", "12.3", "12.4", "12.5", "12.6", "12.7", "12.8",
 		"13", "13.1", "13.2", "13.3", "13.4",
 		"14", "14.1", "14.2", "14.3", "14.4", "14.5", "14.6", "14.7", "14.8",
@@ -35,8 +35,8 @@ var sectionOrder = func() map[string]int {
 	return order
 }()
 
-// CitationValid accepts non-Draft-08 text unchanged and validates every current
-// Draft-08 Section/Sections citation against the pinned closed section set.
+// CitationValid accepts non-Draft-09 text unchanged and validates every current
+// Draft-09 Section/Sections citation against the pinned closed section set.
 func CitationValid(value string) bool {
 	suffix, plural, current := citationSuffix(value)
 	if !current {
@@ -57,7 +57,7 @@ func CitationValid(value string) bool {
 	return sectionListValid(suffix, plural)
 }
 
-// citationSuffix recognizes both manifest and issue-log Draft-08 citation prefixes.
+// citationSuffix recognizes both manifest and issue-log Draft-09 citation prefixes.
 func citationSuffix(value string) (string, bool, bool) {
 	for _, draft := range []string{fullDraft, shortDraft} {
 		if suffix, found := strings.CutPrefix(value, draft+" Sections "); found {

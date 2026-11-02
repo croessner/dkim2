@@ -36,8 +36,8 @@ func (originDigestSource) Exploded() bool { return false }
 // ReplayEligible reports an intermediary-handled message for the golden vector.
 func (originDigestSource) ReplayEligible() bool { return true }
 
-// TestDraft08PublishedReplayKey verifies the normative message-wide HMAC vector.
-func TestDraft08PublishedReplayKey(t *testing.T) {
+// TestDraft09PublishedReplayKey verifies the normative message-wide HMAC vector.
+func TestDraft09PublishedReplayKey(t *testing.T) {
 	digestBytes, err := hex.DecodeString("63519c8a3d2e4d5f6fb9e689259be264a058a3a9fbc8bb5a9a904bef0e9d9cd5")
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +61,7 @@ func TestDraft08PublishedReplayKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = "dkim2:replay:v1:01020304:Wqtd3Caq3mDdmFAZQwrQV_5hxgUGk4Z24CNMv60Ppf8"
+	const want = "dkim2:replay:v1:01020304:PGkBF5j_jqoVXZ-hMY9pYXe0yzey1bCwpbna4M-PT2g"
 	if err := UseStorageKey(key, func(got string) error {
 		if got != want {
 			t.Fatalf("storage key = %s, want %s", got, want)
@@ -100,7 +100,7 @@ func TestDeriverProducesExactPublishedStorageKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = "dkim2:replay:v1:01020304:8s_Nd-aZiAG4NRhWSmX85ujJ14RRkbpYg_xl1m98oNg"
+	const want = "dkim2:replay:v1:01020304:XEDZwor_9kdx39DmkLxQJbjPvOOoeeSDxCBhpwrlDSQ"
 	calls := 0
 	if err := UseStorageKey(key, func(storageKey string) error {
 		calls++
@@ -113,9 +113,9 @@ func TestDeriverProducesExactPublishedStorageKey(t *testing.T) {
 	}
 }
 
-// TestDraft08IdentitySeparatesEpoch proves the DraftIdentifier rotates otherwise identical replay facts.
-func TestDraft08IdentitySeparatesEpoch(t *testing.T) {
-	if DraftIdentifier != "draft-ietf-dkim-dkim2-spec-08" {
+// TestDraft09IdentitySeparatesEpoch proves the DraftIdentifier rotates otherwise identical replay facts.
+func TestDraft09IdentitySeparatesEpoch(t *testing.T) {
+	if DraftIdentifier != "draft-ietf-dkim-dkim2-spec-09" {
 		t.Fatalf("DraftIdentifier = %q", DraftIdentifier)
 	}
 	source := syntheticIdentitySource{
@@ -126,7 +126,7 @@ func TestDraft08IdentitySeparatesEpoch(t *testing.T) {
 	}
 	const draft04Key = "dkim2:replay:v1:01020304:ZY5FUs9tgID9qTmf5RMx0klaDUM7YNLc__lWkDX8RnE"
 	if got := mustDerivedStorageKey(t, sequenceBytes(0xa0), 0x01020304, source); got == draft04Key {
-		t.Fatal("Draft-08 replay identity reused the Draft-04 HMAC epoch")
+		t.Fatal("Draft-09 replay identity reused the Draft-04 HMAC epoch")
 	}
 }
 
@@ -193,7 +193,7 @@ func TestDeriverProducesExactAllZeroPresentDigestKey(t *testing.T) {
 		messagePresent: true, signaturePresent: true,
 		recipients: [][32]byte{sequenceDigest(0x40)},
 	}
-	const want = "dkim2:replay:v1:01020304:9jM9-sazq1gSqhwLXhKBpb8TP7bcfW-eyUMxBQvyZF4"
+	const want = "dkim2:replay:v1:01020304:CtjcEWBuGZg2GIMaP221mrmiN4sS94Ff4xp0SP66E-g"
 	if got := mustDerivedStorageKey(t, sequenceBytes(0xa0), 0x01020304, source); got != want {
 		t.Fatalf("all-zero present digest storage key = %q, want %q", got, want)
 	}

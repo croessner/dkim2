@@ -14,11 +14,14 @@ type Base64String struct {
 }
 
 // ParseBase64String parses a padded RFC 4648 DKIM2 base64string value.
+// Draft-09 Section 2.14 admits FWS only between characters and before
+// padding, so a value that begins or ends with FWS is rejected.
 func ParseBase64String(input []byte, limits Limits) (Base64String, error) {
 	return parseBase64String(input, limits, false)
 }
 
-// ParseOptionalPaddingBase64String parses RFC 4648 Base64 with optional terminal padding.
+// ParseOptionalPaddingBase64String parses RFC 4648 Base64 with optional terminal
+// padding for DNS key records, whose DNS-02 grammar keeps its own FWS rules.
 func ParseOptionalPaddingBase64String(input []byte, limits Limits) (Base64String, error) {
 	return parseBase64String(input, limits, true)
 }
@@ -34,6 +37,9 @@ func parseBase64String(input []byte, limits Limits, optionalPadding bool) (Base6
 	}
 
 	encoded := stripBase64FWS(input)
+	if !optionalPadding && len(encoded) > 0 && (isWSP(input[0]) || isWSP(input[len(input)-1])) {
+		return Base64String{}, base64Error(ErrorCodeInvalidBase64Whitespace, 0)
+	}
 	padCount, err := validateBase64AlphabetAndPadding(encoded)
 	if err != nil {
 		return Base64String{}, err

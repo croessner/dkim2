@@ -7,7 +7,7 @@ import (
 )
 
 const outputSchema = "dkim2ctl.result.v1"
-const draftVersion = "draft-ietf-dkim-dkim2-spec-08"
+const draftVersion = "draft-ietf-dkim-dkim2-spec-09"
 const outcomeMatch = "match"
 const outcomeMismatch = "mismatch"
 const outcomeError = "error"
@@ -128,8 +128,8 @@ func validResultRecord(record ResultRecord) bool {
 		return false
 	}
 	return validOptionalEnum(record.Disposition, "accept", "reject", "tempfail", "continue") &&
-		validOptionalEnum(record.VerificationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") &&
-		validOptionalEnum(record.AuthenticationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR") &&
+		validOptionalEnum(record.VerificationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR", "NONE") &&
+		validOptionalEnum(record.AuthenticationState, "PASS", "FAIL", "PERMERROR", "TEMPERROR", "NONE") &&
 		validOptionalEnum(record.PolicyVerdict, "accept", "reject", "tempfail", "continue") &&
 		validOptionalEnum(record.ReplayClass,
 			"not_checked", "not_eligible", "disabled", "first_seen", "exploded", "replayed", "indeterminate")

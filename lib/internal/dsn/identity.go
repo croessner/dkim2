@@ -8,7 +8,7 @@ import (
 	"github.com/croessner/dkim2/internal/signature"
 )
 
-// MaxSigningIdentityCandidates bounds the ordered Draft-08 Section 16.2
+// MaxSigningIdentityCandidates bounds the ordered Draft-09 Section 16.2
 // candidate list, and therefore the number of local profile lookups one DSN
 // can cause. Candidates beyond the bound are dropped after ordering, so the
 // bound can only turn a signable report into an unsigned one, never select a
@@ -16,7 +16,7 @@ import (
 const MaxSigningIdentityCandidates = 64
 
 // SigningIdentityCandidate is one ordered candidate signing domain for a
-// locally generated DSN. Its domain relaxed-matches (Draft-08 Section 7.2,
+// locally generated DSN. Its domain relaxed-matches (Draft-09 Section 7.2,
 // rt= address as Parameter1, d= as Parameter2) at least one rt= address of
 // the highest DKIM2-Signature of the reported message.
 type SigningIdentityCandidate struct {
@@ -37,7 +37,7 @@ func (c SigningIdentityCandidate) Linked() bool { return c.linked }
 func (c SigningIdentityCandidate) Preferred() bool { return c.preferred }
 
 // SigningIdentityCandidates returns every domain that can sign this DSN under
-// Draft-08 Sections 7.1 item 4 and 16.2, in a deterministic preference order:
+// Draft-09 Sections 7.1 item 4 and 16.2, in a deterministic preference order:
 //
 //  1. candidates matching an RFC 3464-linked rt= address before candidates
 //     matching only unlinked rt= addresses;
@@ -102,7 +102,7 @@ func compareSigningIdentityCandidates(left, right SigningIdentityCandidate) int 
 	return strings.Compare(left.domain, right.domain)
 }
 
-// parentDomain removes the leftmost label of a canonical DNS name (Draft-08
+// parentDomain removes the leftmost label of a canonical DNS name (Draft-09
 // Section 7.2 step 5) and returns the empty string when no dot remains.
 func parentDomain(name string) string {
 	dot := strings.IndexByte(name, '.')

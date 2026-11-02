@@ -166,7 +166,7 @@ type Error struct {
 }
 
 // SelectedTarget returns the verification target that was already selected
-// when a Draft-08 Section 14.4 Chain of Custody check failed, so the failure
+// when a Draft-09 Section 14.4 Chain of Custody check failed, so the failure
 // can be reported for that target instead of as a pre-target error.
 func (e *Error) SelectedTarget() (Target, bool) {
 	if e == nil || e.selected.Sequence == 0 || e.selected.InstanceNumber == 0 {
@@ -175,7 +175,7 @@ func (e *Error) SelectedTarget() (Target, bool) {
 	return e.selected, true
 }
 
-// ChainOfCustodyFailure reports whether the error is a completed Draft-08
+// ChainOfCustodyFailure reports whether the error is a completed Draft-09
 // Section 14.4 Chain of Custody failure rather than a malformed or missing
 // protocol state.
 func (e *Error) ChainOfCustodyFailure() bool {

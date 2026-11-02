@@ -89,7 +89,7 @@ func TestMetricsMaximumClosedCardinalityFitsExpositionCap(t *testing.T) {
 		}
 	}
 	for _, result := range []string{valueSuccess, valueFailure, valueTemporary, valueInternal} {
-		for _, verdict := range []string{valuePass, valueFail, valueNeutral, valueTemperror, valuePermerror} {
+		for _, verdict := range []string{valuePass, valueFail, valueNeutral, valueTemperror, valuePermerror, valueNone} {
 			for _, replay := range []string{valueNotChecked, valueNotEligible, valueDisabled, valueFirstSeen, valueReplayed, valueIndeterminate} {
 				for _, disposition := range []string{"accept", "continue", "reject", "tempfail"} {
 					metrics.ProcessCompleted(
@@ -103,7 +103,7 @@ func TestMetricsMaximumClosedCardinalityFitsExpositionCap(t *testing.T) {
 			}
 		}
 	}
-	for _, verdict := range []string{valuePass, valueFail, valueNeutral, valueTemperror, valuePermerror} {
+	for _, verdict := range []string{valuePass, valueFail, valueNeutral, valueTemperror, valuePermerror, valueNone} {
 		for _, reason := range []string{valueNone, valueProtocol, valuePolicy, valueAvailability, valueInternal} {
 			for _, mode := range []string{valueStrict, valuePermissive, valueTesting} {
 				metrics.PolicyCompleted(verdict, reason, mode)

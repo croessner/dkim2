@@ -21,7 +21,7 @@ import (
 
 const (
 	// MessageDraft is the exact DKIM2 behavior baseline used by security evidence.
-	MessageDraft = "draft-ietf-dkim-dkim2-spec-08"
+	MessageDraft = "draft-ietf-dkim-dkim2-spec-09"
 	// DNSDraft is the exact historical DNS behavior baseline used by security evidence.
 	DNSDraft = "draft-ietf-dkim-dkim2-dns-02"
 	// BaseRevision is the fixed trusted implementation anchor for candidate admission.

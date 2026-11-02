@@ -391,7 +391,7 @@ func TestRunMemberVerificationTemporaryProviderAndCancellation(t *testing.T) {
 		runNextDomainHop(runLocalDomain, runForwardDomain),
 		runHop(runForwardDomain, "<forwarded@forward.local.example>", runDestination),
 	)
-	temporary, err := NewVerifier(temporaryKeyProvider{})
+	temporary, err := NewVerifier(temporaryKeyProvider{}, testFromChoice)
 	if err != nil {
 		t.Fatal(err)
 	}

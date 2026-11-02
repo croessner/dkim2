@@ -192,7 +192,7 @@ func excludedHeaderKindForName(nameLower string) excludedHeaderKind {
 	}
 }
 
-// exactUnsignedHeaderName reports the six Draft-08 Section 4 exact
+// exactUnsignedHeaderName reports the six Draft-09 Section 4 exact
 // registered-field exclusions outside the Received, ARC, and protocol
 // classes. Draft-08 removed Auto-Submitted and VBR-Info from this set, so both
 // are signed and any change to them must be described by a Recipe.

@@ -33,7 +33,7 @@ func fixedSignatureBytes(algorithm Algorithm) (int, bool) {
 	}
 }
 
-// parseSignatureSets parses the Draft-08 Section 10.9 s= value (sig-any of
+// parseSignatureSets parses the Draft-09 Section 10.9 s= value (sig-any of
 // sig-all groups of sig-set) into sets in field order and their group
 // layout. The max_signature_sets bound counts sets across all groups and is
 // enforced before any set content is parsed; a selector must not repeat
@@ -74,9 +74,12 @@ func parseSignatureSets(value string, limits Limits, fieldIndex int) ([]Set, com
 
 // parseSignatureSet parses one sig-set = selector [FWS] ":" [FWS] sig-name
 // [FWS] ":" message-sig. A known fixed-length algorithm (ed25519-sha256,
-// mldsa44) with any other decoded signature length is a malformed field. White space may surround selector and sig-name and
-// may appear inside or before the message-sig base64string; it may not
-// appear inside a selector (an RFC 5321 Domain) or a sig-name textstring.
+// mldsa44) with any other decoded signature length is a malformed field.
+// White space may surround selector and sig-name and may appear inside the
+// message-sig base64string. It may not appear inside a selector (an RFC 5321
+// Domain) or a sig-name textstring, nor directly after the second colon:
+// Draft-09 Section 2.14 base64string cannot begin with FWS. Trailing white
+// space belongs to the following separator or tag terminator.
 // The raw selector spelling is kept for the Section 12.8 unsigned target.
 func parseSignatureSet(input []byte, limits tagvalue.Limits, fieldIndex int, signatureIndex int) (Set, error) {
 	components := bytes.Split(input, []byte{':'})
@@ -86,13 +89,13 @@ func parseSignatureSet(input []byte, limits tagvalue.Limits, fieldIndex int, sig
 
 	rawSelector, _ := trimWSP(components[0])
 	rawAlgorithm, _ := trimWSP(components[1])
-	rawSignature, _ := trimWSP(components[2])
+	rawSignature := trimTrailingWSP(components[2])
 	selector, ok := canonicalDNSName(rawSelector)
 	if !ok {
 		return Set{}, malformedSignatureSetError(fieldIndex, signatureIndex)
 	}
 	algorithm, ok := tagvalue.ParseTextstring(rawAlgorithm)
-	if !ok || len(rawSignature) == 0 {
+	if !ok || len(rawSignature) == 0 || isWSP(rawSignature[0]) {
 		return Set{}, malformedSignatureSetError(fieldIndex, signatureIndex)
 	}
 

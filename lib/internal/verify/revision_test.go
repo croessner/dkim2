@@ -25,7 +25,7 @@ func TestVerifyRevisionProofChecksEveryInheritedSignature(t *testing.T) {
 		lookups++
 		return publicKeyResult(query.Algorithm, fixture.rsaKey, KeyStatusFound), nil
 	})
-	verifier, err := NewVerifier(provider, testClockOption())
+	verifier, err := NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -81,7 +81,7 @@ func TestVerifyRevisionProofAfterCurrentDoesNotRepeatCurrentLookup(t *testing.T)
 		lookups++
 		return publicKeyResult(query.Algorithm, fixture.rsaKey, KeyStatusFound), nil
 	})
-	verifier, err := NewVerifier(provider, testClockOption())
+	verifier, err := NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestVerifyRevisionProofCapturesOneClockBeforeProviderCalls(t *testing.T) {
 	verifier, err := NewVerifier(provider, WithClock(func() time.Time {
 		nowCalls++
 		return time.Unix(int64(testTimestampSeconds), 0).Add(time.Hour)
-	}))
+	}), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -134,7 +134,7 @@ func TestRevisionInstantIsOwnedByTheConstructingVerifier(t *testing.T) {
 		clockCalls++
 		return time.Unix(int64(testTimestampSeconds), 0).Add(time.Hour)
 	}
-	verifier, err := NewVerifier(provider, WithClock(clock))
+	verifier, err := NewVerifier(provider, WithClock(clock), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -153,7 +153,7 @@ func TestRevisionInstantIsOwnedByTheConstructingVerifier(t *testing.T) {
 			outcome, prepared.Valid(), err, providerCalls, clockCalls)
 	}
 
-	independent, err := NewVerifier(provider, WithClock(clock))
+	independent, err := NewVerifier(provider, WithClock(clock), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier(independent) error = %v", err)
 	}
@@ -192,7 +192,7 @@ func TestPreparedRevisionProofIsProviderFreeFixedOrderAndSingleUse(t *testing.T)
 			return PublicKey{}, nil
 		}
 	})
-	verifier, err := NewVerifier(provider, testClockOption())
+	verifier, err := NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -234,7 +234,7 @@ func TestPreparedRevisionProofCopiesShareConcurrentSingleUseState(t *testing.T) 
 		callMu.Unlock()
 		return publicKeyResult(query.Algorithm, fixture.rsaPublicKey, KeyStatusFound), nil
 	})
-	verifier, err := NewVerifier(provider, testClockOption())
+	verifier, err := NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -307,7 +307,7 @@ func TestPreparedRevisionProofStopsBeforeLaterProviderCallsOnCancellation(t *tes
 			return PublicKey{}, nil
 		}
 	})
-	verifier, err := NewVerifier(provider, testClockOption())
+	verifier, err := NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -349,7 +349,7 @@ func TestVerifyRevisionProofRejectsUnsupportedOnlyAndAllowsTerminalNextDomain(t 
 }
 
 // TestVerifyRevisionProofRequiresEveryKnownSetAndRejectsUnknownInGroup locks
-// per-field set semantics under Draft-08 Section 14.6: every set of a sig-all
+// per-field set semantics under Draft-09 Section 14.6: every set of a sig-all
 // group must pass, and an unknown algorithm in that group is a PERMERROR
 // intermediate rather than an ignored extension.
 func TestVerifyRevisionProofRequiresEveryKnownSetAndRejectsUnknownInGroup(t *testing.T) {
@@ -392,7 +392,7 @@ func TestVerifyRevisionProofUsesCanonicalCallbackOrderAndSourceIndexedFacts(t *t
 			return PublicKey{}, nil
 		}
 	})
-	verifier, err := NewVerifier(provider, testClockOption())
+	verifier, err := NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -445,7 +445,7 @@ func TestVerifyRevisionProofRejectsTargetOverridesAndUnsafeTimePolicyBeforeWork(
 		clockCalls++
 		return time.Unix(int64(testTimestampSeconds), 0)
 	}
-	verifier, err := NewVerifier(provider, WithClock(clock))
+	verifier, err := NewVerifier(provider, WithClock(clock), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -460,7 +460,7 @@ func TestVerifyRevisionProofRejectsTargetOverridesAndUnsafeTimePolicyBeforeWork(
 	}
 }
 
-// TestRevisionSignatureOutcomeReportsDecisiveSet pins the Draft-08 rule
+// TestRevisionSignatureOutcomeReportsDecisiveSet pins the Draft-09 rule
 // that a non-PASS inherited field reports its decisive set: the first set
 // carrying the combined result inside the first group whose result equals
 // it. Permanent key failures keep their specific reason.
@@ -547,7 +547,7 @@ func TestVerifyRevisionProofPreflightsWholeChainBeforeProviderCallbacks(t *testi
 			})
 			limits := DefaultRevisionLimits()
 			test.configure(&limits)
-			verifier, err := NewVerifier(provider, testClockOption(), WithRevisionLimits(limits))
+			verifier, err := NewVerifier(provider, testClockOption(), WithRevisionLimits(limits), testFromChoice)
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}
@@ -574,7 +574,7 @@ func TestVerifyRevisionProofPreflightsWholeChainBeforeProviderCallbacks(t *testi
 	})
 	verifier, err := NewVerifier(provider, WithClock(func() time.Time {
 		return time.Unix(int64(testTimestampSeconds), 0)
-	}))
+	}), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -613,7 +613,7 @@ func TestVerifyRevisionProofPreflightsWholeChainBeforeProviderCallbacks(t *testi
 			})
 			verifier, err := NewVerifier(provider, WithClock(func() time.Time {
 				return time.Unix(int64(testTimestampSeconds), 0)
-			}))
+			}), testFromChoice)
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}
@@ -642,7 +642,7 @@ func TestVerifyRevisionProofRejectsLaterUnsupportedOnlyBeforeProviderCallbacks(t
 		calls++
 		return publicKeyResult(query.Algorithm, fixture.rsaKey, KeyStatusFound), nil
 	})
-	verifier, err := NewVerifier(provider, testClockOption())
+	verifier, err := NewVerifier(provider, testClockOption(), testFromChoice)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
@@ -726,7 +726,7 @@ func TestVerifyRevisionProofCanonicalWorkCapsAtExactAndOneOver(t *testing.T) {
 			})
 			limits := DefaultRevisionLimits()
 			test.configure(&limits)
-			verifier, err := NewVerifier(provider, testClockOption(), WithRevisionLimits(limits))
+			verifier, err := NewVerifier(provider, testClockOption(), WithRevisionLimits(limits), testFromChoice)
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}
@@ -756,7 +756,7 @@ func TestVerifyRevisionProofRejectsUnsafeClockBeforeProviderCallbacks(t *testing
 				providerCalls++
 				return publicKeyResult(query.Algorithm, fixture.rsaPublicKey, KeyStatusFound), nil
 			})
-			verifier, err := NewVerifier(provider, WithClock(test.clock))
+			verifier, err := NewVerifier(provider, WithClock(test.clock), testFromChoice)
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}

@@ -31,7 +31,7 @@ func TestStrictHandlerReturnsMultiInstanceTestingContinue(t *testing.T) {
 	raw, key := signedMultiInstanceResponseMessage(t, timestamp)
 	verifier, err := dkim2.NewVerifier(
 		selectedMatrixProvider{key: key, outcome: selectedProviderFound},
-		dkim2.WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }),
+		dkim2.WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }), dkim2.WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("historical HTTP verifier construction failed")
@@ -54,7 +54,7 @@ func TestStrictHandlerReturnsMultiInstanceTestingContinue(t *testing.T) {
 	)))
 	t.Cleanup(server.Close)
 
-	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-08",` +
+	body := `{"api_version":"v1","draft":"draft-ietf-dkim-dkim2-spec-09",` +
 		`"message":{"raw_rfc5322_base64":"` + base64.StdEncoding.EncodeToString(raw) +
 		`","fidelity":"milter_reconstructed_crlf"},` +
 		`"smtp":{"mail_from":"<sender@example.test>","rcpt_to":["<rcpt@example.test>"]},` +
@@ -122,7 +122,7 @@ func TestMapDomainResultAcceptsAuthenticatedMultiInstancePolicy(t *testing.T) {
 	raw, key := signedMultiInstanceResponseMessage(t, timestamp)
 	verifier, err := dkim2.NewVerifier(
 		selectedMatrixProvider{key: key, outcome: selectedProviderFound},
-		dkim2.WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }),
+		dkim2.WithVerificationClock(func() time.Time { return time.Unix(timestamp, 0) }), dkim2.WithoutSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatal("historical verifier construction failed")

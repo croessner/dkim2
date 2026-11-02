@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-const recipeGenerationDraftBaseline = "draft-ietf-dkim-dkim2-spec-08"
+const recipeGenerationDraftBaseline = "draft-ietf-dkim-dkim2-spec-09"
 
 type generationGoldenFile struct {
 	Draft string                 `json:"draft"`
@@ -39,8 +39,8 @@ type generationSerializationMetrics struct {
 	maxBodyLineBytes             int
 }
 
-// TestSerializeGenerationPlanMatchesDraft08Goldens verifies exact versioned JSON bytes.
-func TestSerializeGenerationPlanMatchesDraft08Goldens(t *testing.T) {
+// TestSerializeGenerationPlanMatchesDraft09Goldens verifies exact versioned JSON bytes.
+func TestSerializeGenerationPlanMatchesDraft09Goldens(t *testing.T) {
 	fixture := loadGenerationGoldens(t)
 	if fixture.Draft != recipeGenerationDraftBaseline {
 		t.Fatal("fixture draft differs")
@@ -385,7 +385,7 @@ func TestSerializeGenerationPlanRejectsInvalidCombinedState(t *testing.T) {
 // loadGenerationGoldens loads the retained draft-versioned serializer fixture.
 func loadGenerationGoldens(t *testing.T) generationGoldenFile {
 	t.Helper()
-	data, err := os.ReadFile("testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-08.json")
+	data, err := os.ReadFile("testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-09.json")
 	if err != nil {
 		t.Fatalf("read generation golden: %v", err)
 	}

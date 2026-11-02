@@ -1,7 +1,7 @@
 # Static-Key Signature Verification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 
 Status: completed.
@@ -283,7 +283,7 @@ Out of scope:
 - Recipe JSON parsing, recipe application, recipe generation, previous
   instance reconstruction, or previous-instance hash validation.
 - Local policy evaluation, `donotmodify`, `donotexplode` (both removed in
-  Draft-08), feedback action planning, replay detection, or trust-boundary reporting.
+  Draft-09), feedback action planning, replay detection, or trust-boundary reporting.
 - `cmd/dkim2d`, `cmd/dkim2-milter`, and `cmd/dkim2ctl` changes.
 - OpenAPI contracts or generated artifacts.
 - Concrete logging, tracing, metrics, Prometheus labels, OpenTelemetry
@@ -404,7 +404,7 @@ M4 must build cryptographic input through `lib/internal/canonical`:
 
 ### Algorithm And Public-Key Semantics
 
-The default algorithm allowlist is exact and covers every Draft-08 Section 3
+The default algorithm allowlist is exact and covers every Draft-09 Section 3
 algorithm a verifier MUST implement:
 
 - `rsa-sha256`
@@ -443,7 +443,7 @@ Ed25519-SHA256 semantics:
   defines Ed25519-SHA256 as PureEdDSA over the SHA-256 hash value, not over
   the raw canonical signature input bytes.
 
-ML-DSA-44 semantics (Draft-08 Section 3.4):
+ML-DSA-44 semantics (Draft-09 Section 3.4):
 
 - The provider must supply an ML-DSA-44 public key (`*mldsa.PublicKey`) for
   `mldsa44`; the DNS form is `k=mldsa44` with the raw 1312-octet FIPS 204
@@ -1062,7 +1062,7 @@ document the exact blocker.
 - Settled: Timestamp policy is explicit local verification policy over parsed
   `t=`, using an injected clock, a five-minute future tolerance, and a 14-day
   default maximum age per Section 11.3.
-- Settled (Draft-08, superseding the Section 3.4 "ignore" rule): signature
+- Settled (Draft-09, superseding the Section 3.4 "ignore" rule): signature
   sets combine with the Section 14.6 algebra owned by
   `verify.CombineSignatureSets`. An unknown or locally disabled algorithm is
   a PERMERROR intermediate decided without a key lookup; per-set facts stay

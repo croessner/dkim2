@@ -1,7 +1,7 @@
 # MVP Core Verification
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 
 Status: completed under an explicit maintainer exception for the external
@@ -370,7 +370,7 @@ M5 exposes exactly these top-level values:
 | Public state | Meaning |
 | --- | --- |
 | `PASS` | Current target, current hashes, required supported signatures, timestamp, and applicable custody/envelope checks passed. |
-| `FAIL` | Draft-08 Section 14.1: verification completed and the message is not a Fully Verified DKIM2 Message: a hash or signature mismatch, a timestamp failure, a Chain of Custody failure (envelope, MAIL FROM and `d=` alignment, `nd=`, custody adjacency, unmet out-of-band arrangement), an inauthentic From, or a null body Recipe in the history. |
+| `FAIL` | Draft-09 Section 14.1: verification completed and the message is not a Fully Verified DKIM2 Message: a hash or signature mismatch, a timestamp failure, a Chain of Custody failure (envelope, MAIL FROM and `d=` alignment, `nd=`, custody adjacency, unmet out-of-band arrangement), an inauthentic From, or a null body Recipe in the history. |
 | `PERMERROR` | Verification could not complete because of unrecoverable malformed, missing, duplicate, ambiguous, unsupported, sequence, Recipe, limit, or key state. |
 | `TEMPERROR` | Verification could not complete solely because the injected key provider reported a temporary provider failure. |
 
@@ -386,22 +386,22 @@ The binding mapping is:
 | Section 14.7 hash combination is FAIL | `FAIL` | The decisive hash-set's mismatching dimension is reported. |
 | Section 14.6 signature combination is FAIL | `FAIL` | A pass and a fail in one `,` group is `FAIL`. |
 | Only unknown signature algorithms | `PERMERROR` | Nothing checkable exists; never PASS. |
-| Supported pass plus unknown algorithm in one `,` group | `PERMERROR` | Draft-08 Section 14.6 step 4: the unknown set is a PERMERROR intermediate (`unsupported_algorithm`). Joined by `\|` the supported group can pass. |
-| Matching implemented hash plus unknown hash algorithm in one `,` group | `PERMERROR` | Draft-08 Section 14.7 step 4; `sha256\|x-new` passes through `sha256`. A mismatching implemented hash in that group is `FAIL`, because FAIL wins over PERMERROR. |
+| Supported pass plus unknown algorithm in one `,` group | `PERMERROR` | Draft-09 Section 14.6 step 4: the unknown set is a PERMERROR intermediate (`unsupported_algorithm`). Joined by `\|` the supported group can pass. |
+| Matching implemented hash plus unknown hash algorithm in one `,` group | `PERMERROR` | Draft-09 Section 14.7 step 4; `sha256\|x-new` passes through `sha256`. A mismatching implemented hash in that group is `FAIL`, because FAIL wins over PERMERROR. |
 | No hash group of implemented algorithms and no mismatching implemented hash | `PERMERROR` | Nothing checkable covers the current message hashes. |
 | Missing, invalid, ambiguous, mismatched, or policy-rejected static key | `PERMERROR` | No DNS temporary semantics exist in M5. |
 | Temporary injected provider failure | `TEMPERROR` | Provider errors must be typed; arbitrary strings do not decide mapping. |
 | Missing/malformed DKIM2 field, tag, sequence, current instance, or request evidence | `PERMERROR` | Includes resource-limit failure. |
-| Expired or disallowed future timestamp | `FAIL` `timestamp_invalid` | Draft-08 Section 14.3; uses deterministic clock policy. |
-| Current MAIL FROM or RCPT TO mismatch | `FAIL` `envelope_mismatch` | Draft-08 Section 14.4; raw paths are not emitted. |
-| MAIL FROM and `d=` not aligned, current or inherited | `FAIL` `domain_alignment_mismatch` | Draft-08 Section 14.4. |
-| `nd=` does not match the next `d=`, or an unexpected `nd=` transition | `FAIL` `next_domain_mismatch` | Draft-08 Section 14.4; decided before any key lookup. |
-| `mf=` or `d=` does not match the previous `rt=` | `FAIL` `custody_mismatch` | Draft-08 Sections 7.1 and 14.4; decided before any key lookup for the selected target. |
-| Highest `nd=` requiring unmodeled out-of-band trust | `FAIL` `out_of_band_required` | Draft-08 Sections 13.2 and 14.4; never PASS or TEMPERROR. |
-| Inauthentic From in the authenticated history | `FAIL` `from_not_authentic` | Draft-08 Sections 11 and 14.8. |
-| History contains a `"b":null` Recipe | `FAIL` `body_history_unavailable` | Draft-08 Section 13: body hashes below a null Recipe cannot be checked. |
-| Recipe text not valid JSON or not an object | `PERMERROR` `invalid_recipe_json` | Draft-08 Section 14.2. |
-| Valid Recipe JSON with an invalid schema, step, range, literal, or application | `PERMERROR` `invalid_recipe` | Draft-08 Section 14.2; diagnostics carry step index, member, and kind, never step text. |
+| Expired or disallowed future timestamp | `FAIL` `timestamp_invalid` | Draft-09 Section 14.3; uses deterministic clock policy. |
+| Current MAIL FROM or RCPT TO mismatch | `FAIL` `envelope_mismatch` | Draft-09 Section 14.4; raw paths are not emitted. |
+| MAIL FROM and `d=` not aligned, current or inherited | `FAIL` `domain_alignment_mismatch` | Draft-09 Section 14.4. |
+| `nd=` does not match the next `d=`, or an unexpected `nd=` transition | `FAIL` `next_domain_mismatch` | Draft-09 Section 14.4; decided before any key lookup. |
+| `mf=` or `d=` does not match the previous `rt=` | `FAIL` `custody_mismatch` | Draft-09 Sections 7.1 and 14.4; decided before any key lookup for the selected target. |
+| Highest `nd=` requiring unmodeled out-of-band trust | `FAIL` `out_of_band_required` | Draft-09 Sections 13.2 and 14.4; never PASS or TEMPERROR. |
+| Inauthentic From in the authenticated history | `FAIL` `from_not_authentic` | Draft-09 Sections 11 and 14.8. |
+| History contains a `"b":null` Recipe | `PERMERROR` `body_history_unavailable` | Draft-09 Section 13: body hashes below a null Recipe cannot be checked. |
+| Recipe text not valid JSON or not an object | `PERMERROR` `invalid_recipe_json` | Draft-09 Section 14.2. |
+| Valid Recipe JSON with an invalid schema, step, range, literal, or application | `PERMERROR` `invalid_recipe` | Draft-09 Section 14.2; diagnostics carry step index, member, and kind, never step text. |
 | Signature or instance sequence gap or duplicate | `PERMERROR` `sequence_invalid` | Section 14.2 calls this "not Fully Verified"; kept as a structural PERMERROR. |
 | Context canceled or deadline exceeded by the caller | Go error | Caller control flow, not a DKIM2 protocol result. |
 | Invalid verifier construction or programmer misuse | Go error | No partially initialized verifier is returned. |
@@ -438,7 +438,7 @@ A public PASS means only:
 - The current raw message was parsed.
 - Current numbering and target selection were valid.
 - The highest/current instance hashes matched the current message.
-- The Draft-08 Section 14.6 combination of the target `s=` sets passed.
+- The Draft-09 Section 14.6 combination of the target `s=` sets passed.
 - Timestamp and applicable current envelope/domain checks passed.
 - Every structural `nd=` link that M4 encountered matched its immediate
   successor. This is structural custody evidence, not historical crypto or
@@ -474,7 +474,7 @@ link success. No M5 value may be named or documented as full-chain success.
 - Every implemented, enabled signature set is checked; an unknown or locally
   disabled algorithm is a PERMERROR intermediate decided without a key
   lookup.
-- Draft-08 combination algebra (single owner `verify.CombineSignatureSets`
+- Draft-09 combination algebra (single owner `verify.CombineSignatureSets`
   over `lib/internal/combine`): per-set intermediates are PASS, FAIL
   (signature mismatch), TEMPERROR (key temporarily unavailable), or
   PERMERROR (any permanent key or provider error, unknown or disabled
@@ -778,7 +778,7 @@ cannot run, record the exact blocker and largest equivalent passing subset.
   imports public root types.
 - Message/provider/protocol outcomes return a structured result with nil Go
   error; caller context and API misuse return only a Go error and zero result.
-- PASS requires all applicable current checks and a Draft-08 Section 14.6
+- PASS requires all applicable current checks and a Draft-09 Section 14.6
   signature PASS.
 - Unknown signature algorithms are PERMERROR intermediates; unknown-only is
   non-success.
@@ -880,9 +880,9 @@ cannot run, record the exact blocker and largest equivalent passing subset.
   Section 11.1.
 - Settled: `mixed`, `unsupported`, and `indeterminate` remain internal detail
   and map to FAIL or PERMERROR according to typed causes.
-- Settled (Draft-08): Unknown algorithms are PERMERROR intermediates; they
+- Settled (Draft-09): Unknown algorithms are PERMERROR intermediates; they
   pass only through another `|` group. Unknown-only is PERMERROR.
-- Settled (Draft-08): One failing set prevents PASS of its `,` group; another
+- Settled (Draft-09): One failing set prevents PASS of its `,` group; another
   `|` group can still pass.
 - Settled: Structural/permanent PERMERROR facts outrank FAIL, FAIL outranks
   TEMPERROR, and TEMPERROR outranks PASS after caller-control Go errors.

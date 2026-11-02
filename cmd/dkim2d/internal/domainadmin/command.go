@@ -17,6 +17,9 @@ type CommandRequest struct {
 	Apply         bool
 	Machine       bool
 	ToolVersion   string
+	// DomainPolicyStrict requests the strict Domain Policy Record in a DNS
+	// export; it is valid only for CommandDNSExport.
+	DomainPolicyStrict bool
 }
 
 // PreflightCommandAuthority rejects provider substitution before concrete backend construction or I/O.
@@ -80,7 +83,7 @@ func (r CommandRequest) Validate() error {
 			return newError(CodeProtectedInput)
 		}
 		paths = append(paths, r.OutputPath)
-	} else if r.OutputPath != "" {
+	} else if r.OutputPath != "" || r.DomainPolicyStrict {
 		return newError(CodeProtectedInput)
 	}
 	for left := range paths {

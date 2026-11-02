@@ -3,10 +3,10 @@
 The first preview is a tested reference candidate, not a final DKIM2 standard,
 certification, or universal interoperability claim.
 
-- Draft-08 architecture references, full-chain policy guidance, EAI, IANA,
+- Draft-09 architecture references, full-chain policy guidance, EAI, IANA,
   and Security Considerations still contain `TBA` text. The implementation
   does not invent normative behavior for those sections.
-- Pure ML-DSA-44 (`mldsa44`, Draft-08 Section 3.4) is implemented for
+- Pure ML-DSA-44 (`mldsa44`, Draft-09 Section 3.4) is implemented for
   verification and signing. DNS-02 defines no key type for it; the
   implementation reads `k=mldsa44` with a raw 1312-octet `p=` (local
   interpretation, `DKIM2-ISSUE-0020`). The Draft-07 composite
@@ -22,9 +22,9 @@ certification, or universal interoperability claim.
   signing, verification, recipe, custody, SMTP, replay, daemon, OpenAPI,
   telemetry, or deployment behavior.
 - Postfix/Milter qualification is implemented. Exim is
-  `unqualified_draft08`; the five source-linked upstream, Debian, and Ubuntu
+  `unqualified_draft09`; the five source-linked upstream, Debian, and Ubuntu
   rows in the compatibility report are historical Draft-04 evidence. There is
-  no current Draft-08 Exim execution claim, universal local-scan binary, or
+  no current Draft-09 Exim execution claim, universal local-scan binary, or
   Exim container image.
 - The daemon supports outgoing null-reverse-path DSN signing only through the
   Postfix-exclusive route, `delivery_status` profile, route ticket, and
@@ -35,10 +35,10 @@ certification, or universal interoperability claim.
   with a null outer sender and one recipient. `notify`, `verify`, empty or
   absent values, and non-null double-bounce/postmaster copies remain unchanged.
   A bounce is signed only when a local `delivery_status` profile domain
-  relaxed-matches an `rt=` recipient of the returned original (Draft-08
+  relaxed-matches an `rt=` recipient of the returned original (Draft-09
   Section 16.2) and covers the bounce From; bounces of mail sent to remote
   recipients always leave unsigned (`DKIM2-ISSUE-0023`).
-  Received-DSN evaluation and Draft-08 Section 16.3 DSN propagation are
+  Received-DSN evaluation and Draft-09 Section 16.3 DSN propagation are
   implemented against
   [delivery-status-propagation.md](../specs/implementation/delivery-status-propagation.md)
   through the read-only `delivery_status` projection of `POST /v1/process`,
@@ -71,12 +71,12 @@ certification, or universal interoperability claim.
 - Propagation cannot complete when the previous hop's public key was rotated
   away or revoked between forwarding and the arrival of the notification. The
   previous hop's signature is verified over the reconstructed state, with the
-  Draft-08 Section 14.3 window evaluated at the completion signature's `t=`,
+  Draft-09 Section 14.3 window evaluated at the completion signature's `t=`,
   before its `mf=` may become a recipient; without a resolvable key the
   outcome is a permanent refusal, not a best-effort delivery.
 - An EAI previous hop with an RFC 6531 UTF-8 local part is propagated to:
   recorded `mf=` paths keep the local part and carry an A-label domain
-  (Draft-08 Section 18), and the rebuilt report sets `smtputf8_required`. The
+  (Draft-09 Section 18), and the rebuilt report sets `smtputf8_required`. The
   fact is computed over every rendered byte outside the embedded original's
   body, and
   the adapter fails closed when the re-injection listener does not advertise a
@@ -142,27 +142,37 @@ certification, or universal interoperability claim.
   [native-domain runbook](../operator/native-domain-onboarding.md).
 - Product images are Linux `amd64` and `arm64`; release preparation does not
   publish them or create `latest`, stable, minor, or major aliases.
-- The Draft-08 replay identifier is draft-bound inside the replay HMAC frame.
-  An in-place upgrade keeps the epoch and secret, but Draft-07 records are not
-  consulted: a message first seen under Draft-07 that still verifies under
-  Draft-08 can be accepted once more, bounded by the configured retention
+- The Draft-09 replay identifier is draft-bound inside the replay HMAC frame.
+  An in-place upgrade keeps the epoch and secret, but Draft-08 records are not
+  consulted: a message first seen under Draft-08 that still verifies under
+  Draft-09 can be accepted once more, bounded by the configured retention
   period. Replay state is not backward compatible after a rollback either
-  (see the [Draft-08 operator migration](../operator/draft-08-migration.md)).
-- A history containing a null body Recipe (`"b":null`) is FAIL
+  (see the [Draft-09 operator migration](../operator/draft-09-migration.md)).
+- A history containing a null body Recipe (`"b":null`) is PERMERROR
   `body_history_unavailable`: such a message is never a Fully Verified DKIM2
   Message, strict policy rejects it, and transit or revision signing refuses
   it. There is no acceptance knob.
 - The Authentication-Results comment keeps its closed `(reason=<code>)`
-  vocabulary and never carries the selectors that Draft-08 Section 14.6 step
+  vocabulary and never carries the selectors that Draft-09 Section 14.6 step
   8 suggests for error text; the per-set selectors are available in the REST
   `SignatureSetResult.selector` and the library `SignatureSetFact`.
+
+- Draft-09 Section 11.1 lets an absent Domain Policy Record authorize every
+  subdomain signer for a parent From domain. `dkim2d` follows the draft by
+  default; operators who want the Draft-08 downward-only rule set
+  `verification.domain_policy.allow_subdomain_from: false`
+  (`DKIM2-ISSUE-0025`). The policy lookup adds one TXT query per distinct
+  upward From domain and has no dedicated metric.
+- The parser keeps accepting FWS after an `rt=` comma, which Draft-09 Section
+  2.14 no longer allows, so mail signed by earlier releases still verifies
+  (`DKIM2-ISSUE-0024`).
 
 Stable IDs and resolution criteria for draft and interpretation limits are in
 [the issue log](draft-issues.md).
 
 ## Post-Quantum Algorithms
 
-Draft-08 Section 3.4 replaces the Draft-07 composite with pure ML-DSA-44
+Draft-09 Section 3.4 replaces the Draft-07 composite with pure ML-DSA-44
 (`mldsa44`): FIPS 204 ML-DSA.Sign and ML-DSA.Verify over the complete Section
 12.8 input with the context string `DKIM2`, no HashML-DSA. Verifiers MUST
 implement it; the implementation verifies and signs it.
@@ -173,9 +183,9 @@ implement it; the implementation verifies and signs it.
   DKIM2-Signature field.
 - DNS-02 defines no key type for pure ML-DSA-44. `k=mldsa44` with the raw
   FIPS 204 public key in `p=` is a local interpretation that matches the
-  Draft-08 sig-name and the records `opendkim-manage-go` publishes
+  Draft-09 sig-name and the records `opendkim-manage-go` publishes
   (`DKIM2-ISSUE-0020`). DNS-02 also lists `rsa-sha512`, `ed25519-sha512`, and
-  the composite, which Draft-08 does not define; they stay unknown algorithms
+  the composite, which Draft-09 does not define; they stay unknown algorithms
   (`DKIM2-ISSUE-0021`, `DKIM2-ISSUE-0022`).
 - The signer emits a fixed layout: the classical credentials form one
   `sig-all` group and an `mldsa44` credential is a separate `sig-any`

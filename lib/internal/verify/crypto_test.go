@@ -139,7 +139,7 @@ func TestVerifierReportsRejectedAndWrongTypeKeys(t *testing.T) {
 					Material:  tt.material,
 					Metadata:  KeyMetadata{Status: KeyStatusFound},
 				}, nil
-			}), testClockOption())
+			}), testClockOption(), testFromChoice)
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}
@@ -196,7 +196,7 @@ func TestVerifierClassifiesProviderSuccessInvariants(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			verifier, err := NewVerifier(providerFunc(func(context.Context, KeyQuery) (PublicKey, error) {
 				return tt.key, nil
-			}), testClockOption())
+			}), testClockOption(), testFromChoice)
 			if err != nil {
 				t.Fatalf("NewVerifier() error = %v", err)
 			}

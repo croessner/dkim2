@@ -23,7 +23,7 @@ func decodeVectorField(t *testing.T, name, value string) []byte {
 	return decoded
 }
 
-// TestMLDSA44KnownAnswerVector locks the Draft-08 Section 3.4 construction:
+// TestMLDSA44KnownAnswerVector locks the Draft-09 Section 3.4 construction:
 // the fixed seed derives the stored 1312-octet public key, deterministic
 // ML-DSA.Sign with ctx "DKIM2" over the complete input reproduces the stored
 // signature (OpenSSL 4.0.3 produced the same bytes), the shared verifier
@@ -41,7 +41,7 @@ func TestMLDSA44KnownAnswerVector(t *testing.T) {
 		t.Fatal("ML-DSA-44 vector has incoherent sizes")
 	}
 	if len(vector.PublicRaw) != 1752 || len(vector.DeterministicSig) != 3228 {
-		t.Fatal("ML-DSA-44 vector base64 lengths differ from Draft-08 Sections 3.4 and 14.5")
+		t.Fatal("ML-DSA-44 vector base64 lengths differ from Draft-09 Sections 3.4 and 14.5")
 	}
 
 	private, err := mldsa.NewPrivateKey(mldsa.MLDSA44(), seed)

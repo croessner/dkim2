@@ -10,10 +10,11 @@ import (
 	"github.com/croessner/dkim2/internal/tagvalue"
 )
 
-// TestSignatureSetFWSPositions pins every Draft-08 Section 10.9 white-space
+// TestSignatureSetFWSPositions pins every Draft-09 Section 10.9 white-space
 // position of sig-s-tag: [FWS] after "=", around the selector, around
-// sig-name, before and inside message-sig, and around "," are accepted;
-// white space inside a selector or a sig-name is rejected.
+// sig-name, inside message-sig, and around "," are accepted; white space
+// inside a selector or a sig-name, or directly before message-sig (Section
+// 2.14 base64string has no leading FWS), is rejected.
 func TestSignatureSetFWSPositions(t *testing.T) {
 	sig := base64OfByte(0xaa, 64)
 	other := "two:ed25519-sha256:" + base64OfByte(0xbb, 64)
@@ -22,7 +23,6 @@ func TestSignatureSetFWSPositions(t *testing.T) {
 		"before first colon":      "one \t:ed25519-sha256:" + sig,
 		"after first colon":       "one: \ted25519-sha256:" + sig,
 		"before second colon":     "one:ed25519-sha256 \t:" + sig,
-		"before message-sig":      "one:ed25519-sha256: \t" + sig,
 		"inside message-sig":      "one:ed25519-sha256:" + sig[:10] + " \t" + sig[10:],
 		"inside padding":          "one:ed25519-sha256:" + sig[:len(sig)-2] + "= =",
 		"after message-sig":       "one:ed25519-sha256:" + sig + " \t",
@@ -41,6 +41,7 @@ func TestSignatureSetFWSPositions(t *testing.T) {
 		})
 	}
 	rejected := map[string]string{
+		"before message-sig":    "one:ed25519-sha256: \t" + sig,
 		"inside selector":       "o ne:ed25519-sha256:" + sig,
 		"inside sig-name":       "one:ed25519 -sha256:" + sig,
 		"empty selector":        " :ed25519-sha256:" + sig,
@@ -111,7 +112,7 @@ func TestSignatureAlternativeGroupsParse(t *testing.T) {
 // unsigned s= value keeps the received selector spelling and algorithm name,
 // nulls only the signature values, and removes all white space.
 func TestUnsignedSignatureValueKeepsReceivedSpelling(t *testing.T) {
-	value := " Sel-One \t: ed25519-sha256 :" + base64OfByte(0xaa, 64) + " , two:" + testExtensionAlgorithm + ": " + base64OfByte(0xbb, 48)
+	value := " Sel-One \t: ed25519-sha256 :" + base64OfByte(0xaa, 64) + " , two:" + testExtensionAlgorithm + ":" + base64OfByte(0xbb, 48)
 	parsed, err := Parse(dkim2SignatureField(t, 0, signatureValueWith("s", value)))
 	if err != nil {
 		t.Fatal(err)

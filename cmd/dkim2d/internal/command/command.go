@@ -100,7 +100,7 @@ var (
 	// errMLDSA44Unavailable is the fixed, secret-free startup refusal when the
 	// binary was built against a cryptographic module without ML-DSA.
 	errMLDSA44Unavailable = errors.New("mldsa44 is unavailable: this binary uses the FIPS 140-3 Go " +
-		"Cryptographic Module v1.0.0, which has no ML-DSA, but Draft-08 Section 3 requires verifiers " +
+		"Cryptographic Module v1.0.0, which has no ML-DSA, but Draft-09 Section 3 requires verifiers " +
 		"to implement mldsa44; rebuild without GOFIPS140=v1.0.0")
 )
 
@@ -494,12 +494,13 @@ func hasExactApplyToken(args []string) bool {
 
 // domainFlagValues owns one isolated leaf-command flag set.
 type domainFlagValues struct {
-	config    string
-	intent    string
-	operation string
-	output    string
-	apply     bool
-	machine   bool
+	config             string
+	intent             string
+	operation          string
+	output             string
+	apply              bool
+	machine            bool
+	domainPolicyStrict bool
 }
 
 // newDomainCommand constructs the exact offline native-domain command tree.
@@ -573,6 +574,7 @@ func newDomainLeaf(
 				Command: operation, ConfigPath: flags.config, IntentPath: flags.intent,
 				OperationPath: flags.operation, OutputPath: flags.output,
 				Apply: flags.apply, Machine: flags.machine, ToolVersion: buildVersion,
+				DomainPolicyStrict: flags.domainPolicyStrict,
 			}
 			output, err := deps.domain(command.Context(), request)
 			if len(output) > 0 {
@@ -603,6 +605,8 @@ func newDomainLeaf(
 		if leaf.MarkFlagRequired("output") != nil {
 			return nil, errCommandRuntime
 		}
+		leaf.Flags().BoolVar(&flags.domainPolicyStrict, "domain-policy-strict", false,
+			"also export the Draft-09 Domain Policy Record _domainkey.<domain> TXT \"v=DKIM1; f=strict\"")
 	}
 	if wantApply {
 		leaf.Flags().BoolVar(&flags.apply, applyFlagName, false, "authorize one exact activation after fresh recursive resolver proof")

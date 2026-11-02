@@ -27,18 +27,22 @@ func (f processClientFunc) ProcessMessage(ctx context.Context, body generated.Pr
 	return f(ctx, body, editors...)
 }
 
-// TestProcessorAcceptsRealNoContentAndScrubsLocalClaims proves the generated
-// client preserves the bodyless applicability result while RFC 8601 cleanup
-// remains mandatory on the inbound Exim trajectory.
-func TestProcessorAcceptsRealNoContentAndScrubsLocalClaims(t *testing.T) {
+// TestProcessorAppliesNoneReportAndScrubsLocalClaims proves the generated
+// client admits the Draft-09 NONE result, adds only the bound dkim2=none
+// report, and keeps RFC 8601 cleanup mandatory on the inbound Exim trajectory.
+func TestProcessorAppliesNoneReportAndScrubsLocalClaims(t *testing.T) {
+	body, err := json.Marshal(noneProcessFixture("mx.example.test"))
+	if err != nil {
+		t.Fatal("NONE process fixture encoding failed")
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		defer func() { _ = request.Body.Close() }()
 		if request.Method != http.MethodPost || request.URL.Path != "/v1/process" {
 			t.Error("generated process client escaped its route")
 		}
 		writer.Header().Set("Cache-Control", "no-store")
-		writer.Header().Set("Connection", "close")
-		writer.WriteHeader(http.StatusNoContent)
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write(body)
 	}))
 	t.Cleanup(server.Close)
 	client, err := generated.NewClient(server.URL, generated.WithHTTPClient(&http.Client{Timeout: time.Second}))
@@ -48,7 +52,7 @@ func TestProcessorAcceptsRealNoContentAndScrubsLocalClaims(t *testing.T) {
 	publisher := &evidencePublisherStub{locator: testEvidenceLocator}
 	processor, err := NewProcessorWithEvidence(client, "mx.example.test", publisher)
 	if err != nil {
-		t.Fatal("process no-content processor construction failed")
+		t.Fatal("NONE processor construction failed")
 	}
 	input := testLocalScanRequest(t, [][]byte{
 		[]byte("Authentication-Results: mx.example.test; forged=pass\n"),
@@ -57,19 +61,22 @@ func TestProcessorAcceptsRealNoContentAndScrubsLocalClaims(t *testing.T) {
 	processContext, outcome := adapter.WithOutcome(t.Context())
 	response, err := processor.Process(processContext, input)
 	if err != nil || response.Decision() != ipc.DecisionAccept ||
-		len(response.AddValue()) != 0 || string(response.Locator()) != testEvidenceLocator ||
+		string(response.AddValue()) != "mx.example.test; dkim2=none" ||
+		string(response.Locator()) != testEvidenceLocator ||
 		publisher.calls != 1 || outcome.FailOpen() {
-		t.Fatalf("real process 204 failed: response=%v err=%v", response, err)
+		t.Fatalf("real process NONE failed: response=%v err=%v", response, err)
 	}
 	if removals := response.Removals(); len(removals) != 1 || removals[0] != 1 {
-		t.Fatal("not-applicable process did not scrub the forged local claim")
+		t.Fatal("NONE process did not scrub the forged local claim")
 	}
 }
 
-// TestProcessorRejectsMalformedNoContent proves process applicability cannot
-// smuggle representation state or weaken the close-delimited wire contract.
-func TestProcessorRejectsMalformedNoContent(t *testing.T) {
-	tests := noContentResponseMutations()
+// TestProcessorRejectsNoContent proves the retired bodyless process variant
+// fails closed in its exact and every adjacent malformed envelope.
+func TestProcessorRejectsNoContent(t *testing.T) {
+	tests := append(noContentResponseMutations(), noContentResponseMutation{
+		name: "exact retired envelope", response: exactNoContentHTTPResponse,
+	})
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
 			processor, err := NewProcessor(processClientFunc(func(
@@ -89,7 +96,7 @@ func TestProcessorRejectsMalformedNoContent(t *testing.T) {
 			if _, processErr := processor.Process(
 				t.Context(), testLocalScanRequest(t, [][]byte{[]byte("Subject: unsigned\n")}),
 			); !testAdapterFailureClass(processErr, wantClass) {
-				t.Fatal("malformed process 204 was admitted")
+				t.Fatal("process 204 was admitted")
 			}
 		})
 	}

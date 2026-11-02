@@ -8,7 +8,7 @@ import (
 	"github.com/croessner/dkim2/internal/verify"
 )
 
-// TestLocallyDisabledAlgorithmMapsToUnsupportedAlgorithm pins the Draft-08
+// TestLocallyDisabledAlgorithmMapsToUnsupportedAlgorithm pins the Draft-09
 // result for an implemented algorithm that local policy disables: a
 // PERMERROR unsupported_algorithm (the former internal_contract outcome came
 // from the mismatched policy_rejected key status), marked as locally
@@ -32,7 +32,7 @@ func TestLocallyDisabledAlgorithmMapsToUnsupportedAlgorithm(t *testing.T) {
 	assertUnsupportedAlgorithmSetFact(t, mapped)
 }
 
-// assertUnsupportedAlgorithmSetFact pins Draft-08 Section 14.6 step 4 for
+// assertUnsupportedAlgorithmSetFact pins Draft-09 Section 14.6 step 4 for
 // both unknown and locally disabled algorithms: the per-set fact is the
 // PERMERROR intermediate unsupported_algorithm with its selector, and the
 // policy layer seals it into a PERMERROR projection instead of failing

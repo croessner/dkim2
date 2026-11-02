@@ -1220,7 +1220,10 @@ func verifyMessage(expectTransit bool) error {
 	if err != nil {
 		return err
 	}
-	verifier, err := dkim2.NewVerifier(provider)
+	// The static fixture key set carries no Domain Policy Records and the
+	// fixture signs with downward-aligned identities only, so verification
+	// uses the explicit downward-only Section 11.1 choice.
+	verifier, err := dkim2.NewVerifier(provider, dkim2.WithoutSubdomainFromAuthorization())
 	if err != nil {
 		return errFixture
 	}
@@ -1248,6 +1251,7 @@ func verifyMessage(expectTransit bool) error {
 			dkim2.NewRequestRouteAuthority(),
 			unavailableSigningAuthorizer{},
 			unavailablePrivateKeySigner{},
+			dkim2.WithoutSignerSubdomainFromAuthorization(),
 		)
 		if signerErr != nil {
 			return errFixture

@@ -1,12 +1,12 @@
 # DKIM2 Reference Implementation
 
 This repository contains an actively developed Go reference implementation of
-DKIM2 based on `draft-ietf-dkim-dkim2-spec-08` with the DNS companion
-`draft-ietf-dkim-dkim2-dns-02`. The migration from Draft-07 and DNS-01 is
-complete and recorded in `docs/specs/draft-08-migration-disposition.md`; the
-operator upgrade steps are in `docs/operator/draft-08-migration.md`. The
+DKIM2 based on `draft-ietf-dkim-dkim2-spec-09` with the DNS companion
+`draft-ietf-dkim-dkim2-dns-02`. The migration from Draft-08 is recorded in
+`docs/specs/draft-09-migration-disposition.md`; the operator upgrade steps are
+in `docs/operator/draft-09-migration.md`. The
 baseline is not an external conformance claim until the real Exim matrix and
-external interoperability peers are requalified against Draft-08.
+external interoperability peers are requalified against Draft-09.
 
 The first design goal is precision: the core implementation must work from a
 controlled RFC 5322 message representation, preserve wire-significant details,
@@ -104,7 +104,10 @@ Current contents:
   activation, retirement, and rollback runbook.
 - `docs/operator/opendkim-migration.md`: protected dry-run, apply, publication,
   and higher-generation rollback workflow.
-- `docs/operator/draft-08-migration.md`: Draft-08/DNS-02 upgrade,
+- `docs/operator/draft-09-migration.md`: Draft-09 upgrade, the NONE state,
+  Domain Policy Records and `f=strict`, REST and signal changes, the replay
+  restart, the consumers that move together, and rollback.
+- `docs/operator/draft-08-migration.md`: historical Draft-08/DNS-02 upgrade,
   configuration, REST and signal changes, mail-flow consequences, replay-store
   transition, the consumers that move together, and rollback.
 - `docs/operator/draft-07-migration.md`: historical Draft-07/DNS-01 upgrade, replay-store
@@ -167,11 +170,11 @@ The preview's public API, compatibility, issue, and limitation entry point is
 
 The source-linked Exim adapter, packaging validators, operations guide, and
 five-row qualification runner are implemented. Its current capability is
-`unqualified_draft08`: the historical Draft-04 matrix passed all five supported
+`unqualified_draft09`: the historical Draft-04 matrix passed all five supported
 rows with 43 cases per row, but that candidate-bound evidence is not relabeled
-or imported for Draft-08. Portable and full Draft-08 conformance omit Exim
+or imported for Draft-09. Portable and full Draft-09 conformance omit Exim
 execution and reject an evidence root until a fresh, separately authorized
-five-row Draft-08 run is bound to unchanged candidate bytes. No prebuilt
+five-row Draft-09 run is bound to unchanged candidate bytes. No prebuilt
 universal Exim binary or container image is claimed. LDAP, PostgreSQL, MySQL,
 and MariaDB datasource providers,
 deployable schema artifacts, and the offline legacy OpenDKIM migration are
@@ -187,11 +190,11 @@ claims; an arbitrary worktree or mirror checkout does not.
 The public library signs origin messages, hash-unchanged forwarding copies,
 recipe-backed revisions, and authorized next-domain transitions. Signing uses
 exact outgoing SMTP envelope evidence, authority-issued copy tickets, opaque
-private-key handles, deterministic Draft-08 fields, final message reparsing,
+private-key handles, deterministic Draft-09 fields, final message reparsing,
 custody checks, and cryptographic self-verification. Out-of-band outputs
 remain closed until their exact route-bound release.
 
-Verification implements the Draft-08 algorithms `rsa-sha256`,
+Verification implements the Draft-09 algorithms `rsa-sha256`,
 `ed25519-sha256`, and pure ML-DSA-44 (`mldsa44`, DNS `k=mldsa44`), and
 evaluates Message-Instance `h=` and DKIM2-Signature `s=` values as
 `hash-all`/`sig-all` (`,`) and `hash-any`/`sig-any` (`|`) groups. PASS means
@@ -200,7 +203,7 @@ message is not Fully Verified. A signing profile holds up to three
 credentials and signs as `rsa,ed25519 | mldsa44`, so verifiers without ML-DSA
 still pass through the classical group. RSA signing keys need at least 2048
 bits. Delivery-status notifications are signed only under a local domain that
-relaxed-matches an `rt=` recipient of the reported message (Draft-08 Section
+relaxed-matches an `rt=` recipient of the reported message (Draft-09 Section
 16.2), otherwise they leave unsigned with an explicit reason.
 
 Datasource selection is exact and fail closed. Providers return immutable
@@ -224,7 +227,7 @@ in-memory signer from the same generation and uses no local private manifest.
 Inbound delivery-status notifications are evaluated read-only inside
 `POST /v1/process` and projected as the closed `delivery_status` fact.
 "Local" is datasource authority over a signing domain, never an address in
-`mf=`, and no received-DSN fact can authorize a signing operation. Draft-08
+`mf=`, and no received-DSN fact can authorize a signing operation. Draft-09
 Section 16.3 propagation is a separate replay-gated route,
 `POST /v1/dsn/propagate` with `POST /v1/dsn/propagate/commit`, whose signing
 authority is the removed completion signature's domain and whose recipient is

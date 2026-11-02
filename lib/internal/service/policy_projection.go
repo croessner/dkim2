@@ -40,7 +40,7 @@ func buildSelectedPolicyProjection(state State, reason Reason, target Target, in
 	return policy.NewGroupedSelectedTargetProjection(protocol, verificationReason, target.Sequence, hops, signatures, input.SignatureLayout(), selectedTargetHash(input), policy.DefaultLimits())
 }
 
-// selectedTargetHash reports the Draft-08 Section 14.7 class of the selected
+// selectedTargetHash reports the Draft-09 Section 14.7 class of the selected
 // target's hash combination: unsupported when a current header or body hash
 // check is the PERMERROR unsupported_algorithm outcome, the only non-set
 // source of that aggregate reason, and checkable otherwise.

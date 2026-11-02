@@ -158,17 +158,18 @@ func TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs(t *testing.T) {
 		{ProtocolPERMERROR, VerificationReasonProviderPermanent},
 		{ProtocolPERMERROR, VerificationReasonProviderContract},
 		{ProtocolPERMERROR, VerificationReasonLimitExceeded},
-		// Draft-08 Sections 13 and 14.1: an unmet out-of-band arrangement, an
-		// inauthentic From, and a null body Recipe are FAIL.
+		// Draft-09 Sections 13 and 14.1: an unmet out-of-band arrangement and
+		// an inauthentic From are FAIL; Section 14.2 makes a null Recipe
+		// PERMERROR.
 		{ProtocolFAIL, VerificationReasonOutOfBandRequired},
 		{ProtocolFAIL, VerificationReasonFromNotAuthentic},
-		{ProtocolFAIL, VerificationReasonBodyHistoryUnavailable},
+		{ProtocolPERMERROR, VerificationReasonBodyHistoryUnavailable},
 		{ProtocolPERMERROR, VerificationReasonInvalidRecipeJSON},
-		// Draft-08 Section 14.2: an invalid Recipe of valid JSON is PERMERROR.
+		// Draft-09 Section 14.2: an invalid Recipe of valid JSON is PERMERROR.
 		{ProtocolPERMERROR, VerificationReasonInvalidRecipe},
 		{ProtocolPERMERROR, VerificationReasonMalformedProtocol},
 		{ProtocolPERMERROR, VerificationReasonInternalContract},
-		// Inherited key failures keep their specific reason (Draft-08 Section 14.5).
+		// Inherited key failures keep their specific reason (Draft-09 Section 14.5).
 		{ProtocolPERMERROR, VerificationReasonMissingKey},
 		{ProtocolPERMERROR, VerificationReasonInvalidKey},
 	}
@@ -186,7 +187,7 @@ func TestRevisionFailureProjectionAllowsOnlyServiceOutcomePairs(t *testing.T) {
 		{ProtocolPERMERROR, VerificationReasonTimestampInvalid},
 		{ProtocolPERMERROR, VerificationReasonOutOfBandRequired},
 		{ProtocolPERMERROR, VerificationReasonFromNotAuthentic},
-		{ProtocolPERMERROR, VerificationReasonBodyHistoryUnavailable},
+		{ProtocolFAIL, VerificationReasonBodyHistoryUnavailable},
 		{ProtocolFAIL, VerificationReasonInvalidRecipe},
 		{ProtocolFAIL, VerificationReasonCustodyMismatch},
 		{ProtocolPERMERROR, VerificationReason("future")},
@@ -345,7 +346,7 @@ func TestPermanentProjectionRequiresACompatibleOutcomeDriver(t *testing.T) {
 		{"alignment over missing", VerificationReasonDomainAlignmentMismatch, []SignatureFact{missing}},
 		{"next domain over provider", VerificationReasonNextDomainMismatch, []SignatureFact{provider}},
 		{"out of band over missing", VerificationReasonOutOfBandRequired, []SignatureFact{missing}},
-		// Draft-08 Section 14.6 step 4: an unknown algorithm in the group is a
+		// Draft-09 Section 14.6 step 4: an unknown algorithm in the group is a
 		// PERMERROR whose unsupported_algorithm reason outranks timestamp_invalid.
 		{"timestamp over unknown in group", VerificationReasonTimestampInvalid, []SignatureFact{pass, unknown}},
 		{"pre-target malformed message", VerificationReasonMalformedMessage, []SignatureFact{pass}},
@@ -382,10 +383,10 @@ func TestPermanentProjectionRequiresACompatibleOutcomeDriver(t *testing.T) {
 	}
 }
 
-// TestDraft08FailReasonsRequireFailProtocol proves that every Draft-08
+// TestDraft09FailReasonsRequireFailProtocol proves that every Draft-09
 // Section 14.1 FAIL reason is sealable only as FAIL, never as PERMERROR, and
 // still cannot hide a permanent signature outcome.
-func TestDraft08FailReasonsRequireFailProtocol(t *testing.T) {
+func TestDraft09FailReasonsRequireFailProtocol(t *testing.T) {
 	pass := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPass, SetReasonNone)
 	missing := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusPermerror, SetReasonMissingKey)
 	temporary := mustProjectionSignatureFact(t, SetAlgorithmRSA, SetStatusTemperror, SetReasonProviderTemporary)
@@ -448,7 +449,7 @@ func TestSignatureFactStatusReasonAlgorithmMatrix(t *testing.T) {
 	}{
 		{SetAlgorithmRSA, SetStatusPass, SetReasonNone},
 		{SetAlgorithmEd25519, SetStatusFail, SetReasonSignatureMismatch},
-		// Draft-08 Section 14.6 step 4: an unknown algorithm and a locally
+		// Draft-09 Section 14.6 step 4: an unknown algorithm and a locally
 		// disabled known algorithm are both PERMERROR unsupported_algorithm.
 		{SetAlgorithmUnknown, SetStatusPermerror, SetReasonUnsupportedAlgorithm},
 		{SetAlgorithmEd25519, SetStatusPermerror, SetReasonUnsupportedAlgorithm},
@@ -550,7 +551,7 @@ func transitionForTestIndex(index int) TransitionState {
 }
 
 // TestGroupedProjectionRecomputesSection14_6 proves the sealed projection
-// recomputes the Draft-08 combination from its layout: a failing set in a
+// recomputes the Draft-09 combination from its layout: a failing set in a
 // losing alternative group cannot block PASS, while the same facts in one
 // sig-all group are not a PASS.
 func TestGroupedProjectionRecomputesSection14_6(t *testing.T) {
@@ -572,7 +573,7 @@ func TestGroupedProjectionRecomputesSection14_6(t *testing.T) {
 // TestUnsupportedAlgorithmReasonRequiresItsSource proves an aggregate
 // PERMERROR unsupported_algorithm needs one of its two real sources: a
 // decisive set carrying that reason (an unknown or locally disabled
-// algorithm, Draft-08 Section 14.6 step 4), or a selected target whose
+// algorithm, Draft-09 Section 14.6 step 4), or a selected target whose
 // Section 14.7 hash combination is PERMERROR. Without the hash evidence the
 // reason is set-derived and must equal the decisive set's reason in both
 // directions.

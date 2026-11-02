@@ -14,7 +14,8 @@ import (
 var dispositionTableReasons = []ReasonCode{
 	ReasonNone, ReasonInvalidRequest, ReasonLimitExceeded, ReasonMalformedMessage,
 	ReasonMalformedProtocol, ReasonDuplicateHashAlgorithm, ReasonInvalidRecipeJSON,
-	ReasonInvalidRecipe, ReasonFromNotAuthentic, ReasonDuplicateSelector, ReasonMissingProtocol,
+	ReasonInvalidRecipe, ReasonFromNotAuthentic, ReasonFromSubdomainForbidden, ReasonDomainPolicyTemporary,
+	ReasonDomainPolicyAmbiguous, ReasonDomainPolicyInvalid, ReasonDuplicateSelector, ReasonMissingProtocol,
 	ReasonSequenceInvalid, ReasonUnsupportedAlgorithm, ReasonHashMismatch,
 	ReasonSignatureMismatch, ReasonMissingKey, ReasonInvalidKey, ReasonAmbiguousKey,
 	ReasonRevokedKey, ReasonUnsupportedKeyType, ReasonKeyAlgorithmMismatch,
@@ -52,19 +53,35 @@ var wantDispositionTable = []string{
 	"invalid_recipe_json|strict|PERMERROR|reject|protocol_permerror|reject|",
 	"invalid_recipe_json|permissive|PERMERROR|accept|permissive_override|accept|",
 	"invalid_recipe_json|testing|PERMERROR|continue|testing_mode_observe|continue|",
-	// New reason, Draft-08 Section 14.2 "Recipe <value> is invalid": PERMERROR.
+	// New reason, Draft-09 Section 14.2 "Recipe <value> is invalid": PERMERROR.
 	// Before this change the same cases were invalid_recipe_json or
 	// malformed_protocol, both PERMERROR, so every disposition is unchanged.
 	"invalid_recipe|strict|PERMERROR|reject|protocol_permerror|reject|",
 	"invalid_recipe|permissive|PERMERROR|accept|permissive_override|accept|",
 	"invalid_recipe|testing|PERMERROR|continue|testing_mode_observe|continue|",
-	// Deliberate: Draft-08 Sections 14.1 and 14.8 make an inauthentic From a
+	// Deliberate: Draft-09 Sections 14.1 and 14.8 make an inauthentic From a
 	// FAIL (was PERMERROR). Verdicts and actions are unchanged; only the
 	// strict primary policy reason moves from protocol_permerror to
 	// protocol_fail.
 	"from_not_authentic|strict|FAIL|reject|protocol_fail|reject|",
 	"from_not_authentic|permissive|FAIL|accept|permissive_override|accept|",
 	"from_not_authentic|testing|FAIL|continue|testing_mode_observe|continue|",
+	// New reasons, Draft-09 Sections 3.8, 11.1, and 14.8 (D3): a strict
+	// Domain Policy Record refusing the upward From match is FAIL like an
+	// inauthentic From; an unavailable record is TEMPERROR and tempfails like
+	// a temporary key lookup; multiple or invalid records are PERMERROR.
+	"from_subdomain_forbidden|strict|FAIL|reject|protocol_fail|reject|",
+	"from_subdomain_forbidden|permissive|FAIL|accept|permissive_override|accept|",
+	"from_subdomain_forbidden|testing|FAIL|continue|testing_mode_observe|continue|",
+	"domain_policy_temporary|strict|TEMPERROR|tempfail|protocol_temperror|tempfail|",
+	"domain_policy_temporary|permissive|TEMPERROR|tempfail|protocol_temperror|tempfail|",
+	"domain_policy_temporary|testing|TEMPERROR|continue|testing_mode_observe|continue|",
+	"domain_policy_ambiguous|strict|PERMERROR|reject|protocol_permerror|reject|",
+	"domain_policy_ambiguous|permissive|PERMERROR|accept|permissive_override|accept|",
+	"domain_policy_ambiguous|testing|PERMERROR|continue|testing_mode_observe|continue|",
+	"domain_policy_invalid|strict|PERMERROR|reject|protocol_permerror|reject|",
+	"domain_policy_invalid|permissive|PERMERROR|accept|permissive_override|accept|",
+	"domain_policy_invalid|testing|PERMERROR|continue|testing_mode_observe|continue|",
 	"duplicate_selector|strict|PERMERROR|reject|protocol_permerror|reject|",
 	"duplicate_selector|permissive|PERMERROR|accept|permissive_override|accept|",
 	"duplicate_selector|testing|PERMERROR|continue|testing_mode_observe|continue|",
@@ -110,46 +127,46 @@ var wantDispositionTable = []string{
 	"provider_contract|strict|PERMERROR|reject|protocol_permerror|reject|",
 	"provider_contract|permissive|PERMERROR|accept|permissive_override|accept|",
 	"provider_contract|testing|PERMERROR|continue|testing_mode_observe|continue|",
-	// Deliberate: Draft-08 Section 14.3 timestamp failures are FAIL (was
+	// Deliberate: Draft-09 Section 14.3 timestamp failures are FAIL (was
 	// PERMERROR); verdicts and actions are unchanged.
 	"timestamp_invalid|strict|FAIL|reject|protocol_fail|reject|",
 	"timestamp_invalid|permissive|FAIL|accept|permissive_override|accept|",
 	"timestamp_invalid|testing|FAIL|continue|testing_mode_observe|continue|",
-	// Deliberate: Draft-08 Section 14.4 MAIL FROM / RCPT TO mismatches are FAIL
+	// Deliberate: Draft-09 Section 14.4 MAIL FROM / RCPT TO mismatches are FAIL
 	// (was PERMERROR); verdicts and actions are unchanged.
 	"envelope_mismatch|strict|FAIL|reject|protocol_fail|reject|",
 	"envelope_mismatch|permissive|FAIL|accept|permissive_override|accept|",
 	"envelope_mismatch|testing|FAIL|continue|testing_mode_observe|continue|",
-	// Deliberate: Draft-08 Section 14.4 "MAIL FROM and d= do not match" is FAIL
+	// Deliberate: Draft-09 Section 14.4 "MAIL FROM and d= do not match" is FAIL
 	// (was PERMERROR); verdicts and actions are unchanged.
 	"domain_alignment_mismatch|strict|FAIL|reject|protocol_fail|reject|",
 	"domain_alignment_mismatch|permissive|FAIL|accept|permissive_override|accept|",
 	"domain_alignment_mismatch|testing|FAIL|continue|testing_mode_observe|continue|",
-	// Deliberate: Draft-08 Section 14.4 nd= failures are FAIL (was
+	// Deliberate: Draft-09 Section 14.4 nd= failures are FAIL (was
 	// PERMERROR); verdicts and actions are unchanged.
 	"next_domain_mismatch|strict|FAIL|reject|protocol_fail|reject|",
 	"next_domain_mismatch|permissive|FAIL|accept|permissive_override|accept|",
 	"next_domain_mismatch|testing|FAIL|continue|testing_mode_observe|continue|",
-	// New reason, Draft-08 Section 14.4 "mf= / d= does not match the rt= of
+	// New reason, Draft-09 Section 14.4 "mf= / d= does not match the rt= of
 	// i=<y>": FAIL. These cases were PERMERROR malformed_protocol before, with
 	// the same reject, accept, and continue verdicts.
 	"custody_mismatch|strict|FAIL|reject|protocol_fail|reject|",
 	"custody_mismatch|permissive|FAIL|accept|permissive_override|accept|",
 	"custody_mismatch|testing|FAIL|continue|testing_mode_observe|continue|",
-	// Deliberate: Draft-08 Sections 13.2 and 14.4 make a terminal nd= without
+	// Deliberate: Draft-09 Sections 13.2 and 14.4 make a terminal nd= without
 	// an out-of-band arrangement FAIL (was PERMERROR); verdicts and actions
 	// are unchanged.
 	"out_of_band_required|strict|FAIL|reject|protocol_fail|reject|",
 	"out_of_band_required|permissive|FAIL|accept|permissive_override|accept|",
 	"out_of_band_required|testing|FAIL|continue|testing_mode_observe|continue|",
-	// New reason, Draft-08 Section 13: a null body Recipe makes the message
+	// New reason, Draft-09 Section 13: a null body Recipe makes the message
 	// not Fully Verified, so FAIL. Such messages were PASS with partial
 	// history before; this is the one deliberate verdict change: strict mode
 	// now rejects them (was accept), permissive mode accepts them by
 	// override, and testing mode continues as before.
-	"body_history_unavailable|strict|FAIL|reject|protocol_fail|reject|",
-	"body_history_unavailable|permissive|FAIL|accept|permissive_override|accept|",
-	"body_history_unavailable|testing|FAIL|continue|testing_mode_observe|continue|",
+	"body_history_unavailable|strict|PERMERROR|reject|protocol_permerror|reject|",
+	"body_history_unavailable|permissive|PERMERROR|accept|permissive_override|accept|",
+	"body_history_unavailable|testing|PERMERROR|continue|testing_mode_observe|continue|",
 	"internal_contract|strict|PERMERROR|reject|protocol_permerror|reject|",
 	"internal_contract|permissive|PERMERROR|accept|permissive_override|accept|",
 	"internal_contract|testing|PERMERROR|continue|testing_mode_observe|continue|",

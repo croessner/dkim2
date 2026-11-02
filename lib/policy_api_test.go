@@ -248,7 +248,7 @@ func TestEvaluatePolicySelectedFourStateModeMatrix(t *testing.T) {
 // TestEvaluatePolicyUsesSealedAuthenticatedFlags proves current flags cross only a cryptographically authenticated seam.
 func TestEvaluatePolicyUsesSealedAuthenticatedFlags(t *testing.T) {
 	flaggedRaw, flaggedKey := signedPublicFlaggedPolicyMessage(t, publicVectorClock)
-	flaggedVerifier, err := NewVerifier(publicGoldenProvider{mode: goldenProviderKeys, rsa: flaggedKey}, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }))
+	flaggedVerifier, err := NewVerifier(publicGoldenProvider{mode: goldenProviderKeys, rsa: flaggedKey}, WithVerificationClock(func() time.Time { return time.Unix(publicVectorClock, 0) }), WithoutSubdomainFromAuthorization())
 	if err != nil {
 		t.Fatalf("NewVerifier(flags) error = %v", err)
 	}
@@ -267,7 +267,7 @@ func TestEvaluatePolicyUsesSealedAuthenticatedFlags(t *testing.T) {
 		t.Fatalf("feedback intent = %#v", decision.FeedbackIntent())
 	}
 	// The removed Draft-06 donotmodify and donotexplode flags in the fixture are
-	// inert unknown flags under Draft-08 Section 10.10 and produce no findings.
+	// inert unknown flags under Draft-09 Section 10.10 and produce no findings.
 	wantFlagReasons := []PolicyReason{PolicyReasonProtocolPass, PolicyReasonFeedbackRequested, PolicyReasonFeedbackRelaySelected}
 	flagFindings := decision.Findings()
 	gotFlagReasons := make([]PolicyReason, len(flagFindings))
@@ -596,7 +596,7 @@ func actualUnavailablePolicyResult(t *testing.T, pre policy.PreTargetReason, rea
 	if pre == policy.PreTargetLimitExceeded {
 		options = append(options, WithMaxRawMessageBytes(len(raw)-1))
 	}
-	verifier, err := NewVerifier(publicGoldenProvider{mode: goldenProviderKeys, rsa: corpus.rsaKey(t), ed: corpus.edKey(t)}, options...)
+	verifier, err := NewVerifier(publicGoldenProvider{mode: goldenProviderKeys, rsa: corpus.rsaKey(t), ed: corpus.edKey(t)}, append([]VerifierOption{WithoutSubdomainFromAuthorization()}, options...)...)
 	if err != nil {
 		t.Fatalf("NewVerifier(%s) error = %v", pre, err)
 	}

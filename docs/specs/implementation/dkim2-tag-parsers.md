@@ -1,7 +1,7 @@
 # DKIM2 Tag Parsers
 
 > Historical Draft-04 implementation record. The original scope and evidence
-> below are preserved; current Draft-08 authority is the migration disposition
+> below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 
 Status: completed.
@@ -240,8 +240,8 @@ syntax that the DNS record format copies from DKIM2.
   `signature` packages must not implement parallel semicolon splitting,
   duplicate detection, FWS trimming, base64 FWS stripping, or tag-name
   validation.
-- Tag identifiers before `=` are case-sensitive and never folded (Draft-08
-  Section 8). Draft-08 Sections 9 and 10 require every `Message-Instance` and
+- Tag identifiers before `=` are case-sensitive and never folded (Draft-09
+  Section 8). Draft-09 Sections 9 and 10 require every `Message-Instance` and
   `DKIM2-Signature` tag name, including unknown extension names, to be
   lowercase; the header scanner rejects any uppercase tag name as a syntax
   error before semantic dispatch, so `M=1` is invalid rather than an ignored
@@ -253,7 +253,7 @@ syntax that the DNS record format copies from DKIM2.
 - WSP and FWS around tag names, `=`, tag values, commas, and colons is handled
   only where the relevant ABNF permits it.
 - Semicolons separate tags and the final semicolon is optional in both header
-  fields and DNS records (Draft-08 Section 8). Unencoded semicolons inside a
+  fields and DNS records (Draft-09 Section 8). Unencoded semicolons inside a
   tag value are invalid, a tag list needs at least one tag-spec, and empty
   interior tag specifications are invalid. Canonical signature input retains
   the presence or absence of the final semicolon exactly.
@@ -261,7 +261,7 @@ syntax that the DNS record format copies from DKIM2.
   required tags, optional tags, and extension tags under exact name
   comparison.
 - Hash algorithm, signature algorithm, and flag names are case-sensitive
-  textstrings (Draft-08 Section 2.14). An uppercase spelling of a supported
+  textstrings (Draft-09 Section 2.14). An uppercase spelling of a supported
   name is an unknown name and is never folded onto the supported one.
 - Unknown extension tags are syntactically validated and then ignored by
   semantic results. They must not produce success data, but they still
@@ -305,7 +305,7 @@ syntax that the DNS record format copies from DKIM2.
 - Parsed `Message-Instance` collections must validate that instance numbers are
   contiguous from `1` with no gaps. Gaps make verification impossible and are
   reported as structured parser or validation errors.
-- `h=` follows the Draft-08 Section 9.3 grammar
+- `h=` follows the Draft-09 Section 9.3 grammar
   `hash-any = hash-all *([FWS] "|" [FWS] hash-all)`,
   `hash-all = hash-set *([FWS] "," [FWS] hash-set)`, and
   `hash-set = hash-name [FWS] ":" header-hash ":" body-hash`. The parser keeps
@@ -377,7 +377,7 @@ syntax that the DNS record format copies from DKIM2.
   syntax, rejects empty labels, leading or trailing dot, label length over 63,
   total length over 253, and control or whitespace bytes. IDNA, Unicode, and
   EAI semantics remain deferred because the DKIM2 EAI section is TBA.
-- `s=` follows the Draft-08 Section 10.9 grammar
+- `s=` follows the Draft-09 Section 10.9 grammar
   `sig-any = sig-all *([FWS] "|" [FWS] sig-all)`,
   `sig-all = sig-set *([FWS] "," [FWS] sig-set)`, and
   `sig-set = selector [FWS] ":" [FWS] sig-name [FWS] ":" message-sig`. The
@@ -396,7 +396,7 @@ syntax that the DNS record format copies from DKIM2.
   completion proof both use it; the signer's folded unsigned field is proven
   to reduce to the same bytes.
 - Known signature algorithm names are `rsa-sha256`, `ed25519-sha256`, and
-  `mldsa44` (Draft-08 Section 10.9). Unknown algorithm names, including the
+  `mldsa44` (Draft-09 Section 10.9). Unknown algorithm names, including the
   DNS-02-only `rsa-sha512`, `ed25519-sha512`, and the removed composite, are
   represented but cannot create verification success.
 - Fixed-length algorithms are enforced after base64 decoding: exactly 64
@@ -755,6 +755,6 @@ document the exact blocker.
 - Settled: Current SMTP envelope matching is deferred to verification and
   Milter/service milestones.
 - Settled: Same-algorithm multi-selector `s=` sets are accepted with distinct
-  selectors (Draft-08 Section 10.9).
+  selectors (Draft-09 Section 10.9).
 - Open: The final public facade shape for parsed DKIM2 fields remains deferred
   until the service layer needs it.

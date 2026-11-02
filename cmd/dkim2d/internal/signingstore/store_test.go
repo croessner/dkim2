@@ -113,7 +113,7 @@ func TestStoreComposesDatasourceProjectionAndOpaqueSigner(t *testing.T) {
 		signingStorePublicKeys{key: &fixture.key.PublicKey},
 		dkim2.NewRequestRouteAuthority(),
 		signingStoreAuthorizer{},
-		store,
+		store, dkim2.WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)

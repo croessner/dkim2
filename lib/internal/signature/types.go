@@ -17,7 +17,7 @@ const (
 	AlgorithmRSASHA256 Algorithm = "rsa-sha256"
 	// AlgorithmEd25519SHA256 is the baseline Ed25519 signature algorithm name.
 	AlgorithmEd25519SHA256 Algorithm = "ed25519-sha256"
-	// AlgorithmMLDSA44 is the Draft-08 Section 3.4 pure ML-DSA-44 signature
+	// AlgorithmMLDSA44 is the Draft-09 Section 3.4 pure ML-DSA-44 signature
 	// algorithm name.
 	AlgorithmMLDSA44 Algorithm = "mldsa44"
 )
@@ -25,7 +25,7 @@ const (
 // Algorithm identifies one canonical supported or extension signing-algorithm token.
 type Algorithm string
 
-// Known reports whether algorithm belongs to the implemented Draft-08
+// Known reports whether algorithm belongs to the implemented Draft-09
 // Section 3 signature vocabulary: rsa-sha256, ed25519-sha256, and mldsa44.
 // The Draft-07 composite mldsa44-ed25519-sha512 that Draft-08 removed stays
 // an unknown, unsupported algorithm.
@@ -185,7 +185,7 @@ func (s Signature) SignatureSets() []Set {
 	return cloneSignatureSets(s.signatures)
 }
 
-// SignatureLayout returns the Draft-08 Section 10.9 sig-any/sig-all group
+// SignatureLayout returns the Draft-09 Section 10.9 sig-any/sig-all group
 // structure of SignatureSets.
 func (s Signature) SignatureLayout() combine.Layout {
 	return s.setLayout

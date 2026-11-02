@@ -649,7 +649,7 @@ func newDatasourceSigningIntegrationFixture(t *testing.T) datasourceSigningInteg
 		&orderedRouteAuthority{delegate: routeplan.NewMemoryAuthority(), events: events},
 		authorizer,
 		signingProvider,
-		WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }),
+		WithSigningClock(func() time.Time { return time.Unix(1_700_000_000, 0) }), WithoutSignerSubdomainFromAuthorization(),
 	)
 	if err != nil {
 		t.Fatalf("NewSigner() error = %v", err)
