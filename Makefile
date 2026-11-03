@@ -1,4 +1,3 @@
-export GOEXPERIMENT := runtimesecret
 export GOTOOLCHAIN := go1.27.3
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 PRODUCT_MODULES := ./lib ./cmd/dkim2d ./cmd/dkim2-milter ./cmd/dkim2-exim ./cmd/dkim2ctl ./cmd/dkim2-dsn-propagator

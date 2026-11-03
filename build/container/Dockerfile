@@ -33,7 +33,6 @@ RUN case "${VERSION}" in \
     && printf '%s\n' dkim2-build-metadata-v1 > /validated
 
 FROM --platform=$BUILDPLATFORM golang:1.27.3-bookworm@sha256:21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132 AS build
-ENV GOEXPERIMENT=runtimesecret
 ARG TARGETARCH
 ARG VERSION
 WORKDIR /src

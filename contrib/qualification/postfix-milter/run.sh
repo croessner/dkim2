@@ -1,6 +1,5 @@
 #!/bin/sh
 set -eu
-export GOEXPERIMENT=runtimesecret
 export GOTOOLCHAIN=go1.27.3
 
 project=dkim2-postfix-qualification

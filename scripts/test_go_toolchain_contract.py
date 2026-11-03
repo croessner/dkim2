@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lock the exact first-party compiler and internally owned experiment contract."""
+"""Lock the exact first-party compiler and the absence of Go experiments."""
 from pathlib import Path
 import json
 import re
@@ -20,16 +20,16 @@ class ToolchainContractTest(unittest.TestCase):
                 self.assertRegex(content, r'(?m)^toolchain go1\.27\.3$')
                 self.assertNotRegex(content, r'(?m)^(?:go|toolchain) .*1\.26')
 
-    def test_make_and_direct_entry_points_own_experiment(self):
-        """Unsetting the caller environment must not remove the compiler experiment."""
+    def test_make_and_direct_entry_points_pin_toolchain_without_experiments(self):
+        """Entry points pin the compiler and never enable a Go experiment."""
         make = (ROOT / 'Makefile').read_text()
-        self.assertIn('export GOEXPERIMENT := runtimesecret', make)
+        self.assertNotIn('GOEXPERIMENT', make)
         self.assertIn('export GOTOOLCHAIN := go1.27.3', make)
         self.assertIn('OPENAPI_GO_TOOLCHAIN := go1.27.3', make)
         self.assertRegex(make, r'(?m)^guardrails:.*check-go-toolchain-contract')
         for path in SCRIPTS:
             with self.subTest(path=path):
-                self.assertRegex((ROOT / path).read_text(), r'(?m)^export GOEXPERIMENT=runtimesecret$')
+                self.assertNotIn('GOEXPERIMENT', (ROOT / path).read_text())
                 self.assertRegex((ROOT / path).read_text(), r'(?m)^export GOTOOLCHAIN=go1\.27\.3$')
 
     def test_ci_and_image_provenance_share_exact_compiler(self):
@@ -41,15 +41,16 @@ class ToolchainContractTest(unittest.TestCase):
         docker = (ROOT / 'build/container/Dockerfile').read_text()
         self.assertRegex(docker, r'golang:1\.27\.3-bookworm@sha256:[0-9a-f]{64}')
         self.assertNotIn('golang:1.26', docker)
+        self.assertNotIn('GOEXPERIMENT', docker)
 
-    def test_qualification_images_share_compiler_and_experiment(self):
+    def test_qualification_images_share_compiler_without_experiments(self):
         """Qualification compilers must not silently retain an older Go lane."""
         for name in ('contrib/qualification/postfix-milter/Dockerfile',
                      'cmd/dkim2-exim/exim/tests/container/Dockerfile'):
             with self.subTest(path=name):
                 content = (ROOT / name).read_text()
                 self.assertRegex(content, r'golang:1\.27\.3-trixie@sha256:[0-9a-f]{64}')
-                self.assertIn('ENV GOEXPERIMENT=runtimesecret', content)
+                self.assertNotIn('GOEXPERIMENT', content)
                 self.assertIn('ENV GOTOOLCHAIN=go1.27.3', content)
         image = re.search(r'golang:1\.27\.3-trixie@sha256:[0-9a-f]{64}',
                           (ROOT / 'contrib/qualification/postfix-milter/Dockerfile').read_text()).group()
@@ -61,9 +62,9 @@ class ToolchainContractTest(unittest.TestCase):
             with self.subTest(path=name):
                 self.assertIn(image, (ROOT / name).read_text())
         builder = (ROOT / 'cmd/dkim2-exim/exim/tests/build-real-matrix-inputs-container.sh').read_text()
-        for setting in ('GOEXPERIMENT=runtimesecret', 'GOTOOLCHAIN=go1.27.3'):
-            self.assertIn('export ' + setting, builder)
-            self.assertIn('--env ' + setting, builder)
+        self.assertIn('export GOTOOLCHAIN=go1.27.3', builder)
+        self.assertIn('--env GOTOOLCHAIN=go1.27.3', builder)
+        self.assertNotIn('GOEXPERIMENT', builder)
 
 if __name__ == '__main__':
     unittest.main()

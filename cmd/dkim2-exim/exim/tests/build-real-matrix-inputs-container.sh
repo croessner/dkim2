@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Builds five source-matched Exim binaries in a disposable pinned Linux container.
 set -euo pipefail
-export GOEXPERIMENT=runtimesecret
 export GOTOOLCHAIN=go1.27.3
 umask 077
 
@@ -29,7 +28,6 @@ candidate_snapshot_sha256=$(
 mkdir -m 0700 "$input_root"
 
 docker run --rm --platform linux/amd64 \
-  --env GOEXPERIMENT=runtimesecret \
   --env GOTOOLCHAIN=go1.27.3 \
   --env "DKIM2_BUILD_BASE_REVISION=$base_revision" \
   --env "DKIM2_BUILD_CANDIDATE_SNAPSHOT_SHA256=$candidate_snapshot_sha256" \

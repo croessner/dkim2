@@ -58,11 +58,16 @@ You need Go 1.27.3. Build Linux binaries from a checkout of a release tag:
 git clone https://github.com/croessner/dkim2.git
 cd dkim2
 for p in dkim2d dkim2-milter dkim2-dsn-propagator dkim2ctl; do
-  GOEXPERIMENT=runtimesecret CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+  GOFLAGS=-mod=vendor GOPROXY=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -o "bin/$p" "./cmd/$p"
 done
 install -m 0755 bin/* /usr/local/sbin/
 ```
+
+All third-party Go modules are checked in under `vendor/`. `-mod=vendor`
+builds from that tree only, and `GOPROXY=off` proves that nothing is
+downloaded: the build works on an offline machine and uses exactly the
+dependency sources of the release build. Use `GOARCH=arm64` for ARM servers.
 
 `make product-binaries` builds the reproducible release binaries for amd64
 and arm64 into `.artifacts/product-binaries/`. Container images are described

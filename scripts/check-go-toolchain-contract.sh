@@ -1,6 +1,5 @@
 #!/bin/sh
 set -eu
-export GOEXPERIMENT=runtimesecret
 export GOTOOLCHAIN=go1.27.3
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo_root"

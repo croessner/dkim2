@@ -244,7 +244,7 @@ contrib assets, and developer home material.
 
 Product builds:
 
-- use exact Go `1.27.3` with `GOEXPERIMENT=runtimesecret` consistently across
+- use exact Go `1.27.3` without Go experiments consistently across
   repository metadata, builder identity, docs, and CI;
 - use the checked-in vendor tree with `-mod=vendor` and no network access after
   immutable builder/runtime image acquisition;

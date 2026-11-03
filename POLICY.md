@@ -7,8 +7,8 @@ incomplete if any mandatory rule is missed.
 
 - MUST: Keep the project on Go 1.27.3 across `go.work`, module metadata, CI,
   generated code, Docker or packaging files, and documentation.
-- MUST: Export `GOEXPERIMENT=runtimesecret` internally in every Make and
-  direct-script Go test entry point; direct Go tests must prefix it explicitly.
+- MUST: Build and test without Go experiments. Make targets, scripts,
+  Dockerfiles, and CI must not set `GOEXPERIMENT`.
 - MUST: Preserve the multi-module boundary. `lib/` is the standalone DKIM2
   reference library; service and adapter dependencies belong in command modules.
 - MUST: Apply security-by-design and security-by-default. Ambiguous protocol,

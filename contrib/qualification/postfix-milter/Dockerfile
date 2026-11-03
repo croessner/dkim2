@@ -3,7 +3,6 @@ ARG DAEMON_IMAGE=debian@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a
 ARG POSTFIX_IMAGE=chrroessner/postfix@sha256:736180b4fa352bb55bdca9e93e9201c7df7a419dad6622ed601d9dde028ae254
 
 FROM ${BUILD_IMAGE} AS build
-ENV GOEXPERIMENT=runtimesecret
 ENV GOTOOLCHAIN=go1.27.3
 WORKDIR /source
 COPY go.work go.work.sum ./

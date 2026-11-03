@@ -85,12 +85,16 @@ configuration.
 git clone https://github.com/croessner/dkim2.git
 cd dkim2
 for p in dkim2d dkim2-exim dkim2-dsn-propagator dkim2ctl; do
-  GOEXPERIMENT=runtimesecret CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+  GOFLAGS=-mod=vendor GOPROXY=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -o "bin/$p" "./cmd/$p"
 done
 install -m 0755 bin/dkim2d bin/dkim2-dsn-propagator bin/dkim2ctl /usr/local/sbin/
 install -m 0755 bin/dkim2-exim /usr/libexec/dkim2-exim
 ```
+
+The build uses only the checked-in `vendor/` tree (`-mod=vendor`) and no
+network (`GOPROXY=off`); see the
+[Postfix guide](postfix-quickstart.md#build-the-programs) for details.
 
 ### Users and directories
 

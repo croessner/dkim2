@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Exercises the strict fixture-bound real-matrix evidence verifier.
 set -euo pipefail
-export GOEXPERIMENT=runtimesecret
 export GOTOOLCHAIN=go1.27.3
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)

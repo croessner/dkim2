@@ -182,7 +182,7 @@ signatures and test-only protected material to a new private directory:
 
 ```sh
 DKIM2_BATCH_FIXTURE_DIR=/absolute/private/new-fixture \
-GOEXPERIMENT=runtimesecret go test ./cmd/dkim2d/internal/app \
+go test ./cmd/dkim2d/internal/app \
   -run '^TestBatchRevisionIntegrationFixture$' -count=1
 ```
 
@@ -217,7 +217,7 @@ fields and the actual prepared reverse path:
 DKIM2_BATCH_FIXTURE_DIR=/absolute/private/new-fixture \
 DKIM2_BATCH_REMOTE_MESSAGE_FILE=/absolute/private/final.eml \
 DKIM2_BATCH_REMOTE_ENVELOPE_FILE=/absolute/private/final-envelope.json \
-GOEXPERIMENT=runtimesecret go test ./cmd/dkim2d/internal/app \
+go test ./cmd/dkim2d/internal/app \
   -run '^TestBatchRevisionIntegrationFixture$' -count=1
 ```
 
@@ -238,7 +238,7 @@ rewriting the input or creating a new report:
 DKIM2_BATCH_FIXTURE_DIR=/absolute/private/new-fixture \
 DKIM2_BATCH_VERIFY_MESSAGE_FILE=/absolute/private/received.eml \
 DKIM2_BATCH_VERIFY_ENVELOPE_FILE=/absolute/private/received-envelope.json \
-GOEXPERIMENT=runtimesecret go test ./cmd/dkim2d/internal/app \
+go test ./cmd/dkim2d/internal/app \
   -run '^TestBatchRevisionIntegrationFixture$' -count=1
 ```
 

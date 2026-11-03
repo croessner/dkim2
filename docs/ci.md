@@ -124,7 +124,7 @@ The workflow publishes the exact stable version only; it does not create
 ## Qualification compiler and evidence scope
 
 Postfix and Exim qualification use the digest-pinned Go 1.27.3 Trixie
-compiler image, with `GOEXPERIMENT=runtimesecret` and exact toolchain selection.
+compiler image, with exact toolchain selection and no Go experiments.
 The product image keeps its Go 1.27.3 Bookworm build environment. The toolchain
 contract checks both qualification Dockerfiles and their evidence producers
 and consumers. Changing the compiler identity invalidates earlier
@@ -147,7 +147,7 @@ are classified as product vulnerabilities.
 
 ## Toolchain refresh and generator compatibility
 
-The 2026-10-19 refresh pins Go 1.27.3 with `GOEXPERIMENT=runtimesecret`,
+The 2026-10-19 refresh pins Go 1.27.3 (built without Go experiments since 2026-11-03),
 `golangci-lint` 2.15.0, `govulncheck` 1.9.0 and the Valkey 9.1.2 integration
 fixture. `actionlint` 1.7.12 and `oapi-codegen` 2.8.0 remain current for this
 refresh. Container evidence tools are Syft 1.54.1 and Trivy 0.76.0; the

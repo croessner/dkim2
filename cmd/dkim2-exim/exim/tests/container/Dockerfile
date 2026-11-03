@@ -1,6 +1,5 @@
 # Provides the disposable Linux runtime for source-matched Exim qualification.
 FROM golang:1.27.3-trixie@sha256:604106102d33b1084e37ca08adf98ac0813624ae8595bd0d7f3965ecebded09c
-ENV GOEXPERIMENT=runtimesecret
 ENV GOTOOLCHAIN=go1.27.3
 
 RUN apt-get update \

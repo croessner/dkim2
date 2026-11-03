@@ -795,7 +795,7 @@ func appendClosedGoEnvironment(environment []string, root string) []string {
 		"GOCACHE=/tmp/dkim2-security-go-cache",
 		"GOMODCACHE=/tmp/dkim2-security-module-cache",
 		"GOFLAGS=",
-		"GOENV=off", "GOEXPERIMENT=runtimesecret",
+		"GOENV=off",
 		"GOTOOLCHAIN=local",
 		"GOVULNDB=https://vuln.go.dev",
 		"GOWORK="+filepath.Join(root, "go.work"),
@@ -838,20 +838,14 @@ func resolveGoExecutable() (string, string, error) {
 	return executable, digest, nil
 }
 
-// runtimeToolchainVersion separates the closed runtime experiment suffix from
-// the underlying Go toolchain version reported by the compiler executable.
+// runtimeToolchainVersion returns the Go toolchain version of the running
+// binary. Builds use no Go experiments, so a "-X:" experiment suffix is
+// rejected instead of being stripped.
 func runtimeToolchainVersion(value string) (string, error) {
-	base, experiments, present := strings.Cut(value, "-X:")
-	if !present {
-		if value == "" || strings.ContainsAny(value, " \t\r\n") {
-			return "", errors.New("security_go_dependency")
-		}
-		return value, nil
-	}
-	if base == "" || experiments == "" || strings.ContainsAny(base+experiments, " \t\r\n") || strings.Contains(experiments, "-X:") {
+	if value == "" || strings.ContainsAny(value, " \t\r\n") || strings.Contains(value, "-X:") {
 		return "", errors.New("security_go_dependency")
 	}
-	return base, nil
+	return value, nil
 }
 
 // scannerVersion returns the bounded scanner identity without database URL material.

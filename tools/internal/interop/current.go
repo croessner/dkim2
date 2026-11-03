@@ -461,7 +461,6 @@ func peerBuildArguments(
 		"--env", "GOSUMDB=off",
 		"--env", "GOWORK=off",
 		"--env", "GOENV=off",
-		"--env", "GOEXPERIMENT=runtimesecret",
 		"--env", "CGO_ENABLED=0",
 		"--env", "GOOS=linux",
 		"--env", "GOARCH=amd64",

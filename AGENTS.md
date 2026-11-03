@@ -34,9 +34,9 @@ before substantial work in its area:
 
 ## Required Workflow
 
-- Always use exact Go 1.27.3 and `GOEXPERIMENT=runtimesecret`. Make targets
-  and direct test scripts export the experiment internally; direct Go test
-  invocations must prefix it explicitly. Run `make check-go-toolchain-contract`.
+- Always use exact Go 1.27.3 without Go experiments (`GOEXPERIMENT` stays
+  unset). Builds use the checked-in vendor tree. Run
+  `make check-go-toolchain-contract`.
 
 - Use `make` targets instead of ad hoc command variants whenever possible.
 - Run `make guardrails` before every commit or pull request once the touched
@@ -197,10 +197,10 @@ as those targets become available.
 Current multi-module direct checks:
 
 ```text
-GOEXPERIMENT=runtimesecret go test ./lib/...
-GOEXPERIMENT=runtimesecret go test ./cmd/dkim2d/...
-GOEXPERIMENT=runtimesecret go test ./cmd/dkim2-milter/...
-GOEXPERIMENT=runtimesecret go test ./cmd/dkim2ctl/...
+go test ./lib/...
+go test ./cmd/dkim2d/...
+go test ./cmd/dkim2-milter/...
+go test ./cmd/dkim2ctl/...
 ```
 
 ## Definition Of Done

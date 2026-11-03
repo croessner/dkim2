@@ -1,5 +1,4 @@
 #!/bin/sh
-export GOEXPERIMENT=runtimesecret
 export GOTOOLCHAIN=go1.27.3
 set -eu
 
@@ -162,7 +161,7 @@ openssl x509 -req -sha256 -days 1 -in "$RUNTIME_DIR/certs/outbox-redis.csr" \
   -CAcreateserial -copy_extensions copy -out "$RUNTIME_DIR/certs/outbox-redis.crt" >/dev/null 2>&1
 (
   cd "$NAUTHILUS_REPO"
-  GOEXPERIMENT=runtimesecret go test -mod=vendor "$SCRIPT_DIR/policy-e2e/compose_config.go" "$SCRIPT_DIR/policy-e2e/compose_config_test.go"
+  go test -mod=vendor "$SCRIPT_DIR/policy-e2e/compose_config.go" "$SCRIPT_DIR/policy-e2e/compose_config_test.go"
   go run -mod=vendor "$SCRIPT_DIR/policy-e2e/compose_config.go" "$RUNTIME_DIR/nauthilus.yml" \
     server/docs/examples/go_plugin_reputation.yml \
     server/docs/examples/reputation_geoip_observation.yml \

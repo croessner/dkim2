@@ -31,7 +31,7 @@ func TestInspectBinaryBuildRequiresMeasuredCompilerAndExperiment(t *testing.T) {
 			command.Env = append(command.Env, entry)
 		}
 	}
-	command.Env = append(command.Env, "GOWORK=off", "GOTOOLCHAIN=local", "GOEXPERIMENT=runtimesecret", "CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64", "GOAMD64=v1", "GOFLAGS=", "GOENV=off")
+	command.Env = append(command.Env, "GOWORK=off", "GOTOOLCHAIN=local", "CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64", "GOAMD64=v1", "GOFLAGS=", "GOENV=off")
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("compiler probe failed: %v: %s", err, output)
 	}
@@ -48,9 +48,5 @@ func TestInspectBinaryBuildRequiresMeasuredCompilerAndExperiment(t *testing.T) {
 	}
 	if _, err = inspectBinaryBuild("dkim2d", "linux/amd64", stale); err == nil {
 		t.Fatal("stale compiler identity accepted")
-	}
-	altered := bytes.ReplaceAll(content, []byte("runtimesecret"), []byte("runtimeother"))
-	if _, err = inspectBinaryBuild("dkim2d", "linux/amd64", altered); err == nil {
-		t.Fatal("altered experiment identity accepted")
 	}
 }
