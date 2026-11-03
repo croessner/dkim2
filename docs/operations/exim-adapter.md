@@ -4,6 +4,8 @@ The Exim adapter has three separately configured operations: the Linux-only
 inbound `local_scan` service, one-shot originator signing, and one-shot
 ordinary-transit revision. Use the examples under
 `cmd/dkim2-exim/examples/` as reviewed starting points, not as credentials.
+The example-driven walkthrough with routers, transports, and use cases is
+[Exim step by step](../guide/exim-quickstart.md).
 
 ## Installation and ownership
 

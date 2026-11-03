@@ -12,6 +12,24 @@ The first design goal is precision: the core implementation must work from a
 controlled RFC 5322 message representation, preserve wire-significant details,
 and keep adapter behavior separate from the protocol engine.
 
+## New to DKIM2? Start Here
+
+The [administrator guides](docs/guide/README.md) explain DKIM2 with
+examples, diagrams, and step-by-step configurations for people who run mail
+servers, not protocol drafts:
+
+- [DKIM2 explained](docs/guide/dkim2-explained.md): the chain of custody and
+  a real signed and forwarded message taken apart line by line.
+- [Tag and flag cheat sheet](docs/guide/tag-cheatsheet.md): what `i=`, `m=`,
+  `mf=`, `rt=`, `nd=`, `s=`, `f=exploded`, `h=`, `r=`, and the DNS tags mean.
+- [How dkim2d works](docs/guide/dkim2d-explained.md): inputs, routes,
+  capabilities, policy modes, replay, and the signing datasource.
+- [Keys and DNS](docs/guide/keys-and-dns.md): generating keys, publishing and
+  testing TXT records, `f=strict`, and rotation.
+- [Postfix step by step](docs/guide/postfix-quickstart.md) and
+  [Exim step by step](docs/guide/exim-quickstart.md): inbound verification,
+  outbound signing, forwarding, auto-replies, and bounces.
+
 ## Repository Status
 
 `github.com/croessner/dkim2` is the canonical development, issue, release, and
@@ -68,6 +86,8 @@ owns DKIM2 protocol semantics.
 
 Current contents:
 
+- `docs/guide/`: example-driven administrator guides for DKIM2 concepts,
+  tags, `dkim2d`, keys and DNS, Postfix, and Exim.
 - `docs/ARCHITECTURE.md`: current architecture, ownership boundaries, and
   implementation plan.
 - `AGENTS.md` and `POLICY.md`: repository development rules and engineering
@@ -139,7 +159,9 @@ Current contents:
 
 ## Operator Navigation
 
-Start with the [Postfix administrator guide](docs/operator/postfix-admin.md)
+First-time installers start with the
+[administrator guides](docs/guide/README.md). Experienced operators continue
+with the [Postfix administrator guide](docs/operator/postfix-admin.md)
 for the installation order, route decisions, parameter rationale and acceptance
 matrix, and the [deployment walkthrough](docs/operator/deployment-walkthrough.md)
 for illustrated mail flows. Continue with

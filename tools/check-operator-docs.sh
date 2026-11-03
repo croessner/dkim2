@@ -336,6 +336,32 @@ done
 refute 'transport_maps' "$walkthrough"
 refute 'minimal_backoff_time' "$walkthrough"
 refute 'docker compose' "$walkthrough"
+
+# The administrator guides are the first-time entry point; every page must
+# exist, be indexed from the root and guide index, and keep the baselines.
+for page in \
+  dkim2-explained.md \
+  tag-cheatsheet.md \
+  dkim2d-explained.md \
+  keys-and-dns.md \
+  postfix-quickstart.md \
+  exim-quickstart.md; do
+  test -s "docs/guide/$page"
+  grep -Fq "docs/guide/$page" README.md
+  grep -Fq "($page" docs/guide/README.md
+done
+grep -Fq 'docs/guide/README.md' README.md
+grep -Fq 'guide/README.md' docs/reference/README.md
+for required in \
+  'draft-ietf-dkim-dkim2-spec-09' \
+  'draft-ietf-dkim-dkim2-dns-02'; do
+  grep -Fq "$required" docs/guide/README.md
+done
+grep -Fq 'unqualified_draft09' docs/guide/exim-quickstart.md
+grep -Fq '{postfix_internal_origin}' docs/guide/postfix-quickstart.md
+for command in 'dkim2d datasource key generate' 'dkim2d validate'; do
+  grep -Fq "$command" docs/guide/keys-and-dns.md
+done
 refute 'DKIM2 based on `draft-ietf-dkim-dkim2-spec-04`' README.md
 refute 'implemented with capability `qualified_linux`' README.md
 refute 'Protocol behavior remains pinned to `draft-ietf-dkim-dkim2-spec-04`' "$guide"
@@ -573,7 +599,7 @@ refute_pattern \
   '(example\.(com|org|net)|0\.0\.0\.0:2525|image:[[:space:]]+[^[:space:]]*:latest)' \
   README.md cmd/dkim2d/README.md cmd/dkim2-milter/README.md \
   cmd/dkim2ctl/README.md cmd/dkim2-dsn-propagator/README.md \
-  docs/operator docs/specs/openapi/README.md \
+  docs/operator docs/guide docs/specs/openapi/README.md \
   deployments/postfix-compose \
   --include='*.md' --include='*.yaml' --include='*.cf'
 

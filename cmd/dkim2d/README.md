@@ -11,6 +11,8 @@ owned by `github.com/croessner/dkim2`. The authoritative REST contract is
 [`docs/specs/openapi/dkim2d.yaml`](../../docs/specs/openapi/dkim2d.yaml).
 The production navigation and container trust topology start in
 [`docs/operator/postfix-compose.md`](../../docs/operator/postfix-compose.md).
+A conceptual, example-driven introduction to the daemon is
+[How dkim2d works](../../docs/guide/dkim2d-explained.md).
 LDAP/PostgreSQL/MySQL/MariaDB installation and migration are documented in
 [`docs/operator/datasource-backends.md`](../../docs/operator/datasource-backends.md)
 and

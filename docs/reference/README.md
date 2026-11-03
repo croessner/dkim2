@@ -5,6 +5,9 @@ remains the pinned drafts and repository architecture; OpenAPI truth remains
 the generated source contract. Reference prose summarizes tested behavior and
 limitations without creating a second protocol model.
 
+- [Administrator guides](../guide/README.md) are the example-driven entry
+  point for first-time installers: concepts, tags and flags, `dkim2d`, keys
+  and DNS, and step-by-step Postfix and Exim setups.
 - [Draft issue log](draft-issues.md) separates upstream text, local behavior,
   executable tests, external observations, and release effects.
 - [Compatibility](compatibility.md) records the public Go, HTTP, CLI,

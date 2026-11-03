@@ -1,5 +1,10 @@
 # Postfix and DKIM2: administrator's starting point
 
+New to DKIM2? Start with the example-driven
+[Postfix step by step](../guide/postfix-quickstart.md) guide and the
+[administrator guides](../guide/README.md); return here for the complete
+decision list and acceptance matrix.
+
 This guide connects the deployment procedure to the decisions an administrator
 must make before accepting real mail. Read it alongside the
 [deployment walkthrough](deployment-walkthrough.md), which explains verification,

@@ -7,7 +7,8 @@ has not seen this project before. It is not the deployment procedure. The
 hardened step-by-step procedure, the exact Postfix parameters, the protected
 state layout, lifecycle, backup, and rollback are in
 [`postfix-compose.md`](postfix-compose.md); this page links there instead of
-repeating it.
+repeating it. For a gentler, example-driven introduction start with the
+[administrator guides](../guide/README.md).
 
 Protocol behavior is pinned to `draft-ietf-dkim-dkim2-spec-09` with the
 tested `draft-ietf-dkim-dkim2-dns-02` DNS behavior. Where the draft leaves a
