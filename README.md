@@ -88,6 +88,9 @@ Current contents:
 
 - `docs/guide/`: example-driven administrator guides for DKIM2 concepts,
   tags, `dkim2d`, keys and DNS, Postfix, and Exim.
+- `docs/man/`: manual pages for `dkim2d(8)`, `dkim2-milter(8)`,
+  `dkim2-dsn-propagator(8)`, `dkim2-exim(8)`, and `dkim2ctl(1)`, rendered from
+  `docs/man/src/` and the real command help by `make man`.
 - `docs/ARCHITECTURE.md`: current architecture, ownership boundaries, and
   implementation plan.
 - `AGENTS.md` and `POLICY.md`: repository development rules and engineering
@@ -160,7 +163,9 @@ Current contents:
 ## Operator Navigation
 
 First-time installers start with the
-[administrator guides](docs/guide/README.md). Experienced operators continue
+[administrator guides](docs/guide/README.md); the
+[manual pages](docs/man/) give a per-command reference
+(`man ./docs/man/dkim2d.8`). Experienced operators continue
 with the [Postfix administrator guide](docs/operator/postfix-admin.md)
 for the installation order, route decisions, parameter rationale and acceptance
 matrix, and the [deployment walkthrough](docs/operator/deployment-walkthrough.md)

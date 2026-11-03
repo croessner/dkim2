@@ -1,0 +1,85 @@
+.\" Template for dkim2-dsn-propagator(8). Edit this file, then run "make man".
+.\" Lines starting with '.\" @cobra' are replaced by the real help text.
+.TH DKIM2-DSN-PROPAGATOR 8 "2026-11-03" "dkim2" "System Manager's Manual"
+.SH NAME
+dkim2\-dsn\-propagator \- DKIM2 delivery\-status propagation adapter
+.SH SYNOPSIS
+.\" @cobra Usage dkim2-dsn-propagator
+.SH DESCRIPTION
+When a remote server bounces a message that this host forwarded under DKIM2,
+the bounce must travel back to the previous hop.
+.B dkim2\-dsn\-propagator
+receives such a delivery\-status notification over LMTP, asks
+.BR dkim2d (8)
+to evaluate, rebuild, and sign the notification for the previous hop,
+re\-injects it through a trusted local, Milter\-free SMTP listener, commits
+the reserved propagation coordinate, and only then acknowledges the LMTP
+transaction.
+.PP
+The adapter is transport glue: it never parses DKIM2 fields, rewrites a
+message, chooses a recipient, or falls back to another signing route.
+.SH COMMANDS
+.TP
+.B serve
+Create the configured LMTP Unix socket and serve until SIGTERM or SIGINT.
+.TP
+.B validate
+Load the strict configuration and its propagation capability without opening
+a socket or contacting the daemon.
+It is silent on success.
+.TP
+.B probe
+Reload the configuration and check that its socket is a single\-link Unix
+socket owned by the effective UID with no permissions for other users.
+It neither opens an LMTP session nor contacts the daemon.
+.SH OPTIONS
+.\" @cobra Flags dkim2-dsn-propagator
+.SH ENVIRONMENT
+Every stable configuration path may also be supplied through its single
+declared environment name: the path upper\-cased, with
+.B .\&
+replaced by
+.BR _ ,
+behind the
+.B DKIM2_DSN_PROPAGATOR_
+prefix.
+A value set in both places is a configuration error.
+Scalar values may contain
+.B ${NAME}
+placeholders, expanded before validation; a missing variable fails closed.
+.SH EXIT STATUS
+.TP
+.B 0
+Success, help output, or a clean shutdown.
+.TP
+.B 1
+Configuration, startup, validation, probe, or runtime failure.
+.TP
+.B 2
+Command shape or flag error.
+.SH FILES
+.TP
+.I /run/dkim2/propagation/lmtp.sock
+LMTP socket used by the Postfix guide's
+.B dsn_propagator
+transport.
+.TP
+.I propagation capability
+The 32\-byte capability for the daemon's two propagation operations (mode 0400
+or 0600) in a parent of exact mode 0500.
+No other route ever receives it.
+.SH SEE ALSO
+.BR dkim2d (8),
+.BR dkim2\-milter (8),
+.BR dkim2ctl (1)
+.PP
+In the source tree:
+.I docs/guide/README.md
+(start here),
+.I docs/guide/postfix\-quickstart.md
+(section on bounce propagation),
+.IR docs/guide/dkim2d\-explained.md ,
+.IR docs/guide/keys\-and\-dns.md ,
+.IR docs/operator/postfix\-compose.md ,
+and the complete configuration reference in
+.IR cmd/dkim2\-dsn\-propagator/README.md .

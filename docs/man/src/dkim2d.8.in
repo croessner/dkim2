@@ -1,0 +1,191 @@
+.\" Template for dkim2d(8). Edit this file, then run "make man".
+.\" Lines starting with '.\" @cobra' are replaced by the real help text.
+.TH DKIM2D 8 "2026-11-03" "dkim2" "System Manager's Manual"
+.SH NAME
+dkim2d \- DKIM2 signing, revision, and verification daemon
+.SH SYNOPSIS
+.\" @cobra Usage dkim2d
+.SH DESCRIPTION
+.B dkim2d
+is the HTTP/JSON service around the standalone DKIM2 library.
+Mail adapters such as
+.BR dkim2\-milter (8),
+.BR dkim2\-exim (8),
+and
+.BR dkim2\-dsn\-propagator (8)
+send it complete messages; it verifies inbound DKIM2 chains, signs mail for
+local domains, adds a revision hop to forwarded mail, and signs delivery
+status notifications.
+The daemon owns every protocol rule; the adapters only translate MTA
+transactions into requests.
+.PP
+Each instance serves exactly the routes its configuration enables and
+authenticates every caller with a per\-route capability file.
+Configuration is one strict YAML document; protected material such as private
+keys, capabilities, and replay keys is referenced by absolute path and is never
+accepted on the command line or in environment values.
+.SH COMMANDS
+.TP
+.B serve
+Load and validate the configuration, acquire every selected dependency, and
+serve HTTP until SIGTERM or SIGINT.
+Readiness is published only after every owner is live; shutdown withdraws
+readiness first and then drains.
+.TP
+.B validate
+Perform the same protected load as
+.B serve
+without opening a listener.
+It is silent on success and never creates or rewrites protected state.
+Run it after every configuration change.
+.TP
+.B probe
+Send one two\-second, non\-proxied
+.B GET /readyz
+to the local daemon and succeed only on status 200.
+It is intended for container and service\-manager health checks.
+.TP
+.B datasource bootstrap\-opendkim
+Inventory legacy OpenDKIM key data and, with
+.BR \-\-apply ,
+publish it as one fenced datasource generation.
+Dry\-run is the default.
+.TP
+.B datasource rollback
+Republish prior datasource content under a higher generation.
+.TP
+.B datasource domain plan|prepare|dns export|prove|activate|status|reconcile|abort
+Onboard one native signing domain offline through a protected operation
+journal: plan the change, prepare keys, export the DNS records to publish,
+prove them through a recursive resolver, and activate only with
+.BR \-\-apply .
+.TP
+.B datasource rotation run|emergency|status|reconcile|abort|purge plan|purge apply
+Run global key rotation campaigns offline through a protected campaign journal.
+.B run
+plans by default and executes only with
+.BR \-\-apply ;
+.B purge apply
+destroys only the generations named in an exact, previously written plan.
+.TP
+.B datasource key generate
+Create one owner\-only PKCS#8 private key file for flat\-file key custody and
+print its public credential and the DNS TXT record to publish.
+.SH OPTIONS
+These options apply to
+.BR serve ;
+the overrides take precedence over YAML and environment values.
+.\" @cobra Flags dkim2d
+.SS Probe options
+.TP
+\fB\-\-port\fR \fIport\fR
+Local readiness port (default 8080).
+.TP
+\fB\-\-connect\-address\fR \fIip\fR
+Exact local listener IP to dial (default 127.0.0.1).
+Without TLS it must be a loopback address.
+.TP
+\fB\-\-tls\-server\-name\fR \fIname\fR
+Verify the private\-network TLS server identity; requires
+.B \-\-tls\-ca\-file
+and a private
+.BR \-\-connect\-address .
+.TP
+\fB\-\-tls\-ca\-file\fR \fIpath\fR
+Absolute path of the internal PKI trust roots.
+.SS Datasource options
+.TP
+.B \-\-dry\-run
+Validate and report without writing (the default for
+.B bootstrap\-opendkim
+and
+.BR "rotation run" ).
+.TP
+.B \-\-apply
+Authorize the one exact mutation the command describes.
+Activation, emergency rotation, abort, and purge refuse to run without it.
+.TP
+.B \-\-machine
+Emit one deterministic, bounded JSON document instead of the human report.
+.TP
+\fB\-\-algorithm\fR \fIalgorithm\fR
+Key algorithm for
+.BR "key generate" :
+.BR rsa\-sha256 ,
+.BR ed25519\-sha256 ,
+or
+.BR mldsa44 .
+.TP
+\fB\-\-rsa\-bits\fR \fIbits\fR
+RSA modulus size: 2048, 3072, or 4096.
+.TP
+\fB\-\-ttl\fR \fIseconds\fR
+TTL of the printed DNS record.
+.PP
+The remaining datasource options name absolute protected files (configuration,
+intent, operation or campaign journal, plan, and output artifact) or exact
+binding values, as shown in the synopsis.
+.SH ENVIRONMENT
+Every stable configuration path except
+.B config.version
+and
+.B protected.generation
+has one explicit
+.B DKIM2D_
+environment name, for example
+.BR DKIM2D_SERVER_LISTEN .
+Other names are ignored.
+Scalar YAML values may contain one non\-recursive
+.B ${NAME}
+expansion; a missing variable is a configuration error.
+Precedence is defaults, YAML, environment, then command\-line overrides.
+.SH EXIT STATUS
+.TP
+.B 0
+Success, help output, or a clean shutdown.
+.TP
+.B 1
+Configuration, startup, dependency, serve, shutdown, or probe failure, or a
+runtime without the mandatory
+.B mldsa44
+algorithm.
+Diagnostics are fixed and content\-free.
+.TP
+.B 2
+Command shape or flag error, including a missing
+.B \-\-apply
+where it is required.
+.SH FILES
+.TP
+.I /etc/dkim2/dkim2d\-*.yaml
+Configuration documents used by the administrator guides, one per instance
+(for example inbound and signer).
+.TP
+.I /var/lib/dkim2/<instance>/<generation>/
+Protected generation directory (mode 0500) named by
+.BR protected.generation ,
+holding capabilities, replay keys, and certificates, as laid out in the
+guides.
+It is immutable after publication; create a new generation, point the YAML
+file at it, and restart.
+There is no hot reload.
+.SH SECURITY
+Run one instance per trust role.
+Keep the HTTP listener on loopback or a private network with TLS; the daemon
+rejects proxies, redirects, and ambient credentials.
+Secret bytes never appear in logs, metrics, traces, or command output.
+.SH SEE ALSO
+.BR dkim2\-milter (8),
+.BR dkim2\-exim (8),
+.BR dkim2\-dsn\-propagator (8),
+.BR dkim2ctl (1)
+.PP
+In the source tree:
+.I docs/guide/README.md
+(start here),
+.IR docs/guide/dkim2d\-explained.md ,
+.IR docs/guide/keys\-and\-dns.md ,
+.IR docs/guide/postfix\-quickstart.md ,
+.IR docs/guide/exim\-quickstart.md ,
+and the complete configuration reference in
+.IR cmd/dkim2d/README.md .

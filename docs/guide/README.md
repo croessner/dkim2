@@ -105,6 +105,19 @@ unsigned, exactly as it does today.
 
 Every binary documents its commands: `dkim2d --help`, `dkim2-milter --help`,
 `dkim2-dsn-propagator --help`, `dkim2ctl --help`, and `dkim2-exim --help`.
+
+Manual pages summarize each command, its options, exit status, and files, and
+point back to these guides:
+[`dkim2d(8)`](../man/dkim2d.8),
+[`dkim2-milter(8)`](../man/dkim2-milter.8),
+[`dkim2-dsn-propagator(8)`](../man/dkim2-dsn-propagator.8),
+[`dkim2-exim(8)`](../man/dkim2-exim.8), and
+[`dkim2ctl(1)`](../man/dkim2ctl.1).
+Read one from the source tree with `man ./docs/man/dkim2d.8`, or install the
+pages into a `man8` and `man1` directory. Edit the templates under
+`docs/man/src/` and run `make man`; the synopsis and option lists are copied
+from the real `--help` output, and `make check-generated` rejects stale pages.
+
 These guides teach and give working starting points; the complete,
 authoritative references stay where they are:
 

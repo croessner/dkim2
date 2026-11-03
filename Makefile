@@ -41,6 +41,7 @@ EXIM_PROBE_CONTRACT := $(EXIM_C_DIR)/generated/probe-contract-v1.txt
 EXIM_BUILD_HEADER := $(EXIM_C_DIR)/generated/build-id-v1.h
 EXIM_COMPAT_MANIFEST := $(EXIM_C_DIR)/generated/compatibility-manifest-v1.txt
 EXIM_SOURCE_MANIFEST := $(EXIM_C_DIR)/fixtures/upstream-4.99.5/source-manifest-v1.txt
+MAN_COMMANDS := dkim2d dkim2-milter dkim2-dsn-propagator dkim2ctl dkim2-exim
 EXIM_MATRIX_ROWS := upstream-4.99.5 debian-4.98.2-1+deb13u3 debian-4.98.2-1+deb13u4 ubuntu-4.99.1-1ubuntu1.3 ubuntu-4.99.1-1ubuntu1.4
 
 .PHONY: help
@@ -57,7 +58,8 @@ help:
 		'  make test-fips140-mldsa44    prove mldsa44 fails closed under FIPS v1.0.0' \
 		'  make race                    run race-enabled Go unit tests only' \
 		'  make build-check             build all product surfaces' \
-		'  make check-generated         verify generated OpenAPI and adapter artifacts' \
+		'  make check-generated         verify generated OpenAPI, adapter, and manual page artifacts' \
+		'  make man                     regenerate manual pages under docs/man' \
 		'  make check-conformance       verify conformance contracts' \
 		'  make conformance             run portable protocol conformance' \
 		'  make test-redis              run real-server Redis replay harness' \
@@ -466,8 +468,30 @@ check-openapi:
 	go -C cmd/dkim2-exim test ./internal/daemon/...; \
 	go -C cmd/dkim2-dsn-propagator test ./internal/daemon/... ./internal/integration/...
 
+# run-mangen builds the product binaries into a private temporary directory
+# and renders docs/man from docs/man/src with their real help text; $(1)
+# passes -check to compare instead of writing.
+define run-mangen
+	@set -eu; \
+	bin="$$(mktemp -d /tmp/dkim2-man.XXXXXX)"; \
+	chmod 0700 "$$bin"; \
+	trap 'rm -rf "$$bin"' 0 1 2 15; \
+	for command in $(MAN_COMMANDS); do \
+		go -C "cmd/$$command" build -trimpath -o "$$bin/$$command" .; \
+	done; \
+	go -C tools run ./cmd/mangen -root .. -bin "$$bin" $(1)
+endef
+
+.PHONY: man
+man:
+	$(call run-mangen,)
+
+.PHONY: check-man
+check-man:
+	$(call run-mangen,-check)
+
 .PHONY: check-generated
-check-generated: check-openapi check-exim-build check-exim-row-builds
+check-generated: check-openapi check-exim-build check-exim-row-builds check-man
 
 .PHONY: check-workspace
 check-workspace:
