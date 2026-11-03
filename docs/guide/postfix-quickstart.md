@@ -578,7 +578,7 @@ message, and its `From` (`MAILER-DAEMON@$myorigin`) must lie in that domain.
 Set `myorigin` to your main domain (or a subdomain of it).
 
 1. Generate bounce keys and extend the signer generation as described in
-   [Keys and DNS, section 7](keys-and-dns.md#7-add-bounce-keys-later): a
+   [Keys and DNS, section 8](keys-and-dns.md#8-add-bounce-keys-later): a
    `delivery_status` profile with its own keys, and `dsn-sign.cap`.
 2. Add to `/etc/dkim2/dkim2d-signer.yaml`:
 

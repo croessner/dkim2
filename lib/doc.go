@@ -72,12 +72,14 @@
 // after every signature proof passed. Signers themselves choose d= downward
 // only and never query a Domain Policy Record.
 //
-// DNS key records use PKCS#1 RSAPublicKey DER for RSA and exactly 32 raw bytes
-// for Ed25519. The post-quantum Draft-09 Section 3.4 mldsa44-ed25519-sha512
-// composite is deliberately not implemented while the working group has not
-// settled its construction: such signature sets are ignored as unsupported
-// algorithms and k=mldsa44-ed25519-sha512 records are unsupported key types,
-// exactly like any other unknown token. Empty p= is revoked. Non-empty p= accepts omitted terminal
+// DNS key records use PKCS#1 RSAPublicKey DER for RSA, exactly 32 raw bytes
+// for Ed25519, and exactly the 1312-octet raw FIPS 204 public key for the
+// Draft-09 Section 3.4 post-quantum mldsa44 algorithm. DNS-02 defines no key
+// type for it; k=mldsa44 is the documented local interpretation. The Draft-07
+// mldsa44-ed25519-sha512 composite is no longer defined: such signature sets
+// are ignored as unsupported algorithms and k=mldsa44-ed25519-sha512 records
+// are unsupported key types, exactly like any other unknown token. Empty p= is
+// revoked. Non-empty p= accepts omitted terminal
 // Base64 padding as DNS-02 specifies while still requiring canonical zero pad
 // bits. The parser recognizes lowercase k= as the DNS-02 grammar requires; the
 // inherited DNS-00 ABNF typo is corrected there. The active DKIM2

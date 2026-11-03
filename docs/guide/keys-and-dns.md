@@ -18,6 +18,7 @@ A **selector** is the name of one key. Verifiers look the key up at
 | --- | --- | --- |
 | `rsa-2026a` | `rsa-sha256`, 2048 bits | outbound mail |
 | `ed-2026a` | `ed25519-sha256` | outbound mail |
+| `ml-2026a` | `mldsa44` | outbound mail (optional, see [step 7](#7-add-ml-dsa-44-later)) |
 | `bounce-rsa-2026a` | `rsa-sha256` | bounces (only if you sign bounces) |
 | `bounce-ed-2026a` | `ed25519-sha256` | bounces |
 
@@ -27,9 +28,10 @@ Recommendations:
   one signature that needs both to verify. RSA keeps compatibility, Ed25519
   is small and fast. RSA keys must have at least 2048 bits.
 - **ML-DSA-44 (`mldsa44`) is optional.** It is the post-quantum algorithm.
-  Its DNS record is about 1,750 characters, which some DNS web interfaces
-  cannot store. Add it later as a third key if you want it; verifiers that do
-  not know it still pass with the RSA and Ed25519 group.
+  Its DNS record is about 1,770 characters, which some DNS web interfaces
+  cannot store. Add it later as a third key if you want it
+  ([step 7](#7-add-ml-dsa-44-later)); verifiers that do not know it still
+  pass with the RSA and Ed25519 group.
 - **One key per job.** Keys for outbound mail (`originator`), forwarding
   (`ordinary_transit`), and bounces (`delivery_status`) must be different
   keys. The daemon refuses a datasource that binds one key to two uses.
@@ -237,7 +239,82 @@ failure. The most common causes are a wrong owner or mode, a capability file
 that is not exactly 32 bytes, a value pasted into the wrong JSON field, and
 one key bound to two uses.
 
-## 7. Add bounce keys later
+## 7. Add ML-DSA-44 later
+
+A profile holds at most three keys, one per algorithm. With ML-DSA-44 the
+signer writes `s=` as `rsa,ed25519 | mldsa44`: the RSA and Ed25519 pair is
+one group, ML-DSA-44 an alternative group (see the
+[tag cheat sheet](tag-cheatsheet.md#how-several-algorithms-in-s-combine)).
+Verifiers without ML-DSA keep passing with the pair. As long as the pair is
+signed as well, ML-DSA-44 adds no protection against forgery yet; it
+prepares the domain for the day the classical pair is dropped.
+
+Generate the key. ML-DSA-44 has no size option:
+
+```sh
+dkim2d datasource key generate --algorithm mldsa44 \
+  --domain example.test --selector ml-2026a \
+  --private-key "$DIR/ml-2026a.pem" > "$OUT/ml-2026a.txt"
+```
+
+Real output (both keys shortened):
+
+```text
+algorithm=mldsa44 domain=example.test selector=ml-2026a
+public_key_spki=MIIFMjALBglghkgBZQMEAxEDggUhAJ2ysDASLltVELvSjMU+lwN1...
+public_spki_sha256=r3j+QAsWCx0qSnZcr6kxMoJWP3LMxOLzU6qjg+U2erw=
+; dkim2-dns-export-v1
+; ttl-seconds=3600
+; algorithm=mldsa44 selector=ml-2026a
+ml-2026a._domainkey.example.test. 3600 IN TXT "v=DKIM1; k=mldsa44; p=nbKwMBIuW1UQu9KMxT6X..." "..." "...wfJUKC6uwRA=="
+```
+
+The output lines go to the same places as for RSA and Ed25519. The
+`public_key_spki` value starts with `MIIFMj`; the DNS `p=` value is the raw
+1,312-byte key in Base64 (1,752 characters) and has no common prefix. The
+private key file holds only the 32-byte seed. DNS-02 defines no key type for
+ML-DSA-44 yet; `k=mldsa44` is the form this implementation and
+`opendkim-manage-go` use (see
+[Known limitations](../reference/known-limitations.md#post-quantum-algorithms)).
+
+Publish the DNS record before the generation uses it:
+
+- In a zone file, paste the TXT line as printed. It is split into nine
+  quoted strings of at most 255 characters.
+- In a web DNS interface, enter the value as one string of about 1,770
+  characters. If the interface truncates it or refuses it, use a `CNAME`
+  from `ml-2026a._domainkey.example.test` into a zone you manage as a file.
+- Test it as in [step 4](#4-test-the-dns-records):
+  `dig +short TXT ml-2026a._domainkey.example.test`. The joined `p=` value
+  must be complete; a cut-off key cannot verify any signature.
+
+Then build a new generation with the script from step 6, extended by:
+
+- the `key generate` call above;
+- in `datasource.json`: a third handle `{ "id": "example-ml-2026a" }` and a
+  third credential, which must come **last** in `credentials` (order
+  `rsa-sha256`, `ed25519-sha256`, `mldsa44`), inside the `datasource.json`
+  heredoc of the script:
+
+  ```text
+  { "algorithm": "mldsa44", "selector": "ml-2026a",
+    "public_key_spki": "$(value public_key_spki "$OUT/ml-2026a.txt")",
+    "handle_id": "example-ml-2026a" }
+  ```
+
+- in `private-keys.json`: a third entry with `"handle_id": "example-ml-2026a"`,
+  `"algorithm": "mldsa44"`, the `public_spki_sha256` from `ml-2026a.txt`,
+  and `"private_key_file": "ml-2026a.pem"`.
+
+Run `dkim2d validate` and restart `dkim2d` as in step 6. With LDAP no schema
+change is needed. PostgreSQL, MySQL, and MariaDB need the forward migration
+`010_mldsa44_algorithm.sql` first; see
+[Datasource backends](../operator/datasource-backends.md#ml-dsa-44-credentials).
+A `dkim2d` built against the FIPS 140-3 Go Cryptographic Module v1.0.0 has
+no ML-DSA; `dkim2d serve` and `dkim2d validate` refuse to start in that
+build.
+
+## 8. Add bounce keys later
 
 To sign bounces (Postfix only, see the
 [Postfix guide](postfix-quickstart.md#use-case-e-bounces)), generate two more
@@ -250,14 +327,15 @@ generation that additionally contains:
 - in `private-keys.json`: two entries with `"use": "delivery_status"`;
 - a third capability `dsn-sign.cap`.
 
-## 8. Rotate keys
+## 9. Rotate keys
 
 Keys are rotated by publishing new ones *before* using them and removing old
-ones *long after*:
+ones *long after*. With ML-DSA-44, rotate `ml-2026a` to `ml-2026b` in the
+same step:
 
 ```mermaid
 flowchart LR
-    a["generate rsa-2026b, ed-2026b"] --> b["publish DNS,<br/>wait for the TTL"]
+    a["generate rsa-2026b, ed-2026b<br/>(and ml-2026b)"] --> b["publish DNS,<br/>wait for the TTL"]
     b --> c["new generation:<br/>profile uses the new selectors"]
     c --> d["validate, restart dkim2d"]
     d --> e["keep the old DNS records<br/>at least 14 days"]
