@@ -347,7 +347,7 @@ func requiredModuleGraph(root string, _ string, _ conformance.Snapshot) ([]modul
 			return nil, errors.New("module_graph_mod")
 		}
 		for _, requirement := range file.Require {
-			if requirement.Mod.Path != "github.com/croessner/dkim2" {
+			if !candidateLibraryVersion(requirement.Mod) {
 				needed[requirement.Mod.Path+"@"+requirement.Mod.Version] = requirement.Mod
 			}
 		}
@@ -387,7 +387,7 @@ func requiredModuleGraph(root string, _ string, _ conformance.Snapshot) ([]modul
 			}
 			processed[key] = true
 			for _, requirement := range file.Require {
-				if requirement.Mod.Path == "github.com/croessner/dkim2" {
+				if candidateLibraryVersion(requirement.Mod) {
 					continue
 				}
 				if sums[requirement.Mod.Path+"@"+requirement.Mod.Version+"/go.mod"] != "" ||
@@ -415,6 +415,14 @@ func requiredModuleGraph(root string, _ string, _ conformance.Snapshot) ([]modul
 		return strings.Compare(left.Path+"@"+left.Version, right.Path+"@"+right.Version)
 	})
 	return modules, nil
+}
+
+// candidateLibraryVersion reports whether one requirement names the
+// unpublished release-candidate library that the private proxy synthesizes
+// from candidate bytes. Published library versions are authenticated
+// dependencies and are copied from the module cache like any other module.
+func candidateLibraryVersion(requirement module.Version) bool {
+	return requirement.Path == "github.com/croessner/dkim2" && requirement.Version == candidateVersion
 }
 
 // moduleDownloadCache resolves the module download cache exactly as the go

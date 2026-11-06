@@ -19,7 +19,7 @@ github.com/cenkalti/backoff/v5
 # github.com/cespare/xxhash/v2 v2.3.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
-# github.com/croessner/dkim2 v0.1.0-rc.1
+# github.com/croessner/dkim2 v0.3.3
 ## explicit; go 1.27
 # github.com/dlclark/regexp2 v1.12.0
 ## explicit; go 1.13

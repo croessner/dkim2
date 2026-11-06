@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/mod/module"
 )
 
 // TestVersionSeparationRejectsPublicationBypasses exercises the current tag-push workflow boundary.
@@ -99,4 +101,35 @@ func FuzzLoadReleasePlan(f *testing.F) {
 		}
 		_, _ = LoadReleasePlan(input)
 	})
+}
+
+// TestValidLibraryRequirementAcceptsCandidateOrCanonicalRelease freezes which
+// library versions command and tools modules may require.
+func TestValidLibraryRequirementAcceptsCandidateOrCanonicalRelease(t *testing.T) {
+	for _, version := range []string{candidateVersion, "v0.3.3", "v1.0.0"} {
+		if !validLibraryRequirement(version) {
+			t.Fatalf("validLibraryRequirement(%q) rejected a valid version", version)
+		}
+	}
+	for _, version := range []string{"", "v0.3", "0.3.3", "v0.3.3-rc.1", "v0.0.0-20261106000000-da19ecc5f13a", "v0.3.3+meta"} {
+		if validLibraryRequirement(version) {
+			t.Fatalf("validLibraryRequirement(%q) accepted an invalid version", version)
+		}
+	}
+}
+
+// TestCandidateLibraryVersionMatchesOnlyTheSynthesizedCandidate keeps
+// published library versions on the authenticated dependency path.
+func TestCandidateLibraryVersionMatchesOnlyTheSynthesizedCandidate(t *testing.T) {
+	if !candidateLibraryVersion(module.Version{Path: "github.com/croessner/dkim2", Version: candidateVersion}) {
+		t.Fatal("candidate library version was not recognized")
+	}
+	for _, value := range []module.Version{
+		{Path: "github.com/croessner/dkim2", Version: "v0.3.3"},
+		{Path: "github.com/croessner/dkim2/cmd/dkim2d", Version: candidateVersion},
+	} {
+		if candidateLibraryVersion(value) {
+			t.Fatalf("candidateLibraryVersion(%v) accepted a published or foreign module", value)
+		}
+	}
 }

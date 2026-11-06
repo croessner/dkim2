@@ -7,7 +7,7 @@ toolchain go1.27.3
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 
 require (
-	github.com/croessner/dkim2 v0.1.0-rc.1
+	github.com/croessner/dkim2 v0.3.3
 	github.com/getkin/kin-openapi v0.151.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	go.yaml.in/yaml/v3 v3.0.5

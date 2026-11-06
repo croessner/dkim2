@@ -15,6 +15,8 @@ import (
 	"github.com/croessner/dkim2/tools/internal/strictjson"
 	"go.yaml.in/yaml/v3"
 	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/module"
+	"golang.org/x/mod/semver"
 )
 
 const (
@@ -198,6 +200,7 @@ func checkModulePlans(root string, modules []ReleaseModule) error {
 	if !slices.Equal(modules, expected) {
 		return errors.New("release_plan_modules")
 	}
+	daemonLibrary := ""
 	for _, modulePlan := range modules {
 		content, err := artifactpath.ReadFile(
 			root, filepath.ToSlash(filepath.Join(modulePlan.Directory, "go.mod")), 1<<20,
@@ -210,9 +213,8 @@ func checkModulePlans(root string, modules []ReleaseModule) error {
 			len(moduleFile.Replace) != 0 {
 			return errors.New("release_module_contract")
 		}
-		if modulePlan.Directory == "cmd/dkim2d" &&
-			!requiresExact(moduleFile, "github.com/croessner/dkim2", candidateVersion) {
-			return errors.New("release_module_requirement")
+		if modulePlan.Directory == "cmd/dkim2d" {
+			daemonLibrary = libraryRequirement(moduleFile)
 		}
 	}
 	toolsContent, err := artifactpath.ReadFile(root, "tools/go.mod", 1<<20)
@@ -220,8 +222,8 @@ func checkModulePlans(root string, modules []ReleaseModule) error {
 		return errors.New("release_module_read")
 	}
 	toolsFile, err := modfile.Parse("go.mod", toolsContent, nil)
-	if err != nil || !requiresExact(toolsFile, "github.com/croessner/dkim2", candidateVersion) ||
-		len(toolsFile.Replace) != 0 {
+	if err != nil || len(toolsFile.Replace) != 0 ||
+		!validLibraryRequirement(daemonLibrary) || libraryRequirement(toolsFile) != daemonLibrary {
 		return errors.New("release_module_requirement")
 	}
 	work, err := artifactpath.ReadFile(root, "go.work", 1<<20)
@@ -232,14 +234,25 @@ func checkModulePlans(root string, modules []ReleaseModule) error {
 	return nil
 }
 
-// requiresExact reports whether one module requirement has the exact version.
-func requiresExact(file *modfile.File, path, version string) bool {
+// libraryRequirement returns the exact library version one module requires,
+// or the empty string when the module does not require the library.
+func libraryRequirement(file *modfile.File) string {
 	for _, requirement := range file.Require {
-		if requirement.Mod.Path == path {
-			return requirement.Mod.Version == version
+		if requirement.Mod.Path == "github.com/croessner/dkim2" {
+			return requirement.Mod.Version
 		}
 	}
-	return false
+	return ""
+}
+
+// validLibraryRequirement accepts the unpublished release-candidate version or
+// one canonical published release version of the library module.
+func validLibraryRequirement(version string) bool {
+	if version == candidateVersion {
+		return true
+	}
+	return module.Check("github.com/croessner/dkim2", version) == nil &&
+		semver.Canonical(version) == version && semver.Prerelease(version) == ""
 }
 
 // checkVersionSeparation proves product RC metadata cannot enter stable publication.
