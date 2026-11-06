@@ -517,6 +517,15 @@ check-man:
 .PHONY: check-generated
 check-generated: check-openapi check-exim-build check-exim-row-builds check-man
 
+# sync-workspace refreshes go.work.sum and the module go.sum files through the
+# candidate-bound private proxy; the candidate library checksum changes with
+# every library change, and check-workspace fails until this is rerun.
+.PHONY: sync-workspace
+sync-workspace:
+	GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
+		GOFLAGS=-mod=vendor \
+		go -C tools run ./cmd/reference -root .. sync-workspace
+
 .PHONY: check-workspace
 check-workspace:
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \

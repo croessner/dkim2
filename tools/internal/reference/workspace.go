@@ -100,22 +100,11 @@ func WriteVendorTree(root string) error {
 
 // CheckWorkspaceMetadata proves go work sync is stable through the private proxy.
 func CheckWorkspaceMetadata(root string) error {
-	proof, proxy, cleanup, err := BuildPrivateProxy(root)
+	repository, _, cleanup, err := syncCandidateWorkspace(root, false)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = cleanup() }()
-	snapshot, err := conformance.ProduceSnapshot(root, proof.BaseRevision)
-	if err != nil || snapshot.SHA256 != proof.CandidateSnapshotSHA256 {
-		return errors.New("workspace_candidate")
-	}
-	repository := filepath.Join(filepath.Dir(proxy), "workspace")
-	if err := copyCandidateSnapshot(root, repository, snapshot); err != nil {
-		return err
-	}
-	if err := runWorkspaceCommand(repository, proxy, filepath.Join(filepath.Dir(proxy), "workspace-state"), "work", "sync"); err != nil {
-		return err
-	}
 	for _, path := range workspaceMetadataPaths {
 		current, err := readStableRegular(filepath.Join(root, filepath.FromSlash(path)), 8<<20)
 		if err != nil {
@@ -124,6 +113,125 @@ func CheckWorkspaceMetadata(root string) error {
 		generated, err := readStableRegular(filepath.Join(repository, filepath.FromSlash(path)), 8<<20)
 		if err != nil || !bytes.Equal(current, generated) {
 			return errors.New("workspace_stale")
+		}
+	}
+	return nil
+}
+
+// WriteWorkspaceMetadata regenerates the committed workspace metadata with go
+// work sync through the candidate-bound private proxy. The candidate library
+// checksum recorded for the planned release-candidate version changes with
+// every library change, so this is the supported way to refresh it. Only the
+// fixed metadata allowlist is written, and only when the candidate tree did
+// not change while the sync ran.
+func WriteWorkspaceMetadata(root string) error {
+	root, err := filepath.Abs(root)
+	if err != nil {
+		return errors.New("workspace_root")
+	}
+	repository, proof, cleanup, err := syncCandidateWorkspace(root, true)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = cleanup() }()
+	generated := make(map[string][]byte, len(workspaceMetadataPaths))
+	for _, path := range workspaceMetadataPaths {
+		content, err := readStableRegular(filepath.Join(repository, filepath.FromSlash(path)), 8<<20)
+		if err != nil {
+			return errors.New("workspace_metadata")
+		}
+		generated[path] = content
+	}
+	current, err := conformance.ProduceSnapshot(root, proof.BaseRevision)
+	if err != nil || current.SHA256 != proof.CandidateSnapshotSHA256 {
+		return errors.New("workspace_candidate")
+	}
+	for _, path := range workspaceMetadataPaths {
+		target := filepath.Join(root, filepath.FromSlash(path))
+		existing, err := readStableRegular(target, 8<<20)
+		if err != nil {
+			return errors.New("workspace_metadata")
+		}
+		if bytes.Equal(existing, generated[path]) {
+			continue
+		}
+		if err := os.WriteFile(target, generated[path], 0o644); err != nil {
+			return errors.New("workspace_write")
+		}
+	}
+	return nil
+}
+
+// syncCandidateWorkspace runs go work sync on a private copy of the exact
+// candidate snapshot and returns that copy together with its proof. With
+// refreshCandidate, the copy's recorded candidate library zip checksum is
+// first replaced by the checksum of the candidate the private proxy just
+// built; go work sync would otherwise refuse the stale entry as a checksum
+// mismatch. Checks pass false so a stale entry still fails closed. The caller
+// owns cleanup, which also removes the private proxy.
+func syncCandidateWorkspace(root string, refreshCandidate bool) (string, ModuleProof, func() error, error) {
+	proof, proxy, cleanup, err := BuildPrivateProxy(root)
+	if err != nil {
+		return "", ModuleProof{}, nil, err
+	}
+	snapshot, err := conformance.ProduceSnapshot(root, proof.BaseRevision)
+	if err != nil || snapshot.SHA256 != proof.CandidateSnapshotSHA256 {
+		_ = cleanup()
+		return "", ModuleProof{}, nil, errors.New("workspace_candidate")
+	}
+	repository := filepath.Join(filepath.Dir(proxy), "workspace")
+	if err := copyCandidateSnapshot(root, repository, snapshot); err != nil {
+		_ = cleanup()
+		return "", ModuleProof{}, nil, err
+	}
+	if refreshCandidate {
+		if err := refreshCandidateSums(repository, proof); err != nil {
+			_ = cleanup()
+			return "", ModuleProof{}, nil, err
+		}
+	}
+	if err := runWorkspaceCommand(repository, proxy, filepath.Join(filepath.Dir(proxy), "workspace-state"), "work", "sync"); err != nil {
+		_ = cleanup()
+		return "", ModuleProof{}, nil, err
+	}
+	return repository, proof, cleanup, nil
+}
+
+// refreshCandidateSums rewrites only the candidate library zip checksum lines
+// in the private copy's checksum files to the proof's exact candidate hash.
+func refreshCandidateSums(repository string, proof ModuleProof) error {
+	hash := ""
+	for _, identity := range proof.Modules {
+		if identity.Path == "github.com/croessner/dkim2" && identity.Version == candidateVersion && identity.Mode == "zip" {
+			hash = identity.H1
+		}
+	}
+	if !strings.HasPrefix(hash, "h1:") {
+		return errors.New("workspace_candidate_sum")
+	}
+	prefix := "github.com/croessner/dkim2 " + candidateVersion + " "
+	for _, path := range workspaceMetadataPaths {
+		if !strings.HasSuffix(path, ".sum") {
+			continue
+		}
+		target := filepath.Join(repository, filepath.FromSlash(path))
+		content, err := readStableRegular(target, 8<<20)
+		if err != nil {
+			return errors.New("workspace_metadata")
+		}
+		lines := strings.SplitAfter(string(content), "\n")
+		changed := false
+		for index, line := range lines {
+			if strings.HasPrefix(line, prefix+"h1:") {
+				lines[index] = prefix + hash + "\n"
+				changed = true
+			}
+		}
+		if !changed {
+			continue
+		}
+		if err := os.WriteFile(target, []byte(strings.Join(lines, "")), 0o600); err != nil {
+			return errors.New("workspace_write")
 		}
 	}
 	return nil

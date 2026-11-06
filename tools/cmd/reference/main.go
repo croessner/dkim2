@@ -55,6 +55,8 @@ func run(arguments []string) error {
 		return referencecheck.CheckDatasourceIntegrationReport(*root, content)
 	case "check-workspace":
 		return referencecheck.CheckWorkspaceMetadata(*root)
+	case "sync-workspace":
+		return referencecheck.WriteWorkspaceMetadata(*root)
 	case "check-vendor":
 		return referencecheck.CheckVendorTree(*root)
 	case "harden-vendor":
