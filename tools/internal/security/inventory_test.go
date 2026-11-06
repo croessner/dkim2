@@ -99,7 +99,7 @@ func TestDiscoveryIgnoresVendorAndRejectsUnexpectedFirstPartyTargets(t *testing.
 			t.Fatal(err)
 		}
 	}
-	writeSource("lib/first_test.go", "FuzzFirst")
+	writeSource("first_test.go", "FuzzFirst")
 	writeSource("vendor/example/vendor_test.go", "FuzzIgnored")
 	discovered, err := discoverFuzzTargets(root)
 	if err != nil {
@@ -113,7 +113,7 @@ func TestDiscoveryIgnoresVendorAndRejectsUnexpectedFirstPartyTargets(t *testing.
 // TestProofDiscoveryBindsTheExactSourcePath prevents same-name tests from masking drift.
 func TestProofDiscoveryBindsTheExactSourcePath(t *testing.T) {
 	root := t.TempDir()
-	path := filepath.Join(root, "lib", "owner_test.go")
+	path := filepath.Join(root, "owner_test.go")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -125,10 +125,10 @@ func TestProofDiscoveryBindsTheExactSourcePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := functions["lib/owner_test.go#TestExactBoundary"]; !ok {
+	if _, ok := functions["owner_test.go#TestExactBoundary"]; !ok {
 		t.Fatalf("proof index = %#v", functions)
 	}
-	if _, ok := functions["lib/other_test.go#TestExactBoundary"]; ok {
+	if _, ok := functions["other_test.go#TestExactBoundary"]; ok {
 		t.Fatal("same-name proof was accepted at the wrong source path")
 	}
 }

@@ -7,7 +7,7 @@
 // semicolon terminator. Known flags include feedhere. The parser consumes
 // immutable rawmsg.HeaderField values, preserves the raw header occurrence
 // index, and delegates shared tag-list scanning and padded base64string decoding
-// to lib/internal/tagvalue.
+// to internal/tagvalue.
 //
 // Parser scope is intentionally narrow. Collection helpers extract
 // DKIM2-Signature fields from full raw messages in RFC 5322 occurrence order,

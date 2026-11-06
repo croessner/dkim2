@@ -693,11 +693,13 @@ func nestedModuleDirectories(snapshot conformance.Snapshot) []string {
 }
 
 // libraryModuleEntry reports whether one candidate repository path belongs to
-// the root library module. It follows the Go module zip boundary: nested
-// modules and vendored packages are excluded. Paths with a dot-prefixed
-// component are repository metadata (for example .github or .gitkeep), which
-// the go command never treats as package content, so they stay out of the
-// private candidate module.
+// the private-proxy candidate of the root library module. Like a Go module
+// zip it excludes nested modules and vendored packages. It deliberately also
+// excludes paths with a dot-prefixed component (for example .github or
+// .gitkeep): published module zips keep such repository metadata, but the
+// go command never builds it, and validModuleRelativePath rejects .git*
+// names. The candidate h1 is therefore self-consistent for the proof but not
+// equal to the h1 of a published release zip.
 func libraryModuleEntry(path string, nestedModules []string) bool {
 	if path == "" {
 		return false

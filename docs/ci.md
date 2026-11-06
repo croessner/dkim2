@@ -15,6 +15,12 @@ second build or test system.
 There is no separate unit-test workflow because Guardrails already owns unit
 tests.
 
+Guardrails resolves the workspace through the checked-in vendor tree. The one
+exception is `make check-library-standalone`, which tests the root library
+module as consumers resolve it (`GOWORK=off GOFLAGS=-mod=readonly`): it
+fetches the library's `go.mod` requirements through `GOPROXY` and verifies them
+against the committed `go.sum` and the checksum database.
+
 The Guardrails `redis-integration` job checks out `valkey-io/valkey` at the
 exact commit pinned in `build/ci/toolchain.json` (`fixtures.valkey.commit`),
 builds it with `scripts/install-valkey-ci.sh`, and runs `make test-redis`. The

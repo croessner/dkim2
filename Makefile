@@ -68,6 +68,7 @@ help:
 		'  make vet                     run Go vet' \
 		'  make lint                    run golangci-lint' \
 		'  make test                    run Go unit tests only' \
+		'  make check-library-standalone test the library module without workspace or vendor' \
 		'  make test-tools              run tools-module runner tests' \
 		'  make check-rspamd-projection-binding verify Rspamd fixture bindings' \
 		'  make test-fips140-mldsa44    prove mldsa44 fails closed under FIPS v1.0.0' \
@@ -184,6 +185,13 @@ test-fips140-mldsa44:
 	@GOFIPS140=v1.0.0 go test -count=1 \
 		-run 'TestMLDSA44AvailabilityFollowsCryptographicModule|TestMLDSA44PolicyFailsClosedWithoutRuntime|TestMLDSA44CredentialFailsClosedWithoutRuntime' \
 		./internal/cryptodkim2/ ./internal/verify/ ./internal/signing/
+
+# The workspace vendor tree lives inside the library module root and records
+# the workspace inventory, so the standalone library is checked in module mode
+# exactly as a consumer resolves it: no workspace, read-only go.mod and go.sum.
+.PHONY: check-library-standalone
+check-library-standalone:
+	@GOWORK=off GOFLAGS=-mod=readonly go test $(GATE_TEST_FLAGS) ./...
 
 .PHONY: test
 test: test-postfix-qualification-helper test-fips140-mldsa44
@@ -651,7 +659,7 @@ integration-exim: test-exim-local-scan check-exim-matrix-prep check-exim-c-linux
 qualification-exim: integration-exim check-exim-c-linux-cross test-exim-real-matrix
 
 .PHONY: guardrails
-guardrails: check-go-toolchain-contract check-ci fmt-check vet lint test test-tools check-rspamd-projection-binding race build-check check-generated check-vendor check-platform-builds check-boundaries check-operator-docs
+guardrails: check-go-toolchain-contract check-ci fmt-check vet lint test check-library-standalone test-tools check-rspamd-projection-binding race build-check check-generated check-vendor check-platform-builds check-boundaries check-operator-docs
 
 .PHONY: product-binaries
 product-binaries:

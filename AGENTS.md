@@ -112,7 +112,13 @@ before substantial work in its area:
   models into protocol packages.
 - Keep local planning, prompt, scratch, and handoff artifacts under `temp/`.
   The root `temp/` directory is ignored and must never be staged. Durable
-  project documentation belongs under `docs/`.
+  project documentation belongs under `docs/`. Because the library module owns
+  the repository root, `temp/` must carry its own local `go.mod` so root
+  package patterns never claim scratch Go files; `make` creates it on demand.
+- The workspace `vendor/` tree sits inside the library module root and
+  records the workspace inventory. Check the library standalone with
+  `make check-library-standalone` (`GOWORK=off GOFLAGS=-mod=readonly`), not
+  with plain `GOWORK=off`, which reports inconsistent vendoring.
 - Write code comments and technical documentation in English.
 - All hand-written named functions and receiver methods introduced or changed
   by a change must have concise English doc comments, including unexported

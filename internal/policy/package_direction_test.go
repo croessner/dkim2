@@ -109,20 +109,23 @@ func libraryModuleDirectory(root, path, name string) bool {
 	return errors.Is(err, fs.ErrNotExist)
 }
 
-// containsGoSource reports whether one directory directly holds Go source, so
+// containsGoSource reports whether one directory tree holds any Go source, so
 // documentation-only directories such as the OpenAPI specification tree are
-// not mistaken for generated Go scopes.
+// not mistaken for generated Go scopes while nested generated packages are
+// still caught. Unreadable trees count as containing Go source (fail closed).
 func containsGoSource(directory string) bool {
-	entries, err := os.ReadDir(directory)
-	if err != nil {
-		return true
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") {
-			return true
+	found := false
+	err := filepath.WalkDir(directory, func(_ string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-	}
-	return false
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") {
+			found = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found || err != nil
 }
 
 // rejectForbiddenFileImports parses one production file and rejects exact or slash-terminated prefix rules.
