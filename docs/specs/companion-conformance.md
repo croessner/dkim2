@@ -46,13 +46,13 @@ python3 tools/check-dns-draft-equivalence.py temp/companion-audit
 Active source references, schemas, conformance metadata and the DNS golden
 vector directory now name the WG draft. Historical dated reports and migration
 disposition records retain their original identifiers. DNS vectors are exercised
-by `lib/dns_provider_vector_test.go`; record parsing and resolution remain owned
-by `lib/internal/keyresolver`. Renaming a baseline does not constitute new live
+by `dns_provider_vector_test.go`; record parsing and resolution remain owned
+by `internal/keyresolver`. Renaming a baseline does not constitute new live
 DNS, MTA, or external interoperability qualification.
 
 ## Authentication-Results profile
 
-`lib/authresults` owns an immutable canonical report and the shared parser used
+`authresults` owns an immutable canonical report and the shared parser used
 by the daemon, Milter and Exim clients, Milter EOM admission, and CLI. It imports
 no HTTP DTOs or adapter dependencies. The daemon remains the sole report author.
 Adapters bind reports to the configured authority and final authentication
@@ -95,7 +95,7 @@ client/admission consumers together; bare reports remain accepted by the new
 consumers. No existing configuration key was renamed. The OpenAPI source
 records the profile and generation propagates that contract to every SDK.
 
-Regression evidence: `lib/authresults/report_test.go` includes spoofing,
+Regression evidence: `authresults/report_test.go` includes spoofing,
 contradiction, injection and canonical round-trip cases;
 `cmd/dkim2d/internal/httpjson/response_scalar_test.go` covers final-reason
 formatting; `cmd/dkim2-milter/internal/milter/actions_test.go` covers EOM
@@ -111,26 +111,26 @@ labels alone proves a production installation complies.
 | BCP section | Status | Repository evidence and remaining work |
 | --- | --- | --- |
 | 1–2, terminology | covered | Architecture pins Draft-09; no second protocol model introduced. |
-| 3.1, key size | covered/operator | `lib/internal/keyresolver`, signing tests, native onboarding. Verify deployed profiles independently. |
-| 3.2, multiple algorithms | covered/operator | `lib/signing_facade_test.go`, `lib/signing_datasource_integration_test.go`; actual selected profiles need inspection. |
+| 3.1, key size | covered/operator | `internal/keyresolver`, signing tests, native onboarding. Verify deployed profiles independently. |
+| 3.2, multiple algorithms | covered/operator | `signing_facade_test.go`, `signing_datasource_integration_test.go`; actual selected profiles need inspection. |
 | 3.3, DKIM1 coexistence | operator | DKIM1 is explicitly outside the library. Prove both signatures after the final filter in the owning mailstack. |
 | 3.4, egress | operator | Adapter supports signing; topology determines the last hop. Prove no later signed-content mutation. |
 | 3.5, rotation | covered/operator | `docs/operator/datasource-key-rotation.md`; generations, selectors, retirement and testing semantics. Obtain live schedule and retained-key evidence. |
 | 3.6, time | operator | Timestamp verification exists; host clock synchronization must be checked separately. |
-| 4.1, flags | covered/operator | Signing profiles and `lib/internal/policy/compliance_test.go`. Select flags per workload; defaults are not rewritten here. |
+| 4.1, flags | covered/operator | Signing profiles and `internal/policy/compliance_test.go`. Select flags per workload; defaults are not rewritten here. |
 | 5.1, inbound checks | partial/operator | DKIM2 verifier exists. DKIM1 verification and ordering belong to the surrounding mail pipeline. |
-| 5.2, unchanged forwarding | covered/operator | Signing/revision supports unchanged instances; `lib/signing_facade_test.go`. Prove every forwarding route invokes it. |
-| 5.3, From handling | covered/operator | Revision records header changes; DMARC lookup and automatic From rewriting are outside this library. Existing modification prohibitions remain intact. Draft-09 Domain Policy Records: verifier evaluation in `lib/internal/verify` and `f=strict` export through `dkim2d datasource domain dns export --domain-policy-strict`; publication is an operator decision. |
+| 5.2, unchanged forwarding | covered/operator | Signing/revision supports unchanged instances; `signing_facade_test.go`. Prove every forwarding route invokes it. |
+| 5.3, From handling | covered/operator | Revision records header changes; DMARC lookup and automatic From rewriting are outside this library. Existing modification prohibitions remain intact. Draft-09 Domain Policy Records: verifier evaluation in `internal/verify` and `f=strict` export through `dkim2d datasource domain dns export --domain-policy-strict`; publication is an operator decision. |
 | 5.4, recipient privacy | partial/operator | `feedhere` intent exists. Per-subscriber recipient alias provisioning is not implemented in this repository. Never describe normal `rt=` emission as anonymous. |
 | 5.5, request enforcement | covered/operator | Policy compliance and signing/revision tests; prove the outbound route cannot bypass enforcement. |
-| 5.6, imaginary hops | covered/operator | `lib/internal/signature/custody_test.go`, `lib/signing_next_domain_regression_test.go`; out-of-band business authority requires documentation. |
-| 5.7, recipe privacy | partial/operator | `lib/internal/recipe/generation_contract_test.go`, `generation_privacy_test.go`, null-body representation and bounded generation. No automatic DLP/AV classifier; sanitizer must select a non-reconstructable policy. |
-| 5.8, DSN rebuild | covered/operator | `lib/dsn_propagation_test.go`, `lib/internal/dsn/rebuild_test.go`; deployment and private-route proof remain necessary. |
+| 5.6, imaginary hops | covered/operator | `internal/signature/custody_test.go`, `signing_next_domain_regression_test.go`; out-of-band business authority requires documentation. |
+| 5.7, recipe privacy | partial/operator | `internal/recipe/generation_contract_test.go`, `generation_privacy_test.go`, null-body representation and bounded generation. No automatic DLP/AV classifier; sanitizer must select a non-reconstructable policy. |
+| 5.8, DSN rebuild | covered/operator | `dsn_propagation_test.go`, `internal/dsn/rebuild_test.go`; deployment and private-route proof remain necessary. |
 | 6.1.1, continuous chain | covered | Chain scope, historical coverage, custody and replay remain separate authenticated facts. |
 | 6.1.2, interrupted chain | partial/open | No automatic DKIM1 bridge or inferred trust from missing hops. Local policy owns any explicit compatibility decision. |
 | 6.1.3, unsigned | covered/operator | HTTP 200 `NONE` applicability result with the optional `dkim2=none` report; independent spam/SPF/DKIM1 policy must still run. |
 | 6.2, result handling | covered/operator | Daemon outcome matrix, Milter EOM and Exim admission; verify SMTP replies on the deployed adapters. |
-| 6.3, inbound DSNs | covered/operator | `lib/received_dsn_policy_test.go`, `lib/received_dsn_vector_test.go`; locality and production routing require external evidence. |
+| 6.3, inbound DSNs | covered/operator | `received_dsn_policy_test.go`, `received_dsn_vector_test.go`; locality and production routing require external evidence. |
 | 7.1, coexistence | operator | Same mailstack-owned DKIM1 and DKIM2 proof as 3.3 and 5.1. |
 | 7.2, DMARC | open | No new authentication or alignment policy inferred from this discussion. |
 | 7.3, feedback | partial/open | Bounded intent/routing exists, no feedback sender. Do not claim delivery of reports. |

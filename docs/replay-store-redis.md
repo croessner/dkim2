@@ -462,7 +462,7 @@ with the same shared epoch and secret and keep serving traffic. No drain,
 quiescent retention wait, or epoch change is required.
 
 This is safe because the draft identifier is a length-delimited field of the
-replay HMAC frame (`replayHMACFrame` in `lib/internal/replay/deriver.go`) for
+replay HMAC frame (`replayHMACFrame` in `internal/replay/deriver.go`) for
 both the `dkim2-replay-v2` first-seen frame and the
 `dkim2-replay-propagation-v1` propagation frame. The provider prepends only
 the configured `key_prefix` to the derived key. Under one secret and epoch, a

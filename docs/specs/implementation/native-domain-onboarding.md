@@ -119,7 +119,7 @@ Planning estimate:
 
 Risk notes:
 
-- Low risk: `lib/`, Milter, Exim, OpenAPI, and `dkim2ctl` remain unchanged.
+- Low risk: the root library module, Milter, Exim, OpenAPI, and `dkim2ctl` remain unchanged.
 - Medium risk: stable operator CLI, protected journal handling, and bounded
   machine reports.
 - High risk: cloning native private-key rows, key generation, DNS encoding,
@@ -907,7 +907,7 @@ generations or selectors and does not shorten DNS overlap policy.
 
 ## Package Boundaries
 
-- `lib/`: unchanged DKIM2 protocol and provider-neutral runtime contracts.
+- Root library module: unchanged DKIM2 protocol and provider-neutral runtime contracts.
 - `cmd/dkim2d/internal/datasourceadmin`: shared offline administration.
 - `cmd/dkim2d/internal/domainadmin`: domain intent, keys, DNS, journal, and
   onboarding state machine.
@@ -1065,7 +1065,7 @@ Fresh independent final review remains pending.
 | Backends | LDAP and SQL-family parity | real LDAP, PostgreSQL, MySQL, and MariaDB evidence | done | exact service report retained outside Git |
 | Security | Fail-closed and secret-safe | abuse, ambiguity, redaction, least-privilege, and cleanup evidence | done | final security review remains Prompt 12 scope |
 | Tests | Unit, abuse, race, disposable integration | release-proportional Prompt 11 gates and unchanged-byte service evidence complete | done | exact commands, stops, report, and candidate identities retained in ignored ledger |
-| Boundaries | `lib`, OpenAPI, clients unchanged | checked throughout implementation | done | OpenAPI remains the unchanged REST authority |
+| Boundaries | The root library module, OpenAPI, clients unchanged | checked throughout implementation | done | OpenAPI remains the unchanged REST authority |
 | Effort | Prompt timings retained | exact known spans and honest missing timestamps in ignored ledger | done | variance includes multiple review correction cycles |
 | Review | Independent and orchestrator approvals | Prompt 01-10 gates approved; Prompt 11 self-review complete; final independent closeout review not started | partial | no commit or release authority |
 

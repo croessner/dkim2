@@ -34,11 +34,11 @@ This spec is governed by:
 - `docs/specs/implementation/raw-message-model.md`
 - `docs/specs/implementation/dkim2-tag-parsers.md`
 - `docs/specs/implementation/canonicalization-and-hashes.md`
-- `lib/internal/rawmsg`
-- `lib/internal/tagvalue`
-- `lib/internal/instance`
-- `lib/internal/signature`
-- `lib/internal/canonical`
+- `internal/rawmsg`
+- `internal/tagvalue`
+- `internal/instance`
+- `internal/signature`
+- `internal/canonical`
 - `Makefile`
 - `.gitignore`
 - `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05, especially
@@ -70,16 +70,16 @@ out-of-band acceptance as typed non-success.
 
 The repository currently has completed foundations for M1 through M3:
 
-- `lib/internal/rawmsg` owns byte-preserving RFC 5322 parsing, immutable
+- `internal/rawmsg` owns byte-preserving RFC 5322 parsing, immutable
   header/body views, strict CRLF policy, and bounded parser metadata.
-- `lib/internal/tagvalue` owns shared DKIM2 tag-list scanning and strict
+- `internal/tagvalue` owns shared DKIM2 tag-list scanning and strict
   padded base64string parsing.
-- `lib/internal/instance` parses `Message-Instance` fields, hash sets,
+- `internal/instance` parses `Message-Instance` fields, hash sets,
   optional recipe base64 containers, and contiguous `m=` sequences.
-- `lib/internal/signature` parses `DKIM2-Signature` fields, envelope-path
+- `internal/signature` parses `DKIM2-Signature` fields, envelope-path
   containers, signature sets, flags, nonces, contiguous `i=` sequences, and
   the unreferenced-instance special case.
-- `lib/internal/canonical` owns Section 6.1 body hash input, Section 6.2
+- `internal/canonical` owns Section 6.1 body hash input, Section 6.2
   header hash input, Section 9.6 signature input, SHA-256 digest containers,
   and bounded debug metadata.
 
@@ -102,7 +102,7 @@ Implement a library-internal static-key verification coordinator that:
 
 - Consumes one parser-owned `rawmsg.Message` as the sole protocol authority and
   derives all M2/M3 state from its immutable accessors.
-- Uses `lib/internal/canonical` for all body hash, header hash, and signature
+- Uses `internal/canonical` for all body hash, header hash, and signature
   input bytes.
 - Verifies `rsa-sha256` signatures with SHA-256 plus PKCS#1 v1.5 RSA public
   key verification.
@@ -139,7 +139,7 @@ order. Expected prompt count is five implementation prompts plus one final
 closeout prompt.
 
 1. Verification package contract and error taxonomy:
-   Add `lib/internal/verify` as the M4 coordinator. Define request, result,
+   Add `internal/verify` as the M4 coordinator. Define request, result,
    check status, static key, key provider, algorithm policy, clock/timestamp
    policy, envelope, limits, typed errors, and package documentation. The
    package must consume M1-M3 types and must not own parsing or
@@ -246,7 +246,7 @@ recorded as an additional estimate, but it does not replace wall-clock time.
 
 In scope:
 
-- `lib/internal/verify` as the library-internal coordinator for static-key
+- `internal/verify` as the library-internal coordinator for static-key
   signature verification.
 - Static public-key provider abstractions and deterministic in-memory key
   provider fixtures.
@@ -269,13 +269,13 @@ In scope:
 
 Out of scope:
 
-- Public `lib` facade APIs, unless a later implementation prompt updates this
+- Public root library facade APIs, unless a later implementation prompt updates this
   spec with a concrete facade need.
-- Raw RFC 5322 parsing changes in `lib/internal/rawmsg`.
-- DKIM2 tag parser changes in `lib/internal/tagvalue`,
-  `lib/internal/instance`, or `lib/internal/signature`, unless an M4 test
+- Raw RFC 5322 parsing changes in `internal/rawmsg`.
+- DKIM2 tag parser changes in `internal/tagvalue`,
+  `internal/instance`, or `internal/signature`, unless an M4 test
   exposes a root-cause defect in those packages and this spec is updated first.
-- Canonicalization changes in `lib/internal/canonical`, unless M4 proves the
+- Canonicalization changes in `internal/canonical`, unless M4 proves the
   M3 signature-input target rendering contract is wrong and M3/M4 golden
   vectors are updated before behavior changes.
 - DNS key TXT record parsing, network DNS lookup, cache policy, DNSSEC
@@ -386,7 +386,7 @@ from the available M1 raw message.
 
 ### Signature Input Verification
 
-M4 must build cryptographic input through `lib/internal/canonical`:
+M4 must build cryptographic input through `internal/canonical`:
 
 - Use `canonical.SignatureInput` with the authoritative M1 `HeaderBlock` and
   target `i=` sequence. M3 reparses and validates all protocol fields from that
@@ -411,7 +411,7 @@ algorithm a verifier MUST implement:
 - `ed25519-sha256`
 - `mldsa44`
 
-`lib/internal/cryptodkim2` is the single owner of each algorithm's message
+`internal/cryptodkim2` is the single owner of each algorithm's message
 representative (`MessageRepresentative`): the SHA-256 digest of the Section
 12.8 input for `rsa-sha256` and `ed25519-sha256`, the complete input for
 `mldsa44`. Signer and verifier both use it.
@@ -627,40 +627,40 @@ names where needed.
 
 Intended ownership:
 
-- `lib/internal/verify`:
+- `internal/verify`:
   Owns the M4 verification coordinator, request/result types, static key
   provider interface, in-memory static provider fixture, algorithm allowlist,
   key validation, RSA/Ed25519 cryptographic checks, timestamp policy,
   envelope comparison, hash comparison, per-signature-set statuses, typed
   verification errors, and package documentation.
-- `lib/internal/rawmsg`:
+- `internal/rawmsg`:
   Remains the source of truth for byte-preserving RFC 5322 message
   representation. M4 consumes `Message`, `HeaderBlock`, and `Body` accessors
   and must not alter raw parsing or CRLF policy.
-- `lib/internal/tagvalue`:
+- `internal/tagvalue`:
   Remains the owner of generic DKIM2 tag-list scanning and base64string
   parsing. M4 consumes immutable decoded signature, hash, and envelope
   containers through M2 types and must not implement parallel base64 parsing.
-- `lib/internal/instance`:
+- `internal/instance`:
   Remains the owner of `Message-Instance` parsing, hash-set parsing,
   optional recipe base64 containers, and `m=` sequence validation. M4 invokes
   extraction from `Request.Message`, consumes only those freshly parsed
   instances, and may add no parallel `h=` parser.
-- `lib/internal/signature`:
+- `internal/signature`:
   Remains the owner of `DKIM2-Signature` parsing, signature-set parsing,
   envelope containers, flags, nonces, and `i=` sequence validation. M4 invokes
   extraction from `Request.Message`, consumes only those freshly parsed
   signatures, and may add no parallel `s=`, `mf=`, or `rt=` parser.
-- `lib/internal/canonical`:
+- `internal/canonical`:
   Remains the single source of truth for Section 6.1, Section 6.2, and
   Section 9.6 byte transformations plus SHA-256 digest containers. M4 consumes
   these helpers and must not duplicate canonicalization.
-- `lib/internal/keyresolver`:
+- `internal/keyresolver`:
   Does not change in M4 unless implementation evidence strongly favors placing
   only an interface there. DNS lookup, DNS key record parsing, resolver cache
   policy, and network failure taxonomy remain M6.
-- `lib/internal/policy`, `lib/internal/service`, `lib/internal/datasource`,
-  `lib/internal/recipe`, and `lib/internal/observability`:
+- `internal/policy`, `internal/service`, `internal/datasource`,
+  `internal/recipe`, and `internal/observability`:
   Do not change in M4.
 - `cmd/dkim2d`, `cmd/dkim2-milter`, and `cmd/dkim2ctl`:
   No M4 code changes.
@@ -687,7 +687,7 @@ shape is:
 - `Result` stores per-check facts and does not require string parsing by
   callers.
 
-`lib/internal/verify` may import standard-library packages such as
+`internal/verify` may import standard-library packages such as
 `context`, `crypto`, `crypto/rsa`, `crypto/ed25519`, `crypto/sha256`,
 `crypto/subtle`, `errors`, and `time`, plus M1-M3 internal packages. It must
 not import command/service/runtime packages.
@@ -918,7 +918,7 @@ Integration or E2E tests:
 Generated and documentation checks:
 
 - No OpenAPI generated artifacts are touched.
-- Package documentation for `lib/internal/verify` must describe the static-key
+- Package documentation for `internal/verify` must describe the static-key
   verification ownership contract, draft baseline, M1-M3 dependency chain,
   algorithm allowlist, key-provider abstraction, timestamp policy, envelope
   matching, multi-signature semantics, and secret-safe diagnostics.
@@ -937,7 +937,7 @@ document the exact blocker.
 
 ## Acceptance Criteria
 
-- `lib/internal/verify` owns static-key DKIM2 signature verification
+- `internal/verify` owns static-key DKIM2 signature verification
   coordination without duplicating M1 raw parsing, M2 tag parsing, or M3
   canonicalization.
 - Static public-key lookup is injectable, deterministic, and keyed by
@@ -966,7 +966,7 @@ document the exact blocker.
   to pass.
 - Verification errors and result facts are typed, bounded, and secret-safe.
 - No daemon, Milter, OpenAPI, CLI, datasource, DNS, concrete observability
-  exporter, Valkey, SQL, LDAP, or service-only dependency leaks into `lib`.
+  exporter, Valkey, SQL, LDAP, or service-only dependency leaks into the root library module.
 - Unit, negative crypto vector, golden/vector, abuse, and fuzz-smoke tests
   cover the M4 behavior named in `docs/ARCHITECTURE.md`.
 - `make guardrails` passes, or skipped portions are explicitly justified with
@@ -1008,7 +1008,7 @@ document the exact blocker.
   focused `go vet ./internal/verify` check.
 - Focused tests: `cd lib && GOCACHE=/private/tmp/dkim2-gocache GOLANGCI_LINT_CACHE=/private/tmp/dkim2-golangci-cache go test ./internal/verify/...` passed.
 - Focused dependency tests: `cd lib && GOCACHE=/private/tmp/dkim2-gocache GOLANGCI_LINT_CACHE=/private/tmp/dkim2-golangci-cache go test ./internal/rawmsg/... ./internal/tagvalue/... ./internal/instance/... ./internal/signature/... ./internal/canonical/... ./internal/verify/...` passed.
-- Golden/vector tests: covered by `lib/internal/verify/vector_test.go`, `crypto_test.go`, and `negative_test.go`; `go test ./internal/verify/...` passed.
+- Golden/vector tests: covered by `internal/verify/vector_test.go`, `crypto_test.go`, and `negative_test.go`; `go test ./internal/verify/...` passed.
 - Fuzz-smoke: `cd lib && GOCACHE=/private/tmp/dkim2-gocache GOLANGCI_LINT_CACHE=/private/tmp/dkim2-golangci-cache go test ./internal/verify/... -run '^$' -fuzz=FuzzVerifyStaticKeyRequest -fuzztime=10s` passed.
 - Generated checks: OpenAPI/command surfaces were not changed; `git diff -- docs/specs/openapi cmd` and `git status --short docs/specs/openapi cmd` were empty, and `make guardrails` passed `check-openapi`.
 - Library dependency check: `cd lib && go list -f '{{join .Imports "\n"}}' ./internal/verify` showed only standard-library imports plus M1-M3 internal packages (`canonical`, `instance`, `rawmsg`, `signature`); no service-only dependencies were present.
@@ -1021,17 +1021,17 @@ document the exact blocker.
 
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Scope | Work stays inside `lib/internal/verify`, package-local tests, package-local testdata, and this spec unless a documented M1-M3 defect requires a spec update first | M4 implementation is contained in `lib/internal/verify`; closeout also updated this durable spec, prompt ledger, and corrected stale package documentation. | done | No command modules, OpenAPI contracts, generated artifacts, DNS resolver, datasource, Milter, recipe, replay, policy, or concrete observability code changed. |
+| Scope | Work stays inside `internal/verify`, package-local tests, package-local testdata, and this spec unless a documented M1-M3 defect requires a spec update first | M4 implementation is contained in `internal/verify`; closeout also updated this durable spec, prompt ledger, and corrected stale package documentation. | done | No command modules, OpenAPI contracts, generated artifacts, DNS resolver, datasource, Milter, recipe, replay, policy, or concrete observability code changed. |
 | Behavior | Static-key RSA-SHA256 and Ed25519-SHA256 verification, hash validation, timestamp checks, envelope checks, and multi-signature semantics follow the bound draft sections plus architecture decisions | RSA uses SHA-256 plus PKCS#1 v1.5 over M3 Section 9.6 bytes; Ed25519 verifies over SHA-256 digest bytes; RSA minimum is 1024 bits; envelope matching follows current draft-04 Sections 9.2 and 11.4 recipient membership and ASCII domain-case rules; M2 state is freshly extracted from `Request.Message` and M3 canonical helpers reparse the same authoritative header block. | done | Covered by focused verify tests, crypto tests, vector tests, negative tests, timestamp/envelope/multisignature tests, and final gates. |
-| Tests | Unit, negative crypto vector, golden/vector, abuse, immutability, and fuzz-smoke coverage exist | `lib/internal/verify` includes vector, negative, abuse, immutability, diagnostic, hash, crypto, key, timestamp, envelope, multisignature, and fuzz tests. | done | Focused tests, dependency tests, fuzz smoke, `make test`, `make vet`, `make lint`, `make race`, and `make guardrails` passed. |
+| Tests | Unit, negative crypto vector, golden/vector, abuse, immutability, and fuzz-smoke coverage exist | `internal/verify` includes vector, negative, abuse, immutability, diagnostic, hash, crypto, key, timestamp, envelope, multisignature, and fuzz tests. | done | Focused tests, dependency tests, fuzz smoke, `make test`, `make vet`, `make lint`, `make race`, and `make guardrails` passed. |
 | Security | Fail-closed and secret-safe behavior is preserved | Missing keys, unsupported/disabled algorithms, provider invariant failures, mismatches, unreconstructable historical targets, timestamp failures, envelope failures, and crypto failures are non-success states; diagnostic tests cover synthetic secret markers. | done | Message bytes are the sole protocol authority; result facts use fixed `unknown` for attacker-controlled algorithms and do not expose raw messages, headers, paths, recipients, signatures, public-key bytes, or private keys. |
-| Boundaries | Module and generated-code boundaries hold | `lib/internal/verify` imports only standard library plus `canonical`, `instance`, `rawmsg`, and `signature`; OpenAPI and command module diffs are empty. | done | No service-only, generated REST DTO, Milter, DNS, datasource, recipe, replay, policy, Valkey, SQL, LDAP, CLI, Prometheus, or OTLP dependency entered `lib`. |
+| Boundaries | Module and generated-code boundaries hold | `internal/verify` imports only standard library plus `canonical`, `instance`, `rawmsg`, and `signature`; OpenAPI and command module diffs are empty. | done | No service-only, generated REST DTO, Milter, DNS, datasource, recipe, replay, policy, Valkey, SQL, LDAP, CLI, Prometheus, or OTLP dependency entered the root library module. |
 | Observability | Only bounded result facts and errors exist; no concrete exporters or high-cardinality labels | M4 added structured result/error facts only; no logging, metrics, tracing, exporters, debug modules, or labels were added. | done | Future observability remains a mapping layer over bounded M4 facts. |
 | Effort | Prompt timings are measured and compared to the 4 to 8 agent-day estimate | Productive implementation prompts took 50m20s; total including spec and prompt-pack preparation took 1h02m45s. | done | Actual measured wall-clock is far below estimate due to tight scope, standard-library crypto, and no adapter/service expansion. |
 
 ## Decisions And Open Questions
 
-- Settled: M4 adds `lib/internal/verify` as the coordinator for static-key
+- Settled: M4 adds `internal/verify` as the coordinator for static-key
   verification rather than moving cryptographic verification into
   `signature` or `canonical`.
 - Settled: `signature` remains the owner of `DKIM2-Signature` parsing,

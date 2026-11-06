@@ -1,9 +1,11 @@
 package policy
 
 import (
+	"errors"
 	"fmt"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -75,11 +77,11 @@ func assertForbiddenProductionImportsRecursive(t *testing.T, root string, forbid
 			return walkErr
 		}
 		if entry.IsDir() {
-			if entry.Name() == "testdata" {
+			if path != root && !libraryModuleDirectory(root, path, entry.Name()) {
 				return filepath.SkipDir
 			}
-			if entry.Name() == "generated" || entry.Name() == "openapi" {
-				return fmt.Errorf("forbidden generated/runtime scope entered lib: %s", path)
+			if (entry.Name() == "generated" || entry.Name() == "openapi") && containsGoSource(path) {
+				return fmt.Errorf("forbidden generated/runtime scope entered the library: %s", path)
 			}
 			return nil
 		}
@@ -91,6 +93,36 @@ func assertForbiddenProductionImportsRecursive(t *testing.T, root string, forbid
 	if err != nil {
 		t.Fatalf("recursive production import audit for %q failed: %v", root, err)
 	}
+}
+
+// libraryModuleDirectory reports whether one directory below root belongs to
+// the library module. The library module owns the repository root, so nested
+// modules (directories with their own go.mod), the workspace vendor tree, the
+// ignored root scratch directory, and directories the go command ignores are
+// excluded from the production import audit.
+func libraryModuleDirectory(root, path, name string) bool {
+	if name == "testdata" || name == "vendor" || strings.HasPrefix(name, ".") ||
+		strings.HasPrefix(name, "_") || path == filepath.Join(root, "temp") {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(path, "go.mod"))
+	return errors.Is(err, fs.ErrNotExist)
+}
+
+// containsGoSource reports whether one directory directly holds Go source, so
+// documentation-only directories such as the OpenAPI specification tree are
+// not mistaken for generated Go scopes.
+func containsGoSource(directory string) bool {
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return true
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") {
+			return true
+		}
+	}
+	return false
 }
 
 // rejectForbiddenFileImports parses one production file and rejects exact or slash-terminated prefix rules.

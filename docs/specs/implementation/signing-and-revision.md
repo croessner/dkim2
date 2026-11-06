@@ -85,7 +85,7 @@ generates deterministic inverse recipe JSON. It does not yet:
 - append a signature while proving ordinary or `nd=` chain continuity;
 - issue a sealed, exact-input capability suitable for revision signing;
 - insert generated fields into an immutable RFC 5322 message; or
-- expose signing through the same root `lib/` facade as verification.
+- expose signing through the same root library facade as verification.
 
 The existing verifier also lacks one draft-04 Section 9.4 rule: for each
 ordinary signature after `i=1`, the new `mf=` domain must relaxed-match at
@@ -338,7 +338,7 @@ authorize signing after expiry.
 
 ### Exact Section 9.1 Hash Gate
 
-The gate uses `lib/internal/canonical` and exactly SHA-256:
+The gate uses `internal/canonical` and exactly SHA-256:
 
 - An Originator with no protocol fields always creates `m=1` with the current
   header and body hashes and no `r=`.
@@ -405,7 +405,7 @@ rewrites, removes, or normalizes an existing protocol field.
 
 ### Shared Chain-Of-Custody State Machine
 
-`lib/internal/signature` owns one chain checker used by both verification and
+`internal/signature` owns one chain checker used by both verification and
 signing. There is no verifier-only and signer-only copy.
 
 For every signature in ascending `i=` order:
@@ -578,7 +578,7 @@ or reused tickets and cross-parent/cross-copy mixing fail closed
 where presented to the library. Unknown or underreported total multiplicity fails
 closed.
 
-`lib/internal/routeplan` is the invariant-owning leaf. An injected
+`internal/routeplan` is the invariant-owning leaf. An injected
 context-aware `RouteFanoutAuthority` is the only issuer/sealer of parent plans,
 unique bound copy tickets, and replacement tickets; callers cannot construct,
 self-seal, clone, or choose opaque ticket identity. The root package exposes an
@@ -738,7 +738,7 @@ the implementation's support for it. The DNS-04 draft constrains compatible
 key-record lookup/material and does not override the main draft's signer
 algorithm requirement.
 
-`lib/internal/cryptodkim2` is the single lower leaf owner of RSA/Ed25519
+`internal/cryptodkim2` is the single lower leaf owner of RSA/Ed25519
 public-key structure, algorithm matching, RSA exponent/key-size policy,
 signature-length rules, and cryptographic verification/self-verification.
 DNS decoding reuses only its structural predicates and cloning helpers; it
@@ -824,9 +824,9 @@ rolled back, but no partial message or signature set is returned.
 ### Section 9.6 Input
 
 The signing coordinator does not construct a fake complete signature with a
-placeholder signature value. `lib/internal/signature` builds a validated
+placeholder signature value. `internal/signature` builds a validated
 unsigned target model whose every `s=` signature component has an empty value.
-`lib/internal/canonical` accepts that model through a signing-specific seam and
+`internal/canonical` accepts that model through a signing-specific seam and
 owns the Section 9.6 byte construction.
 
 The canonical input contains, in this exact order:
@@ -899,7 +899,7 @@ flags are never generated.
 
 ### Raw Message Insertion And Transport Form
 
-`lib/internal/rawmsg` owns validated insertion. The coordinator never splices
+`internal/rawmsg` owns validated insertion. The coordinator never splices
 unvalidated byte offsets itself.
 
 - Every request carries a closed transport-form declaration whose only
@@ -955,7 +955,7 @@ durably specified and versioned.
 
 ## Package Boundaries
 
-### `lib/`
+### Root library module
 
 The root package owns the public immutable facade and bridge:
 
@@ -970,10 +970,10 @@ The root package owns the public immutable facade and bridge:
   route-bound release capabilities; and
 - mapping internal typed errors to bounded public errors.
 
-Public APIs must not expose `lib/internal` types, generated DTOs, mutable
+Public APIs must not expose `internal` types, generated DTOs, mutable
 slices, raw private keys, `crypto.Signer`, or `any`.
 
-### `lib/internal/signing`
+### `internal/signing`
 
 A new cohesive coordinator owns operation ordering, exact gate decisions,
 progression, authorizations, preflight, callback sequencing, atomic assembly,
@@ -985,23 +985,23 @@ or construct exporters.
 
 ### Existing Owners
 
-- `lib/internal/instance` owns instance construction, hash/recipe invariants,
+- `internal/instance` owns instance construction, hash/recipe invariants,
   and deterministic `Message-Instance` rendering.
-- `lib/internal/signature` owns unsigned/complete signature construction,
+- `internal/signature` owns unsigned/complete signature construction,
   deterministic rendering, sequence/reference rules, and the one shared
   ordinary/`nd=` custody state machine.
-- `lib/internal/canonical` owns Section 6 hashes and the Section 9.6
+- `internal/canonical` owns Section 6 hashes and the Section 9.6
   signing-input seam over a structured unsigned target.
-- `lib/internal/recipe` owns deterministic decoded inverse JSON and its proof.
-- `lib/internal/rawmsg` owns parser truth and validated field insertion.
-- `lib/internal/cryptodkim2` is the shared leaf for key validation and
+- `internal/recipe` owns deterministic decoded inverse JSON and its proof.
+- `internal/rawmsg` owns parser truth and validated field insertion.
+- `internal/cryptodkim2` is the shared leaf for key validation and
   signature verification/self-verification used by verify and signing.
-- `lib/internal/routeplan` owns fanout authority contracts, parent/copy
+- `internal/routeplan` owns fanout authority contracts, parent/copy
   invariants, atomic ticket state, and replacement lineage; it does not claim
   cross-operation delivery completion.
-- `lib/internal/verify` verifies all facts needed to issue a sealed revision
+- `internal/verify` verifies all facts needed to issue a sealed revision
   capability and reuses signature-owned custody logic.
-- `lib/internal/policy` derives sealed signing restrictions from authenticated
+- `internal/policy` derives sealed signing restrictions from authenticated
   flags; it does not sign or mutate messages.
 
 M11 provider implementations are leaf dependencies on internal datasource and
@@ -1272,7 +1272,7 @@ incidental diagnostics.
 - All new/changed hand-written named functions and receiver methods have
   concise English doc comments.
 - Package docs describe exact ownership and secret boundaries.
-- Import/dependency tests keep `lib/` standalone and package direction acyclic.
+- Import/dependency tests keep the root library module standalone and package direction acyclic.
 - No OpenAPI generated artifact changes.
 
 ### Validation Commands
@@ -1350,7 +1350,7 @@ recorded during implementation closeout.
 
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Scope | Library signing/revision only; later integrations deferred | Implemented in `lib/` with no service or adapter integration | approved | Prompt pack remains ignored and unstaged |
+| Scope | Library signing/revision only; later integrations deferred | Implemented in the root library module with no service or adapter integration | approved | Prompt pack remains ignored and unstaged |
 | Protocol | Draft-04 Sections 3, 6, 7, 8, 9 and transport constraints are explicit | Exact fields, inputs, custody, revision, and insertion behavior implemented | approved | Normative and mail-domain implementation review passed; version remains pinned |
 | Custody | One complete ordinary/`nd=` checker shared by verifier and signer | Shared custody state machine covers ordinary and terminal next-domain transitions | approved | Includes adjacent ordinary-chain verifier repair and full-chain vectors |
 | Security | Sealed exact capabilities, closed authorizations, opaque keys, atomic output | Fail-closed capabilities, authorizations, key handles, callback ordering, and atomic results implemented | approved | Security and restricted-release review passed |

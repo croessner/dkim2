@@ -16,8 +16,8 @@ import (
 var workspaceMetadataPaths = []string{
 	"go.work",
 	"go.work.sum",
-	"lib/go.mod",
-	"lib/go.sum",
+	"go.mod",
+	"go.sum",
 	"cmd/dkim2d/go.mod",
 	"cmd/dkim2d/go.sum",
 	"cmd/dkim2-milter/go.mod",

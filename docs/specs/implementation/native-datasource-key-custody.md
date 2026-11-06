@@ -188,7 +188,7 @@ inventory is permitted only as an explicit offline bootstrap input.
 
 ## Package Boundaries
 
-- `lib/`: unchanged DKIM2 protocol and provider-neutral dataset behavior.
+- Root library module: unchanged DKIM2 protocol and provider-neutral dataset behavior.
 - `cmd/dkim2d/internal/signingstore`: owns strict PKCS#8 parsing, in-memory
   signer construction, key destruction, and opaque signing.
 - `cmd/dkim2d/internal/datasource/ldap`: owns LDAP entry mapping, paging,
@@ -202,7 +202,7 @@ inventory is permitted only as an explicit offline bootstrap input.
 - `cmd/dkim2-milter`, `cmd/dkim2ctl`, and OpenAPI-generated code: unchanged.
 
 Provider-specific rows, entries, credentials, and drivers must not leak into
-`lib/` or generated REST DTOs.
+the root library module or generated REST DTOs.
 
 ## Security And Privacy
 

@@ -98,8 +98,13 @@ Current contents:
 - `Makefile` and `.golangci.yml`: repository-wide local guardrails.
 - `docs/ci.md`: GitHub Actions lanes, privilege boundaries, and release gates.
 - `go.work`: local development workspace.
-- `lib`: standalone DKIM2 library module at
-  `github.com/croessner/dkim2`.
+- Root library module: the standalone DKIM2 library at
+  `github.com/croessner/dkim2` (repository root `go.mod`, root package
+  files, and the `admincontract/`, `authresults/`, `headerfold/`, `internal/`,
+  and `provider/` packages). Consumers fetch it directly with
+  `go get github.com/croessner/dkim2@latest` and import
+  `github.com/croessner/dkim2`; no `replace` directive to a local checkout is
+  needed.
 - `cmd/dkim2d`: standalone HTTP/JSON daemon module.
 - `cmd/dkim2-milter`: standalone Milter adapter module.
 - `cmd/dkim2-exim`: source-linked Exim `local_scan()` and transport-filter
@@ -108,12 +113,12 @@ Current contents:
 - `cmd/dkim2-dsn-propagator`: standalone MTA-neutral delivery-status
   propagation adapter module with LMTP intake and null-sender SMTP
   re-injection.
-- `lib/internal/*`: implemented raw-message, parser, canonicalization,
+- `internal/*`: implemented raw-message, parser, canonicalization,
   verification, policy, recipe, signing, revision, route-authority,
   restricted-release, and datasource protocol foundations.
-- `lib/internal/datasource`: storage-neutral exact profile and administrative
+- `internal/datasource`: storage-neutral exact profile and administrative
   policy contracts with immutable in-memory and confined flat-file providers.
-- `lib/internal/datasource/signingprofile`: the sole bridge from validated
+- `internal/datasource/signingprofile`: the sole bridge from validated
   datasource results and opaque key-handle bindings to signing profiles.
 - `docs/datasource-ldap-sql-design.md`: storage-neutral LDAP, PostgreSQL,
   MySQL, and MariaDB
@@ -155,9 +160,9 @@ Current contents:
 - `docs/operator/container-supply-chain.md`: reproducible product images,
   multi-architecture layouts, SBOM, provenance, and vulnerability policy.
 - `docs/specs/openapi`: authoritative source-of-truth OpenAPI contract.
-- `lib/testdata/vectors`: draft-versioned verification, DNS, custody, crypto,
+- `testdata/vectors`: draft-versioned verification, DNS, custody, crypto,
   signing, revision, and insertion vectors.
-- `lib/internal/*/testdata`: package-owned canonicalization, recipe application
+- `internal/*/testdata`: package-owned canonicalization, recipe application
   and generation, parser, fuzz, and regression fixtures.
 
 ## Operator Navigation
@@ -270,7 +275,7 @@ and raw errors out of diagnostics.
 Useful verification commands:
 
 ```text
-go test ./lib/...
+go test ./...   # root library module only; run at the repository root
 go test ./cmd/dkim2d/...
 go test ./cmd/dkim2-milter/...
 go test ./cmd/dkim2ctl/...

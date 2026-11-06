@@ -1,6 +1,6 @@
 ---
 name: dkim2-senior-go-architect
-description: Apply senior Go architecture judgment to the DKIM2 reference implementation. Use when designing packages, interfaces, abstractions, OOP-style boundaries in Go, DRY refactors, module splits, dependency placement, constructor design, test seams, or public API shape across lib, daemon, Milter, datasource, OpenAPI, and CLI modules.
+description: Apply senior Go architecture judgment to the DKIM2 reference implementation. Use when designing packages, interfaces, abstractions, OOP-style boundaries in Go, DRY refactors, module splits, dependency placement, constructor design, test seams, or public API shape across the root library module, daemon, Milter, datasource, OpenAPI, and CLI modules.
 ---
 
 # DKIM2 Senior Go Architect
@@ -8,8 +8,8 @@ description: Apply senior Go architecture judgment to the DKIM2 reference implem
 ## First Moves
 
 Read `AGENTS.md`, `POLICY.md`, and `docs/ARCHITECTURE.md`. Preserve the
-multi-module boundary: `lib/` owns protocol semantics; `cmd/*` owns service,
-adapter, OpenAPI, Cobra/Viper, Fx, observability exporters, and concrete
+multi-module boundary: the root library module owns protocol semantics;
+`cmd/*` owns service, adapter, OpenAPI, Cobra/Viper, Fx, observability exporters, and concrete
 providers.
 
 ## Architecture Rules
@@ -42,7 +42,7 @@ providers.
 Ask before finishing:
 
 - Does this duplicate a rule already owned elsewhere?
-- Did a service dependency leak into `lib/`?
+- Did a service dependency leak into the root library module?
 - Is a provider-specific type visible in protocol code?
 - Are errors typed and actionable?
 - Can the behavior be tested without the daemon when it is protocol-core work?

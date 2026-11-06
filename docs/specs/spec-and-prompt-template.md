@@ -43,7 +43,7 @@ Every spec must:
 - Define the goal in operator and implementation language.
 - Keep in-scope and out-of-scope work explicit.
 - Bind behavior to DKIM2 draft versions, architecture decisions or local policy.
-- Preserve module boundaries between `lib/`, `cmd/dkim2d`,
+- Preserve module boundaries between the root library module, `cmd/dkim2d`,
   `cmd/dkim2-milter` and `cmd/dkim2ctl`.
 - Define security defaults, fail-closed behavior and secret-redaction rules.
 - Define observability expectations without creating high-cardinality labels or
@@ -151,7 +151,7 @@ revised when the draft changes.
 
 State the intended ownership:
 
-- `lib/`: <core DKIM2 semantics only>
+- Root library module: <core DKIM2 semantics only>
 - `cmd/dkim2d`: <daemon/runtime/OpenAPI/config/observability work>
 - `cmd/dkim2-milter`: <Milter adapter work>
 - `cmd/dkim2ctl`: <generated-client/test-client work>
@@ -329,7 +329,7 @@ expanding implementation.
 - Keep all scratch and handoff notes under `temp/`.
 - Keep durable documentation under `docs/`.
 - Use Makefile targets rather than ad hoc command variants where possible.
-- Keep the `lib/` module free of daemon, Milter, OpenAPI, Cobra, Viper, Fx,
+- Keep the root library module free of daemon, Milter, OpenAPI, Cobra, Viper, Fx,
   Prometheus, OTLP exporter and CLI-only dependencies.
 - Keep generated OpenAPI DTOs at REST boundaries.
 - Keep logs, traces, metrics, REST output, CLI output, test logs and errors

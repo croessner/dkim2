@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	corpusRelativePath = "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/dsn-propagation-golden.json"
+	corpusRelativePath = "testdata/vectors/draft-ietf-dkim-dkim2-spec-09/dsn-propagation-golden.json"
 	// CaseRunOfOne is a rebuildable single-signature local hop run.
 	CaseRunOfOne = "run_of_one"
 	// CaseNextDomainRun is a rebuildable nd= run whose signing domain is the forward domain.

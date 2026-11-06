@@ -434,7 +434,7 @@ func (p appGoldenProvider) LookupPublicKey(_ context.Context, query dkim2.Public
 // TestDomainOwnersHideAuthenticSelectedStateAndDependencies proves structural opacity at the app boundary.
 func TestDomainOwnersHideAuthenticSelectedStateAndDependencies(t *testing.T) {
 	const ownershipMarker = "TOXIC-DOMAIN-PROCESSOR-OWNER"
-	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json")
+	corpusBytes, err := os.ReadFile("../../../../testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json")
 	if err != nil {
 		t.Fatal("golden app fixture unavailable")
 	}

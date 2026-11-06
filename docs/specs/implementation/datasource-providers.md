@@ -63,7 +63,7 @@ failure must never silently select another identity.
 
 In scope:
 
-- domain-owned provider interfaces under `lib/internal/datasource`;
+- domain-owned provider interfaces under `internal/datasource`;
 - immutable validated lookup facts, profile IDs, profiles, key-handle IDs,
   domain/tenant policy, provider states, typed errors, limits, and usage;
 - exact profile lookup and opaque handle lookup;
@@ -97,12 +97,12 @@ interface merely as a placeholder.
 
 ## Architectural Ownership
 
-`lib/internal/datasource` is a lower leaf and owns storage-facing domain
+`internal/datasource` is a lower leaf and owns storage-facing domain
 contracts, identifiers, records, limits, errors, and immutable resolved
-snapshots. `lib/internal/datasource/memory` owns the in-memory implementation.
-`lib/internal/datasource/flatfile` owns strict JSON and confined file loading.
-`lib/internal/datasource/signingprofile` is the only higher integration
-adapter: it imports datasource contracts and `lib/internal/signing`, constructs
+snapshots. `internal/datasource/memory` owns the in-memory implementation.
+`internal/datasource/flatfile` owns strict JSON and confined file loading.
+`internal/datasource/signingprofile` is the only higher integration
+adapter: it imports datasource contracts and `internal/signing`, constructs
 the existing M10 profile, owns one immutable `KeyHandleID` to M10
 `PrivateKeyHandle` registry, and validates the projection. Datasource core,
 memory, and flatfile do not import signing; signing does not import any
@@ -118,7 +118,7 @@ state.
 
 The library remains independent of service-layer dependencies. JSON, hashing,
 and immutable snapshots use the Go standard library. The flat-file package may
-add only `golang.org/x/sys/unix`, pinned in `lib/go.mod`, for the Unix
+add only `golang.org/x/sys/unix`, pinned in `go.mod`, for the Unix
 descriptor-relative no-follow open and metadata checks specified below. No
 LDAP, SQL, daemon, configuration-framework, or telemetry dependency is allowed.
 
@@ -665,7 +665,7 @@ Dependency tests prove:
 - datasource core, memory, and flatfile do not import signing;
 - `datasource/signingprofile` is the sole package allowed to import both
   datasource contracts and signing, while signing never imports it;
-- `lib/` gains no daemon, LDAP, SQL, Cobra, Viper, Fx, Prometheus, OpenTelemetry
+- The root library module gains no daemon, LDAP, SQL, Cobra, Viper, Fx, Prometheus, OpenTelemetry
   exporter, Milter, or CLI dependency;
 - replay-store APIs are absent.
 

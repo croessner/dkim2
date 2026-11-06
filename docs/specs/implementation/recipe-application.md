@@ -10,9 +10,9 @@
   and previous-instance hash validation.
 - Protocol baseline: `draft-ietf-dkim-dkim2-spec-04`, especially Sections 2,
   5, 6, 7.2, 9.1, 10.2, and 11.7.
-- Architecture owners: `lib/internal/recipe` for recipe syntax and
-  reconstruction, `lib/internal/rawmsg` for RFC 5322 bytes, and
-  `lib/internal/canonical` for hash input and SHA-256.
+- Architecture owners: `internal/recipe` for recipe syntax and
+  reconstruction, `internal/rawmsg` for RFC 5322 bytes, and
+  `internal/canonical` for hash input and SHA-256.
 - Status: implementation completed with focused, fuzz, race, and repository
   proof; unchanged-snapshot approvals are recorded in the final handoff and the
   single increment commit remains pending for the root maintainer.
@@ -129,7 +129,7 @@ draft-04:
   lowercase ASCII name, with the required top-down occurrence order inside
   each group. It never claims to recover the original cross-name byte order.
 - A Message-Instance `r=` value is already strictly base64-decoded by
-  `lib/internal/instance`. `lib/internal/recipe` accepts only the cloned decoded
+  `internal/instance`. `internal/recipe` accepts only the cloned decoded
   JSON bytes. It does not parse tag lists or base64 again.
 - For `m>1`, absent `r=` violates the Section 9.1 carriage requirement and
   prevents reconstruction. It is not inferred to be an identity transition.
@@ -218,7 +218,7 @@ evidence are complete.
 
 ## Package And Dependency Boundaries
 
-`lib/internal/recipe` owns:
+`internal/recipe` owns:
 
 - Recipe limits and their validation.
 - Duplicate-aware JSON structural scanning and semantic decoding.
@@ -229,7 +229,7 @@ evidence are complete.
 - Known/unavailable dimension state and bounded reconstruction metadata.
 - Recipe-specific typed errors and stable error codes.
 
-`lib/internal/rawmsg` remains the sole owner of:
+`internal/rawmsg` remains the sole owner of:
 
 - Valid RFC 5322 header field construction.
 - Header occurrence bytes and logical field boundaries.
@@ -240,7 +240,7 @@ Recipe code must use exported rawmsg constructors or a narrow new rawmsg
 builder that validates the same invariants. It must not populate rawmsg
 unexported fields, fork the RFC 5322 parser, or weaken its line limits.
 
-`lib/internal/canonical` remains the sole owner of:
+`internal/canonical` remains the sole owner of:
 
 - Section 6.1 body hash canonicalization.
 - Section 6.2 header hash canonicalization and ignored-header rules.
@@ -250,7 +250,7 @@ Recipe code never reimplements header exclusions, name sorting, WSP handling,
 terminal-empty-line handling, or SHA-256. Verify-owned previous-instance
 validation calls the canonical package over a known reconstructed dimension.
 
-`lib/internal/instance` continues to own Message-Instance tag parsing,
+`internal/instance` continues to own Message-Instance tag parsing,
 strict padded base64string validation, hash-set parsing, and immutable decoded
 `r=` storage. It gains no JSON schema knowledge. It owns one
 `SHA256HashSet()` selection method used by both current and historical
@@ -258,15 +258,15 @@ verification. The parser already rejects duplicate algorithm names, so this
 method returns exactly one known SHA-256 set, `unsupported` for unknown-only
 sets, or `missing` when no SHA-256 set exists without any unknown set.
 
-`lib/internal/verify` exclusively owns Message-Instance adjacency, authenticated
+`internal/verify` exclusively owns Message-Instance adjacency, authenticated
 descent, shared hash-set selection consumption, canonical hash comparison,
 context cancellation, and history-transition results. Recipe never imports
-instance, canonical, or verify. `lib/internal/service` and the public root
+instance, canonical, or verify. `internal/service` and the public root
 facade keep their current result mapping in this increment.
 
 No command module, root public API, OpenAPI type, Milter type, datasource type,
 configuration framework, telemetry exporter, or additional external
-dependency enters `lib/internal/recipe`.
+dependency enters `internal/recipe`.
 
 ## Domain Model And Conceptual API
 
@@ -799,7 +799,7 @@ Limit errors identify only a stable limit name and bounded counts.
 
 ## Error Model And Diagnostics
 
-`lib/internal/recipe` uses one typed error with closed code, class, bounded
+`internal/recipe` uses one typed error with closed code, class, bounded
 location, and bounded details. Its stable parse/application codes are:
 
 ```text
@@ -822,7 +822,7 @@ invalid_literal
 source_unavailable
 ```
 
-`lib/internal/verify` separately owns these history-coordinator codes:
+`internal/verify` separately owns these history-coordinator codes:
 
 ```text
 history_invalid_options
@@ -993,12 +993,12 @@ changes after its recorded snapshot.
 ### Expected Implementation Inventory
 
 The implementation adds cohesive files under
-`lib/internal/recipe` for `limits`, `errors`, `types`, `parser`, `state`,
+`internal/recipe` for `limits`, `errors`, `types`, `parser`, `state`,
 `apply_header`, and `apply_body`, with matching unit/fuzz/abuse tests. Rawmsg
 changes are limited to reconstructed header/body/message constructors and
 tests. Instance adds the shared SHA-256 selector and tests. Verify keeps the
 cohesive history types and coordinator implementation together in
-`lib/internal/verify/history.go`, with focused history tests; service/root
+`internal/verify/history.go`, with focused history tests; service/root
 changes are limited to compatibility tests proving their public
 `not_evaluated` contract is unchanged. File names may split only for cohesion;
 ownership may not move.
@@ -1105,7 +1105,7 @@ and reviewer approval.
 - The durable spec and ignored prompt pack are reviewed before implementation.
 - Every implemented function and method, including unexported named helpers,
   has a concise English doc comment.
-- No recipe rule is duplicated outside `lib/internal/recipe`, and no rawmsg or
+- No recipe rule is duplicated outside `internal/recipe`, and no rawmsg or
   canonical rule is forked inside it.
 - Draft-04 null, unknown-member, ordering, range, and CRLF semantics are covered
   by positive and negative tests.

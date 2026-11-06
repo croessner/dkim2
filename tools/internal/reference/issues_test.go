@@ -86,7 +86,7 @@ func TestCheckIssuesAcceptsRepositoryClosure(t *testing.T) {
 func TestValidateTestReferenceRejectsMissingOwner(t *testing.T) {
 	if err := validateTestReference(
 		repositoryRoot(t),
-		"lib/internal/signature/parser_test.go#TestDoesNotExist",
+		"internal/signature/parser_test.go#TestDoesNotExist",
 	); err == nil {
 		t.Fatal("validateTestReference accepted an absent test")
 	}

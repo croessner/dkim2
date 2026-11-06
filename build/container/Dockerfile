@@ -39,7 +39,12 @@ WORKDIR /src
 COPY --from=build-metadata /validated /validated
 COPY go.work go.work.sum ./
 COPY LICENSE ./LICENSE
-COPY lib ./lib
+COPY go.mod go.sum *.go ./
+COPY admincontract ./admincontract
+COPY authresults ./authresults
+COPY headerfold ./headerfold
+COPY internal ./internal
+COPY provider ./provider
 COPY cmd/dkim2d ./cmd/dkim2d
 COPY cmd/dkim2-milter ./cmd/dkim2-milter
 COPY cmd/dkim2ctl ./cmd/dkim2ctl

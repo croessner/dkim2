@@ -33,7 +33,7 @@ resource set only with `GET /metrics`.
 
 ## Security And Ownership
 
-`lib/internal/observability` owns closed enums, immutable validated events,
+`internal/observability` owns closed enums, immutable validated events,
 panic containment, and a no-op sink. A minimal public facade exposes only an
 injected `Observe(context.Context, Event)` seam. The library imports no slog,
 OpenTelemetry, Prometheus, Fx, HTTP, exporter, or command dependency.
@@ -57,7 +57,7 @@ The daemon pins `github.com/prometheus/client_golang v1.25.0` and
 `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/sdk`, and
 `go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp` at `v1.47.0`.
 No HTTP auto-instrumentation is used. Workspace sums and vendor output remain
-reproducible; no dependency enters `lib/go.mod`.
+reproducible; no dependency enters `go.mod`.
 
 The workspace graph selects `golang.org/x/net v0.61.0`. Under Go 1.27.3,
 `go work sync` retains the pruned indirect requirements and module sums for

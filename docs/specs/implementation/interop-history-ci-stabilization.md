@@ -13,7 +13,7 @@ Date: 2026-08-12.
 This specification returns the repository to a small product-centered shape
 before the next stable tag. The supported product consists of:
 
-- the standalone DKIM2 library in `lib/`;
+- the standalone DKIM2 library in the root library module;
 - the HTTP daemon in `cmd/dkim2d/`;
 - the generated-client CLI in `cmd/dkim2ctl/`;
 - the Milter adapter in `cmd/dkim2-milter/`; and
@@ -161,7 +161,7 @@ operation.
 
 ### Message-Instance folding
 
-`lib/internal/instance.validUnknownHashComponent` rejects every byte below
+`internal/instance.validUnknownHashComponent` rejects every byte below
 space before `tagvalue.ParseBase64String` can remove FWS. A literal HTAB left by
 header unfolding is therefore rejected even though the same Draft-04 base64
 grammar permits it. Brong's focused change on PR 1 is applicable; his separate

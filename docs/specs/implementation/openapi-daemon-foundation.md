@@ -308,7 +308,7 @@ Settled:
 - The draft and API version are required exact request values and echoed from
   server-owned constants.
 - DNS verification uses the existing public library transport/provider
-  boundary; no command module imports `lib/internal`.
+  boundary; no command module imports `internal`.
 - Disabled, memory, and Valkey are the only replay backend choices.
 - Every replay-enabled request processes the complete sealed recipient
   identity set before one deterministic disposition.
@@ -334,7 +334,7 @@ REST paths and schemas. Generated code implements that document but never
 overrides it. A conflict between authorities stops work; no lower layer
 silently wins.
 
-`lib/` remains the sole owner of DKIM2 parsing, canonicalization, verification,
+The root library module remains the sole owner of DKIM2 parsing, canonicalization, verification,
 DNS key interpretation, policy evaluation, and replay identity semantics. M13
 may add a narrow public facade only when it delegates to an existing library
 owner without changing semantics. The library MUST NOT import Cobra, Viper,
@@ -342,7 +342,7 @@ Fx, HTTP, OpenAPI-generated types, Valkey, or daemon configuration.
 
 `cmd/dkim2d/internal/httpjson` owns generated REST types, transport preflight,
 domain mapping, status selection, and bounded error serialization. Generated
-DTOs never cross into `lib/`.
+DTOs never cross into the root library module.
 
 `cmd/dkim2d/internal/config` owns raw YAML preflight, Viper source merge,
 placeholder expansion, typed decode, protected-file loading, and immutable
@@ -687,10 +687,10 @@ tool directive for
 with the generator.
 The v2.8.0 clients use `github.com/oapi-codegen/runtime v1.7.0` to decode the
 declared response headers. The three generated-client owners pin that exact
-direct dependency; the server-only `cmd/dkim2d` module and `lib/` do not.
+direct dependency; the server-only `cmd/dkim2d` module and the root library module do not.
 Dependency guards require the generator, validator, and client-runtime pins,
 require synchronized workspace module metadata, reject a runtime dependency in
-`lib/` or the daemon, and reject an untagged middleware repository.
+the root library module or the daemon, and reject an untagged middleware repository.
 
 The server generator enables models, embedded specification,
 `std-http-server: true`, and `strict-server: true`. Both generator
@@ -2676,9 +2676,9 @@ store state.
   globally installed `oapi-codegen`.
 - Module/dependency guards prove synchronized workspace metadata, prove the
   generated owners neither import nor pin an unused
-  `github.com/oapi-codegen/runtime`, and prove `lib/` imports neither that
+  `github.com/oapi-codegen/runtime`, and prove the root library module imports neither that
   runtime nor the generator.
-- No generated type enters `lib/`; no hand-written parallel REST DTO exists.
+- No generated type enters the root library module; no hand-written parallel REST DTO exists.
 - Every wire-exposed public verification/policy value maps one-to-one,
   including coherent target and feedback optionality; intentionally omitted
   redundant values are checked for coherence.
@@ -3269,7 +3269,7 @@ M13 is complete only when:
   lifecycle races fail closed;
 - all protected material and failure paths are secret-safe;
 - generated server/client artifacts reproduce byte-for-byte;
-- `lib/` remains free of command/service dependencies;
+- The root library module remains free of command/service dependencies;
 - all focused, integration, fuzz, race, vulnerability, and guardrail checks
   pass on one unchanged candidate;
 - two independent reviewers approve its exact identifier;

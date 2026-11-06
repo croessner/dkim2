@@ -35,7 +35,7 @@ const (
 
 var proofModules = []string{"cmd/dkim2-milter", "cmd/dkim2-exim", "cmd/dkim2ctl", "cmd/dkim2d", "cmd/dkim2-dsn-propagator", "tools"}
 
-var moduleSumPaths = []string{"go.work.sum", "lib/go.sum", "cmd/dkim2d/go.sum", "cmd/dkim2-milter/go.sum", "cmd/dkim2-exim/go.sum", "cmd/dkim2ctl/go.sum", "cmd/dkim2-dsn-propagator/go.sum", "tools/go.sum"}
+var moduleSumPaths = []string{"go.work.sum", "go.sum", "cmd/dkim2d/go.sum", "cmd/dkim2-milter/go.sum", "cmd/dkim2-exim/go.sum", "cmd/dkim2ctl/go.sum", "cmd/dkim2-dsn-propagator/go.sum", "tools/go.sum"}
 
 // ModuleIdentity records one exact private-proxy module artifact.
 type ModuleIdentity struct {
@@ -187,7 +187,7 @@ func RunModuleProof(root string) (ModuleProof, error) {
 	if err != nil {
 		return ModuleProof{}, err
 	}
-	metadata, err := artifactpath.ReadFile(sourceRoot, "lib/go.mod", 1<<20)
+	metadata, err := artifactpath.ReadFile(sourceRoot, "go.mod", 1<<20)
 	if err != nil {
 		return ModuleProof{}, err
 	}
@@ -335,7 +335,7 @@ func requiredModuleGraph(root string, _ string, _ conformance.Snapshot) ([]modul
 		value := module.Version{Path: path, Version: version}
 		needed[path+"@"+version] = value
 	}
-	for _, directory := range append(append([]string(nil), proofModules...), "lib") {
+	for _, directory := range append(append([]string(nil), proofModules...), ".") {
 		content, err := artifactpath.ReadFile(
 			root, filepath.ToSlash(filepath.Join(directory, "go.mod")), 1<<20,
 		)
@@ -593,7 +593,7 @@ func writeCandidateModule(root, proxy string, snapshot conformance.Snapshot) (Mo
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return ModuleIdentity{}, errors.New("module_proxy_write")
 	}
-	modContent, err := artifactpath.ReadFile(root, "lib/go.mod", 1<<20)
+	modContent, err := artifactpath.ReadFile(root, "go.mod", 1<<20)
 	if err != nil {
 		return ModuleIdentity{}, errors.New("module_candidate_mod")
 	}
@@ -626,12 +626,13 @@ func createCandidateZip(root, destination, path, version string, snapshot confor
 	}
 	writer := zip.NewWriter(file)
 	prefix := path + "@" + version + "/"
+	nestedModules := nestedModuleDirectories(snapshot)
 	count := 0
 	for _, entry := range snapshot.Entries {
-		if !strings.HasPrefix(entry.Path, "lib/") {
+		if !libraryModuleEntry(entry.Path, nestedModules) {
 			continue
 		}
-		name := strings.TrimPrefix(entry.Path, "lib/")
+		name := entry.Path
 		if !validModuleRelativePath(name) {
 			_ = writer.Close()
 			_ = file.Close()
@@ -676,6 +677,56 @@ func createCandidateZip(root, destination, path, version string, snapshot confor
 		return errors.New("module_proxy_write")
 	}
 	return nil
+}
+
+// nestedModuleDirectories lists every candidate directory below the
+// repository root that owns its own go.mod and is therefore not library content.
+func nestedModuleDirectories(snapshot conformance.Snapshot) []string {
+	var directories []string
+	for _, entry := range snapshot.Entries {
+		if strings.HasSuffix(entry.Path, "/go.mod") {
+			directories = append(directories, strings.TrimSuffix(entry.Path, "go.mod"))
+		}
+	}
+	slices.Sort(directories)
+	return directories
+}
+
+// libraryModuleEntry reports whether one candidate repository path belongs to
+// the root library module. It follows the Go module zip boundary: nested
+// modules and vendored packages are excluded. Paths with a dot-prefixed
+// component are repository metadata (for example .github or .gitkeep), which
+// the go command never treats as package content, so they stay out of the
+// private candidate module.
+func libraryModuleEntry(path string, nestedModules []string) bool {
+	if path == "" {
+		return false
+	}
+	for _, component := range strings.Split(path, "/") {
+		if strings.HasPrefix(component, ".") {
+			return false
+		}
+	}
+	for _, directory := range nestedModules {
+		if strings.HasPrefix(path, directory) {
+			return false
+		}
+	}
+	return !vendoredPackagePath(path)
+}
+
+// vendoredPackagePath reports whether a path lies inside a vendored package
+// directory, which Go module zips omit; vendor/modules.txt itself is kept.
+func vendoredPackagePath(path string) bool {
+	rest, vendored := strings.CutPrefix(path, "vendor/")
+	if !vendored {
+		index := strings.Index(path, "/vendor/")
+		if index < 0 {
+			return false
+		}
+		rest = path[index+len("/vendor/"):]
+	}
+	return strings.Contains(rest, "/")
 }
 
 // validModuleRelativePath rejects escape, reserved, and noncanonical zip names.

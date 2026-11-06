@@ -6,7 +6,12 @@ FROM ${BUILD_IMAGE} AS build
 ENV GOTOOLCHAIN=go1.27.3
 WORKDIR /source
 COPY go.work go.work.sum ./
-COPY lib ./lib
+COPY go.mod go.sum *.go ./
+COPY admincontract ./admincontract
+COPY authresults ./authresults
+COPY headerfold ./headerfold
+COPY internal ./internal
+COPY provider ./provider
 COPY cmd/dkim2d ./cmd/dkim2d
 COPY cmd/dkim2-milter ./cmd/dkim2-milter
 COPY cmd/dkim2-dsn-propagator ./cmd/dkim2-dsn-propagator

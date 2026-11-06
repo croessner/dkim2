@@ -9,7 +9,7 @@ import (
 
 // TestCandidateModuleMetadataSumBindsExactSource permits only the generated local module metadata.
 func TestCandidateModuleMetadataSumBindsExactSource(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join(repositoryRoot(t), "lib/go.mod"))
+	content, err := os.ReadFile(filepath.Join(repositoryRoot(t), "go.mod"))
 	if err != nil {
 		t.Fatal(err)
 	}

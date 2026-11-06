@@ -32,7 +32,6 @@ var plannedCandidateTags = []string{
 	"cmd/dkim2ctl/v0.1.0-rc.1",
 	"cmd/dkim2d/v0.1.0-rc.1",
 	"cmd/dkim2-dsn-propagator/v0.1.0-rc.1",
-	"lib/v0.1.0-rc.1",
 	"v0.1.0-rc.1",
 }
 
@@ -185,7 +184,7 @@ func canonicalDecimal(value string) bool {
 // checkModulePlans validates exact module tags, requirements, and replacements.
 func checkModulePlans(root string, modules []ReleaseModule) error {
 	expected := []ReleaseModule{
-		{Path: "github.com/croessner/dkim2", Directory: "lib", Tag: "lib/" + candidateVersion},
+		{Path: "github.com/croessner/dkim2", Directory: ".", Tag: candidateVersion},
 		{Path: "github.com/croessner/dkim2/cmd/dkim2-milter", Directory: "cmd/dkim2-milter", Tag: "cmd/dkim2-milter/" + candidateVersion},
 		{Path: "github.com/croessner/dkim2/cmd/dkim2-exim", Directory: "cmd/dkim2-exim", Tag: "cmd/dkim2-exim/" + candidateVersion},
 		{Path: "github.com/croessner/dkim2/cmd/dkim2ctl", Directory: "cmd/dkim2ctl", Tag: "cmd/dkim2ctl/" + candidateVersion},

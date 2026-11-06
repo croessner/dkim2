@@ -33,7 +33,7 @@ const (
 	linuxPlatform               = "linux"
 	passState                   = "pass"
 	runnerFailureClass          = "runner_failure"
-	libraryModule               = "lib"
+	libraryModule               = "."
 	daemonModule                = "cmd/dkim2d"
 	manifestSchemaPath          = "testdata/conformance/schemas/manifest.schema.json"
 	caseSchemaPath              = "testdata/conformance/schemas/case.schema.json"

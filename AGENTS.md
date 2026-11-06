@@ -42,8 +42,8 @@ before substantial work in its area:
 - Run `make guardrails` before every commit or pull request once the touched
   packages have implementation code.
 - Use `go.work` for local development, but preserve the product boundary:
-  `lib/` is the standalone DKIM2 library module, while command modules under
-  `cmd/` are adapters or tools.
+  the root library module (`github.com/croessner/dkim2`) is the standalone
+  DKIM2 library, while command modules under `cmd/` are adapters or tools.
 - Keep the library free of daemon, Milter, OpenAPI, Cobra, Viper, Fx,
   Prometheus, OTLP exporter, and CLI-only dependencies unless a future
   architecture decision explicitly moves that boundary.
@@ -125,8 +125,10 @@ before substantial work in its area:
 
 ## Architecture Boundaries
 
-- `lib/` owns DKIM2 protocol semantics and must remain usable without daemon,
-  Milter, OpenAPI, Cobra, Viper, Fx, Prometheus, or OTLP dependencies.
+- The root library module (`github.com/croessner/dkim2`, the repository root
+  excluding the nested `cmd/*`, `tools/`, and `contrib/` helper modules) owns
+  DKIM2 protocol semantics and must remain usable without daemon, Milter,
+  OpenAPI, Cobra, Viper, Fx, Prometheus, or OTLP dependencies.
 - `cmd/dkim2d` owns daemon runtime concerns: Cobra/Viper configuration, Fx
   composition, HTTP server lifecycle, OpenAPI server adapter, concrete
   observability exporters, metrics endpoint, and concrete datasource wiring.
@@ -135,13 +137,13 @@ before substantial work in its area:
   boundaries, and applies returned actions.
 - `cmd/dkim2ctl` owns generated-client workflows and test-client behavior.
 - `docs/specs/openapi/dkim2d.yaml` is the authoritative REST contract.
-- `lib/internal/rawmsg` is the source of truth for byte-preserving RFC 5322
+- `internal/rawmsg` is the source of truth for byte-preserving RFC 5322
   message representation.
-- `lib/internal/canonical` is the source of truth for hash and signature
+- `internal/canonical` is the source of truth for hash and signature
   canonicalization.
-- `lib/internal/recipe` is the source of truth for recipe parsing,
+- `internal/recipe` is the source of truth for recipe parsing,
   application, generation, and resource limits.
-- `lib/internal/datasource` defines storage-facing contracts; provider-specific
+- `internal/datasource` defines storage-facing contracts; provider-specific
   LDAP, SQL, and flat-file code belongs in command/service modules or explicit
   provider packages.
 - Observability records behavior but must not become a second protocol model,
@@ -197,7 +199,7 @@ as those targets become available.
 Current multi-module direct checks:
 
 ```text
-go test ./lib/...
+go test ./...
 go test ./cmd/dkim2d/...
 go test ./cmd/dkim2-milter/...
 go test ./cmd/dkim2ctl/...

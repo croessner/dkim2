@@ -146,11 +146,11 @@ above. A changed anchor is not by itself evidence of changed behavior.
 
 | Draft-05 change | Owning implementation | Required final behavior | Proof owner |
 | --- | --- | --- | --- |
-| SHA-512 Message-Instance hashes | `lib/internal/instance`, `lib/internal/canonical`, `lib/internal/verify` | 32/64-byte lengths, case-insensitive unique names, every supported tuple checked, unknown-only unsupported | Prompts 02, 03, 05 |
-| Expanded unsigned fields and exact ARC set | `lib/internal/canonical` | Exact eight named additions, `Received-*`, only three exact ARC exclusions | Prompts 02, 05 |
-| Lowercase Recipe header keys | `lib/internal/recipe` | Reject decoded non-lowercase keys including escapes; generate lowercase; typed secret-safe error | Prompts 02, 03, 05 |
-| Signature cardinality | `lib/internal/signature`, verifier/key resolver | unique case-insensitive Selector, at most two per algorithm, separate lookup/result order | Prompts 02, 03, 04, 05 |
-| Redundant no-Recipe instance | `lib/internal/verify` | Treat absent Recipe as unchanged; verify every prior supported tuple; malformed/present Recipe remains error | Prompts 03, 05 |
+| SHA-512 Message-Instance hashes | `internal/instance`, `internal/canonical`, `internal/verify` | 32/64-byte lengths, case-insensitive unique names, every supported tuple checked, unknown-only unsupported | Prompts 02, 03, 05 |
+| Expanded unsigned fields and exact ARC set | `internal/canonical` | Exact eight named additions, `Received-*`, only three exact ARC exclusions | Prompts 02, 05 |
+| Lowercase Recipe header keys | `internal/recipe` | Reject decoded non-lowercase keys including escapes; generate lowercase; typed secret-safe error | Prompts 02, 03, 05 |
+| Signature cardinality | `internal/signature`, verifier/key resolver | unique case-insensitive Selector, at most two per algorithm, separate lookup/result order | Prompts 02, 03, 04, 05 |
+| Redundant no-Recipe instance | `internal/verify` | Treat absent Recipe as unchanged; verify every prior supported tuple; malformed/present Recipe remains error | Prompts 03, 05 |
 | Four diagnostics | parser/history/signature owners and public mappings | distinct PERMERROR reasons; no raw Recipe/Selector/message data; never SMTP 4xx | Prompts 03, 04, 05 |
 | Capitalization and references | current docs/comments/generated descriptions | Align current terminology; retain historical wording where truth requires | Prompts 01, 04, 05, 06 |
 
@@ -231,8 +231,8 @@ The following prefix map gives the owner for every row in Appendix A:
 | Path owner | Implementation owner |
 | --- | --- |
 | `AGENTS.md`, `docs/ARCHITECTURE.md`, Spec skill and skills index | Prompt 01 |
-| `lib/internal/{canonical,instance,recipe,signature}/**` | Prompt 02 |
-| remaining `lib/**`, `docs/replay-store-valkey.md` | Prompt 03 |
+| `internal/{canonical,instance,recipe,signature}/**` | Prompt 02 |
+| remaining root library module files, `docs/replay-store-valkey.md` | Prompt 03 |
 | `cmd/**`, `docs/specs/openapi/**`, listed build/qualification scripts | Prompt 04 |
 | `testdata/**`, `tools/**` except operator-doc guard, `Makefile`, reference issue log | Prompt 05 |
 | remaining current `README.md` and `docs/**`, operator-doc guard | Prompt 06 |
@@ -246,7 +246,7 @@ Final-path rules are deterministic:
    `cmd/dkim2ctl` fixtures, three canonical goldens, two Recipe goldens, five
    library-vector files including the key file, and the portable Milter
    fixture. String-bound runners and test names move atomically.
-2. The `lib/testdata/vectors/draft-chuang-dkim2-dns-04/` path and all DNS-04
+2. The `testdata/vectors/draft-chuang-dkim2-dns-04/` path and all DNS-04
    identifiers remain unchanged.
 3. Completed `docs/specs/implementation/**` records and dated reports retain
    pre-05 statements as historical evidence; Prompt 06 adds explicit historical
@@ -259,7 +259,7 @@ Final-path rules are deterministic:
    accepted, while Draft-04 and other non-current values are rejected.
 6. The five explicitly contextualized DNS `-00` occurrences remain deferred
    successor records in `README.md`, `docs/ARCHITECTURE.md`, the completed
-   datasource-provider spec, and `lib/doc.go`.
+   datasource-provider spec, and `doc.go`.
 7. The vendored JSON Schema `draft-04` path is unrelated terminology and is
    byte-for-byte read-only.
 
@@ -415,63 +415,63 @@ docs/specs/implementation/static-key-signature-verification.md | 5 | 10 | 3 | 0 
 docs/specs/implementation/test-vectors-and-conformance-suite.md | 5 | 5 | 3 | 0 | -
 docs/specs/openapi/README.md | 0 | 1 | 0 | 0 | -
 docs/specs/openapi/dkim2d.yaml | 2 | 0 | 0 | 0 | -
-lib/dns_provider_example_test.go | 0 | 0 | 1 | 0 | -
-lib/dns_provider_fuzz_test.go | 1 | 0 | 0 | 0 | -
-lib/dns_provider_vector_test.go | 0 | 0 | 2 | 0 | -
-lib/doc.go | 1 | 0 | 1 | 1 | -
-lib/internal/canonical/doc.go | 1 | 0 | 0 | 0 | -
-lib/internal/canonical/golden_test.go | 3 | 0 | 0 | 0 | -
-lib/internal/canonical/header_test.go | 0 | 1 | 0 | 0 | -
-lib/internal/canonical/options.go | 1 | 0 | 0 | 0 | -
-lib/internal/canonical/relevance.go | 0 | 1 | 0 | 0 | -
-lib/internal/canonical/signature_test.go | 0 | 2 | 0 | 0 | -
-lib/internal/canonical/testdata/golden/body-canonicalization-draft-ietf-dkim-dkim2-spec-04.json | 7 | 0 | 0 | 0 | Y
-lib/internal/canonical/testdata/golden/header-canonicalization-draft-ietf-dkim-dkim2-spec-04.json | 1 | 0 | 0 | 0 | Y
-lib/internal/canonical/testdata/golden/signature-input-draft-ietf-dkim-dkim2-spec-04.json | 1 | 0 | 0 | 0 | Y
-lib/internal/cryptodkim2/golden_test.go | 2 | 0 | 0 | 0 | -
-lib/internal/dsn/evidence.go | 0 | 1 | 0 | 0 | -
-lib/internal/instance/doc.go | 1 | 0 | 0 | 0 | -
-lib/internal/instance/hash.go | 0 | 1 | 0 | 0 | -
-lib/internal/instance/parser_test.go | 0 | 1 | 0 | 0 | -
-lib/internal/keyresolver/doc.go | 0 | 0 | 1 | 0 | -
-lib/internal/keyresolver/record.go | 0 | 0 | 1 | 0 | -
-lib/internal/recipe/apply_header_test.go | 0 | 1 | 0 | 0 | -
-lib/internal/recipe/doc.go | 1 | 0 | 0 | 0 | -
-lib/internal/recipe/generation_golden_integration_test.go | 6 | 0 | 0 | 0 | -
-lib/internal/recipe/generation_header_test.go | 0 | 1 | 0 | 0 | -
-lib/internal/recipe/generation_serializer_test.go | 2 | 0 | 0 | 0 | -
-lib/internal/recipe/golden_test.go | 2 | 0 | 0 | 0 | -
-lib/internal/recipe/parser.go | 0 | 1 | 0 | 0 | -
-lib/internal/recipe/relevance_integration_test.go | 0 | 2 | 0 | 0 | -
-lib/internal/recipe/testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-04.json | 1 | 0 | 0 | 0 | Y
-lib/internal/recipe/testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-04.json | 1 | 0 | 0 | 0 | Y
-lib/internal/recipe/types.go | 0 | 2 | 0 | 0 | -
-lib/internal/replay/identity.go | 1 | 0 | 0 | 0 | -
-lib/internal/service/mapping_test.go | 0 | 1 | 0 | 0 | -
-lib/internal/service/types.go | 1 | 0 | 0 | 0 | -
-lib/internal/signature/custody_golden_test.go | 2 | 0 | 0 | 0 | -
-lib/internal/signature/doc.go | 1 | 0 | 0 | 0 | -
-lib/internal/signature/flags_test.go | 0 | 1 | 0 | 0 | -
-lib/internal/signature/parser_test.go | 0 | 2 | 0 | 0 | -
-lib/internal/signing/closeout_vectors_test.go | 2 | 0 | 0 | 0 | -
-lib/internal/signing/revision_test.go | 0 | 1 | 0 | 0 | -
-lib/internal/tagvalue/doc.go | 1 | 0 | 0 | 0 | -
-lib/internal/tagvalue/scanner_test.go | 0 | 1 | 0 | 0 | -
-lib/internal/verify/doc.go | 2 | 0 | 0 | 0 | -
-lib/internal/verify/envelope_test.go | 0 | 2 | 0 | 0 | -
-lib/internal/verify/options.go | 1 | 0 | 0 | 0 | -
-lib/internal/verify/vector_test.go | 1 | 0 | 0 | 0 | -
-lib/replay_facade_test.go | 1 | 0 | 0 | 0 | -
-lib/signing_facade_test.go | 1 | 0 | 0 | 0 | -
-lib/testdata/vectors/draft-chuang-dkim2-dns-04/dns-golden.json | 1 | 0 | 1 | 0 | -
-lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-04/README.md | 1 | 1 | 0 | 0 | Y
-lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-04/custody-crypto-golden.json | 1 | 0 | 0 | 0 | Y
-lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-04/public-golden.json | 1 | 0 | 0 | 0 | Y
-lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-04/signing-golden.json | 1 | 0 | 0 | 0 | Y
-lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-04/signing-test-rsa.pem | 0 | 0 | 0 | 0 | Y
-lib/verification_example_test.go | 1 | 0 | 0 | 0 | -
-lib/verifier_vector_test.go | 1 | 2 | 0 | 0 | -
-lib/verify_result.go | 1 | 0 | 0 | 0 | -
+dns_provider_example_test.go | 0 | 0 | 1 | 0 | -
+dns_provider_fuzz_test.go | 1 | 0 | 0 | 0 | -
+dns_provider_vector_test.go | 0 | 0 | 2 | 0 | -
+doc.go | 1 | 0 | 1 | 1 | -
+internal/canonical/doc.go | 1 | 0 | 0 | 0 | -
+internal/canonical/golden_test.go | 3 | 0 | 0 | 0 | -
+internal/canonical/header_test.go | 0 | 1 | 0 | 0 | -
+internal/canonical/options.go | 1 | 0 | 0 | 0 | -
+internal/canonical/relevance.go | 0 | 1 | 0 | 0 | -
+internal/canonical/signature_test.go | 0 | 2 | 0 | 0 | -
+internal/canonical/testdata/golden/body-canonicalization-draft-ietf-dkim-dkim2-spec-04.json | 7 | 0 | 0 | 0 | Y
+internal/canonical/testdata/golden/header-canonicalization-draft-ietf-dkim-dkim2-spec-04.json | 1 | 0 | 0 | 0 | Y
+internal/canonical/testdata/golden/signature-input-draft-ietf-dkim-dkim2-spec-04.json | 1 | 0 | 0 | 0 | Y
+internal/cryptodkim2/golden_test.go | 2 | 0 | 0 | 0 | -
+internal/dsn/evidence.go | 0 | 1 | 0 | 0 | -
+internal/instance/doc.go | 1 | 0 | 0 | 0 | -
+internal/instance/hash.go | 0 | 1 | 0 | 0 | -
+internal/instance/parser_test.go | 0 | 1 | 0 | 0 | -
+internal/keyresolver/doc.go | 0 | 0 | 1 | 0 | -
+internal/keyresolver/record.go | 0 | 0 | 1 | 0 | -
+internal/recipe/apply_header_test.go | 0 | 1 | 0 | 0 | -
+internal/recipe/doc.go | 1 | 0 | 0 | 0 | -
+internal/recipe/generation_golden_integration_test.go | 6 | 0 | 0 | 0 | -
+internal/recipe/generation_header_test.go | 0 | 1 | 0 | 0 | -
+internal/recipe/generation_serializer_test.go | 2 | 0 | 0 | 0 | -
+internal/recipe/golden_test.go | 2 | 0 | 0 | 0 | -
+internal/recipe/parser.go | 0 | 1 | 0 | 0 | -
+internal/recipe/relevance_integration_test.go | 0 | 2 | 0 | 0 | -
+internal/recipe/testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-04.json | 1 | 0 | 0 | 0 | Y
+internal/recipe/testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-04.json | 1 | 0 | 0 | 0 | Y
+internal/recipe/types.go | 0 | 2 | 0 | 0 | -
+internal/replay/identity.go | 1 | 0 | 0 | 0 | -
+internal/service/mapping_test.go | 0 | 1 | 0 | 0 | -
+internal/service/types.go | 1 | 0 | 0 | 0 | -
+internal/signature/custody_golden_test.go | 2 | 0 | 0 | 0 | -
+internal/signature/doc.go | 1 | 0 | 0 | 0 | -
+internal/signature/flags_test.go | 0 | 1 | 0 | 0 | -
+internal/signature/parser_test.go | 0 | 2 | 0 | 0 | -
+internal/signing/closeout_vectors_test.go | 2 | 0 | 0 | 0 | -
+internal/signing/revision_test.go | 0 | 1 | 0 | 0 | -
+internal/tagvalue/doc.go | 1 | 0 | 0 | 0 | -
+internal/tagvalue/scanner_test.go | 0 | 1 | 0 | 0 | -
+internal/verify/doc.go | 2 | 0 | 0 | 0 | -
+internal/verify/envelope_test.go | 0 | 2 | 0 | 0 | -
+internal/verify/options.go | 1 | 0 | 0 | 0 | -
+internal/verify/vector_test.go | 1 | 0 | 0 | 0 | -
+replay_facade_test.go | 1 | 0 | 0 | 0 | -
+signing_facade_test.go | 1 | 0 | 0 | 0 | -
+testdata/vectors/draft-chuang-dkim2-dns-04/dns-golden.json | 1 | 0 | 1 | 0 | -
+testdata/vectors/draft-ietf-dkim-dkim2-spec-04/README.md | 1 | 1 | 0 | 0 | Y
+testdata/vectors/draft-ietf-dkim-dkim2-spec-04/custody-crypto-golden.json | 1 | 0 | 0 | 0 | Y
+testdata/vectors/draft-ietf-dkim-dkim2-spec-04/public-golden.json | 1 | 0 | 0 | 0 | Y
+testdata/vectors/draft-ietf-dkim-dkim2-spec-04/signing-golden.json | 1 | 0 | 0 | 0 | Y
+testdata/vectors/draft-ietf-dkim-dkim2-spec-04/signing-test-rsa.pem | 0 | 0 | 0 | 0 | Y
+verification_example_test.go | 1 | 0 | 0 | 0 | -
+verifier_vector_test.go | 1 | 2 | 0 | 0 | -
+verify_result.go | 1 | 0 | 0 | 0 | -
 scripts/build-products.sh | 1 | 0 | 1 | 0 | -
 scripts/test-build-contract.sh | 2 | 0 | 0 | 0 | -
 testdata/conformance/exim/qualification.schema.json | 1 | 0 | 1 | 0 | -
@@ -574,18 +574,18 @@ docs/specs/implementation/security-hardening.md | 5 | 0
 docs/specs/implementation/signing-and-revision.md | 3 | 0
 docs/specs/implementation/static-key-signature-verification.md | 3 | 0
 docs/specs/implementation/test-vectors-and-conformance-suite.md | 4 | 0
-lib/dns_provider_example_test.go | 1 | 0
-lib/dns_provider_test.go | 1 | 0
-lib/dns_provider_vector_test.go | 2 | 0
-lib/doc.go | 3 | 1
-lib/internal/keyresolver/doc.go | 3 | 0
-lib/internal/keyresolver/metadata.go | 2 | 0
-lib/internal/keyresolver/record.go | 4 | 0
-lib/internal/keyresolver/record_test.go | 1 | 0
-lib/internal/tagvalue/doc.go | 1 | 0
-lib/internal/tagvalue/scanner.go | 1 | 0
-lib/internal/tagvalue/scanner_test.go | 2 | 0
-lib/testdata/vectors/draft-chuang-dkim2-dns-04/dns-golden.json | 1 | 0
+dns_provider_example_test.go | 1 | 0
+dns_provider_test.go | 1 | 0
+dns_provider_vector_test.go | 2 | 0
+doc.go | 3 | 1
+internal/keyresolver/doc.go | 3 | 0
+internal/keyresolver/metadata.go | 2 | 0
+internal/keyresolver/record.go | 4 | 0
+internal/keyresolver/record_test.go | 1 | 0
+internal/tagvalue/doc.go | 1 | 0
+internal/tagvalue/scanner.go | 1 | 0
+internal/tagvalue/scanner_test.go | 2 | 0
+testdata/vectors/draft-chuang-dkim2-dns-04/dns-golden.json | 1 | 0
 scripts/build-products.sh | 1 | 0
 testdata/conformance/exim/qualification.schema.json | 1 | 0
 testdata/conformance/manifest.json | 5 | 0
@@ -697,9 +697,9 @@ The 63-path combined inventory follows. No row is `active-stale` or `invalid`.
 | `docs/specs/implementation/signing-and-revision.md` | 18 | 19 | 3 | 19 | 0 | 0 | 0 | dated implementation record |
 | `docs/specs/implementation/static-key-signature-verification.md` | 16 | 16 | 5 | 16 | 0 | 0 | 0 | dated implementation record |
 | `docs/specs/implementation/test-vectors-and-conformance-suite.md` | 11 | 11 | 5 | 11 | 0 | 0 | 0 | dated implementation record |
-| `lib/dns_provider_vector_test.go` | 16 | 16 | 0 | 0 | 0 | 16 | 0 | implemented companion test names |
-| `lib/internal/canonical/header_test.go` | 18 | 27 | 0 | 0 | 27 | 0 | 0 | bidirectional cross-version hash proof |
-| `lib/internal/replay/deriver_test.go` | 3 | 3 | 0 | 0 | 3 | 0 | 0 | cross-version replay derivation proof |
+| `dns_provider_vector_test.go` | 16 | 16 | 0 | 0 | 0 | 16 | 0 | implemented companion test names |
+| `internal/canonical/header_test.go` | 18 | 27 | 0 | 0 | 27 | 0 | 0 | bidirectional cross-version hash proof |
+| `internal/replay/deriver_test.go` | 3 | 3 | 0 | 0 | 3 | 0 | 0 | cross-version replay derivation proof |
 | `testdata/conformance/manifest.json` | 2 | 2 | 0 | 0 | 2 | 0 | 0 | bidirectional cross-version cases |
 | `testdata/interop/candidate-catalog.json` | 4 | 4 | 4 | 4 | 0 | 0 | 0 | external-source candidate claims |
 | `testdata/interop/harness/mailauthlens_overlap_test.go` | 1 | 1 | 0 | 1 | 0 | 0 | 0 | external-source compatibility probe |
@@ -753,12 +753,12 @@ column is `deferred-successor`.
 | `docs/specs/implementation/signing-and-revision.md` | 2 | 0 | historical implementation companion |
 | `docs/specs/implementation/static-key-signature-verification.md` | 3 | 0 | historical implementation companion |
 | `docs/specs/implementation/test-vectors-and-conformance-suite.md` | 3 | 0 | historical implementation companion |
-| `lib/dns_provider_example_test.go` | 1 | 0 | companion proof or versioned fixture |
-| `lib/dns_provider_vector_test.go` | 2 | 0 | companion proof or versioned fixture |
-| `lib/doc.go` | 1 | 1 | companion authority plus external-source deferral |
-| `lib/internal/keyresolver/doc.go` | 1 | 0 | current companion authority or guard |
-| `lib/internal/keyresolver/record.go` | 1 | 0 | current companion authority or guard |
-| `lib/testdata/vectors/draft&#45;chuang&#45;dkim2&#45;dns&#45;04/dns-golden.json` | 1 | 0 | companion proof or versioned fixture |
+| `dns_provider_example_test.go` | 1 | 0 | companion proof or versioned fixture |
+| `dns_provider_vector_test.go` | 2 | 0 | companion proof or versioned fixture |
+| `doc.go` | 1 | 1 | companion authority plus external-source deferral |
+| `internal/keyresolver/doc.go` | 1 | 0 | current companion authority or guard |
+| `internal/keyresolver/record.go` | 1 | 0 | current companion authority or guard |
+| `testdata/vectors/draft&#45;chuang&#45;dkim2&#45;dns&#45;04/dns-golden.json` | 1 | 0 | companion proof or versioned fixture |
 | `scripts/build-products.sh` | 1 | 0 | current companion authority or guard |
 | `testdata/conformance/exim/qualification.schema.json` | 1 | 0 | companion proof or versioned fixture |
 | `testdata/conformance/manifest.json` | 5 | 0 | companion proof or versioned fixture |

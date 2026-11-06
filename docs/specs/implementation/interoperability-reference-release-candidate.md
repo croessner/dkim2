@@ -218,7 +218,7 @@ closeout.
 
 Ownership remains aligned with the existing product boundaries:
 
-- `lib/` owns DKIM2 protocol semantics, the exported library facade, and its
+- The root library module owns DKIM2 protocol semantics, the exported library facade, and its
   deterministic exported-surface manifest input. It remains independently
   usable and does not gain external-comparison, release, daemon, Milter,
   OpenAPI, CLI, container, LDAP, or SQL dependencies.
@@ -562,7 +562,7 @@ separate maintainer authorization.
 
 ### Go Library
 
-The `lib/` module remains the standalone protocol library. The increment
+The root library module remains the standalone protocol library. The increment
 creates a deterministic exported-surface manifest from Go syntax/type
 information, not formatted `go doc` text alone. It includes:
 
@@ -578,7 +578,7 @@ classified `additive`, `compatible_clarification`, `breaking_pre_rc_cleanup`,
 `draft_correctness_fix`, or `security_fix`. A breaking pre-RC cleanup requires
 a durable migration note and exhaustive call-site/test update. No service,
 Milter, OpenAPI, Cobra, Viper, Fx, Prometheus, OTLP, LDAP, SQL, or CLI
-dependency may enter `lib/`.
+dependency may enter the root library module.
 
 ### OpenAPI And Generated Clients
 

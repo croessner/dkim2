@@ -27,63 +27,63 @@
   "artifacts": [
     {
       "id": "canonical-body",
-      "path": "lib/internal/canonical/testdata/golden/body-canonicalization-draft-ietf-dkim-dkim2-spec-09.json",
+      "path": "internal/canonical/testdata/golden/body-canonicalization-draft-ietf-dkim-dkim2-spec-09.json",
       "sha256": "8760bb139b1ed3e6bcb878f14216070a0fb1de4651c8c38af4c9d39bb143e897",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "canonical-digest-source",
-      "path": "lib/internal/canonical/hash_test.go",
+      "path": "internal/canonical/hash_test.go",
       "sha256": "8e7f1cccc0e478cf6bd3efb71fcbc32faf36a3e9d2c43441d538ca822f49e00a",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "canonical-header",
-      "path": "lib/internal/canonical/testdata/golden/header-canonicalization-draft-ietf-dkim-dkim2-spec-09.json",
+      "path": "internal/canonical/testdata/golden/header-canonicalization-draft-ietf-dkim-dkim2-spec-09.json",
       "sha256": "82c8edc92cd60a636e02644002316b88520c642ab5a7e5c12a3dd95cafe388d1",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "canonical-header-source",
-      "path": "lib/internal/canonical/header_test.go",
+      "path": "internal/canonical/header_test.go",
       "sha256": "552799e2d23ec669cd1d4f1496256f281c414c751b7c634bea80cf8185b10051",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "canonical-signature",
-      "path": "lib/internal/canonical/testdata/golden/signature-input-draft-ietf-dkim-dkim2-spec-09.json",
+      "path": "internal/canonical/testdata/golden/signature-input-draft-ietf-dkim-dkim2-spec-09.json",
       "sha256": "5a3060df17639998b54738a776875c37fef7885bd4bf0344b1ee807f22d43796",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "custody-positive-source",
-      "path": "lib/internal/signature/custody_golden_test.go",
+      "path": "internal/signature/custody_golden_test.go",
       "sha256": "00befaeae8294658ab7dfeac7d5e6fc9997bb48f4e49c5142af5dae2afe6d57b",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "daemon-replay-source",
       "path": "cmd/dkim2d/internal/app/replay_test.go",
-      "sha256": "0249f3ecead0317ea93b7dde6643ad70009c8b909ffe18cdf2c5faa722e0dcdf",
+      "sha256": "115eaaf9c8496566cd4ec03c7fa1e6851d87d757eb53c344168678ff3fcda4f0",
       "module": "cmd/dkim2d"
     },
     {
       "id": "dns-negative-source",
-      "path": "lib/dns_provider_test.go",
+      "path": "dns_provider_test.go",
       "sha256": "bd46653baa9c874fea593ca8a464e00c655dd95a9ee89b9b76d1dde22515efc8",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "dns-records",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-dns-02/dns-golden.json",
+      "path": "testdata/vectors/draft-ietf-dkim-dkim2-dns-02/dns-golden.json",
       "sha256": "9c3a8bce6d44f0b8aced14475ba890d9d0a049a75f4ac65153cea90ccf6d21a4",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "instance-draft09-source",
-      "path": "lib/internal/instance/parser_test.go",
+      "path": "internal/instance/parser_test.go",
       "sha256": "74b1de6061561d59509a79a2601e12a7dcf78cf89e5406a10438dbe96cef32a1",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "milter-fixture-data",
@@ -112,7 +112,7 @@
     {
       "id": "openapi-daemon-boundary-source",
       "path": "cmd/dkim2d/internal/httpjson/dkim2ctl_integration_test.go",
-      "sha256": "9b68389366e354b86693b01a7491c09da15f88395f57ca9ebfbb9c1655e63050",
+      "sha256": "2e98d0d28f77094110f3d8d8817cd3444ba78aa86731a22954876d546f0d8407",
       "module": "cmd/dkim2d"
     },
     {
@@ -177,15 +177,15 @@
     },
     {
       "id": "policy-invalid-recipe-source",
-      "path": "lib/policy_projection_test.go",
+      "path": "policy_projection_test.go",
       "sha256": "b0b9cb4c705064335c5c30334cba5a5a79eb36490badcb154b20851ed251dbac",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "policy-positive-source",
-      "path": "lib/policy_api_test.go",
+      "path": "policy_api_test.go",
       "sha256": "d25496d48a486897ffc445a6183163fca23fabfee4574c2af4296faa7317b124",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "postfix-qualification-compose",
@@ -196,13 +196,13 @@
     {
       "id": "postfix-qualification-dockerfile",
       "path": "contrib/qualification/postfix-milter/Dockerfile",
-      "sha256": "d430f795fa41cf3bea6a7be1c6b5af32f332502f7d0aa7b70c4e4ac28e0f3373",
+      "sha256": "df0a4f06616a97d6b50a821c24ee9bc6087c2eecfb4a1636a6d55d9eab4ffcb3",
       "module": "contrib/qualification/postfix-milter"
     },
     {
       "id": "postfix-qualification-policy-source",
       "path": "tools/postfix_qualification_policy_test.go",
-      "sha256": "1c4ac87f09a32c6f8d0b5ab3e026e78ef96e77fa7e76b42738691a5c35106ebc",
+      "sha256": "58fcca346df5fb281b63ff23c22ac0280d8fa5307f2b87275828031be70c0893",
       "module": "tools"
     },
     {
@@ -219,45 +219,45 @@
     },
     {
       "id": "rawmsg-positive-source",
-      "path": "lib/internal/rawmsg/parser_test.go",
+      "path": "internal/rawmsg/parser_test.go",
       "sha256": "d1714b19f48841d617883559299630c79e2c89c2a08a1d546d38ba87e1aa43cd",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "recipe-application",
-      "path": "lib/internal/recipe/testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-09.json",
+      "path": "internal/recipe/testdata/golden/recipe-application-draft-ietf-dkim-dkim2-spec-09.json",
       "sha256": "ca0e174a0f924a1d2bc4348a025a2e217407e7f7bdc84c9b9f4e17e55ba25e60",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "recipe-draft09-source",
-      "path": "lib/internal/recipe/parser_test.go",
+      "path": "internal/recipe/parser_test.go",
       "sha256": "42382f2049361f008eabaec3673b69cf0f5dd0198b676012ebb57fd975b09ba2",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "recipe-draft09-steps-source",
-      "path": "lib/internal/recipe/draft09_test.go",
+      "path": "internal/recipe/draft09_test.go",
       "sha256": "3d683e500ea7e175773f5282e934ace9a8920a5cf22ba27610c8045e56a33306",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "recipe-generation",
-      "path": "lib/internal/recipe/testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-09.json",
+      "path": "internal/recipe/testdata/golden/recipe-generation-draft-ietf-dkim-dkim2-spec-09.json",
       "sha256": "1b670a59c08717db732e9e0dac4987870870dfca31012cc745751728333c8d26",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "recipe-limits-source",
-      "path": "lib/internal/recipe/limits_test.go",
+      "path": "internal/recipe/limits_test.go",
       "sha256": "d476c82854799800f97b53941288796b84cee6bb6599a1579af155ea99d39923",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "recipe-negative-source",
-      "path": "lib/internal/recipe/parser_contract_test.go",
+      "path": "internal/recipe/parser_contract_test.go",
       "sha256": "e4dd64d5d67366bb5cb527373408075e4c70e8388f90fda04f147be3bcc46b1d",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "redis-harness-script",
@@ -273,147 +273,147 @@
     },
     {
       "id": "replay-deriver-source",
-      "path": "lib/internal/replay/deriver_test.go",
+      "path": "internal/replay/deriver_test.go",
       "sha256": "09b309ad1e3907208e25683bc74ad42e310c65774e7a4bfd1c4c6aea31dd7f15",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "replay-memory-source",
-      "path": "lib/internal/replay/memory_test.go",
+      "path": "internal/replay/memory_test.go",
       "sha256": "9d565e9c59edd08e040a0fc737f55f74b0773a194a17fc2cebf320d9545e78b4",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "replay-retention-source",
-      "path": "lib/internal/replay/retention_test.go",
+      "path": "internal/replay/retention_test.go",
       "sha256": "e0a805a7283ed1c0d00be99f2248075a78b3aea410088d95fa80fefaaedc1465",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "service-draft09-source",
-      "path": "lib/internal/service/draft09_test.go",
+      "path": "internal/service/draft09_test.go",
       "sha256": "4f3f8f534cf5e685bd225a4a18ccc89121cf467344223e18f9cb7dda3ff6bf50",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signature-negative-source",
-      "path": "lib/internal/signature/parser_test.go",
+      "path": "internal/signature/parser_test.go",
       "sha256": "5e105fa8513bcc452e5d65a76fee904bbfca47899efeb45f52230e5eb7f1df3a",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signing-custody",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/custody-crypto-golden.json",
+      "path": "testdata/vectors/draft-ietf-dkim-dkim2-spec-09/custody-crypto-golden.json",
       "sha256": "9a7dfcd62a56554dd8d60705a7985fc6c4a951898ef94baf83cfb25a8668bd48",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signing-dsn-propagation",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/dsn-propagation-golden.json",
+      "path": "testdata/vectors/draft-ietf-dkim-dkim2-spec-09/dsn-propagation-golden.json",
       "sha256": "040f1df596705402e02dd8283ff784d4a77a610ae9ca98b38b79a17ef9c1f4f3",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signing-facade-source",
-      "path": "lib/signing_facade_test.go",
+      "path": "signing_facade_test.go",
       "sha256": "a2e7002214db202621423e672edd096477cc7c0aaf2d27fcb42ce244b3048151",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signing-limits-source",
-      "path": "lib/signing_limits_test.go",
+      "path": "signing_limits_test.go",
       "sha256": "7ab22ec5e6389828853aad84ed9cdb21dc5818054e040ee1c3833b419981b22e",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signing-message-source",
-      "path": "lib/internal/signing/message_test.go",
+      "path": "internal/signing/message_test.go",
       "sha256": "785f9890d4a25d416cba2834b65d9644f14994d45a09913e43a3dbac185a10a0",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signing-null-sender-source",
-      "path": "lib/header_from_test.go",
+      "path": "header_from_test.go",
       "sha256": "ede2997a6ea95a3406a316f2758ff6ba1ea728b0ef7f7f390dffee0136fcc42f",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signing-plan-source",
-      "path": "lib/internal/signing/plan_test.go",
+      "path": "internal/signing/plan_test.go",
       "sha256": "5231d9fbe6bab63ec694030f2ac045357800058c1605125c91a40cc63520c18f",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signing-provenance",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/README.md",
+      "path": "testdata/vectors/draft-ietf-dkim-dkim2-spec-09/README.md",
       "sha256": "c8a7653423be9a72d58b7f4e98baf4d9baadf16685dc748992464d53749194c2",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signing-public",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/signing-golden.json",
+      "path": "testdata/vectors/draft-ietf-dkim-dkim2-spec-09/signing-golden.json",
       "sha256": "94e5b17e9b75cb7f534d5ba5523ebe762627d54f3b1e1da0c27341df58d01f20",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signing-release-source",
-      "path": "lib/signing_restricted_release_test.go",
+      "path": "signing_restricted_release_test.go",
       "sha256": "ab7422a5e89f4a5e5bd0523d0ebd863d87b83569efa1a41771c7ba029fcbf4aa",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signing-revision-source",
-      "path": "lib/internal/signing/revision_test.go",
+      "path": "internal/signing/revision_test.go",
       "sha256": "d1eeb96cb4c1235eddc15b3babf863c31b0e583c606c3e89e0c81eea0a8e0bca",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "signing-test-key",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/signing-test-rsa.pem",
+      "path": "testdata/vectors/draft-ietf-dkim-dkim2-spec-09/signing-test-rsa.pem",
       "sha256": "64f74e6f8f7e6f8c1721aaff1ac05c429caa2831d65796e98052f5ff84e3c3d3",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "verification-composite-unsupported-source",
-      "path": "lib/unsupported_composite_test.go",
+      "path": "unsupported_composite_test.go",
       "sha256": "668d02f407804361f567067d3d88c51edb9f9d658c3fc280692fe9c2c1d919f7",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "verification-draft09-source",
-      "path": "lib/internal/verify/draft09_test.go",
+      "path": "internal/verify/draft09_test.go",
       "sha256": "f105b8513e2b7a43f610d37ac186192f09cf511541e7eadad01da270a6df00aa",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "verification-from-authenticity-source",
-      "path": "lib/internal/verify/from_authenticity_test.go",
+      "path": "internal/verify/from_authenticity_test.go",
       "sha256": "0bae02580b66f840c6c4a8ceecccb7c98acb347712e010cb5ed07327883e0dbb",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "verification-mldsa44-source",
-      "path": "lib/internal/verify/mldsa44_test.go",
+      "path": "internal/verify/mldsa44_test.go",
       "sha256": "51618c8e8d8273fd6ec0c8ff6783de0ca8d7ceac136464a5f501ad9eb02f01aa",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "verification-multisignature-source",
-      "path": "lib/internal/verify/multisignature_test.go",
+      "path": "internal/verify/multisignature_test.go",
       "sha256": "fc22f2d87456fde3fdd3ca8ef972f872e7dbc4fc727246fbdfc52cc1e096284a",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "verification-public",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json",
+      "path": "testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json",
       "sha256": "93a6b9fcb3e16cff12d833551c4476147fd3a09f7663802ff81e15cab7fe8a2d",
-      "module": "lib"
+      "module": "."
     },
     {
       "id": "verification-received-dsn",
-      "path": "lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/received-dsn-golden.json",
+      "path": "testdata/vectors/draft-ietf-dkim-dkim2-spec-09/received-dsn-golden.json",
       "sha256": "ecb48b0feb2353c5228ba775617e5e78ec84939c76f08c8bf25233b5bf1e66ce",
-      "module": "lib"
+      "module": "."
     }
   ],
   "cases": [

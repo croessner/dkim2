@@ -26,6 +26,8 @@ docker buildx build --file build/container/Dockerfile \
   --target context-audit --output "type=local,dest=$context" . >/dev/null
 
 test -f "$context/context/go.work"
+test -f "$context/context/go.mod"
+test -f "$context/context/doc.go"
 test -f "$context/context/cmd/dkim2d/main.go"
 test -f "$context/context/cmd/dkim2-dsn-propagator/main.go"
 test -f "$context/context/cmd/dkim2-exim/go.mod"
@@ -42,7 +44,7 @@ if grep -E '(^|/)([.]env($|[.])|[.]netrc$|[.]npmrc$|[.]pypirc$|credentials[.]jso
 fi
 
 for forbidden in \
-  'lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/signing-test-rsa.pem' \
+  'testdata/vectors/draft-ietf-dkim-dkim2-spec-09/signing-test-rsa.pem' \
   'cmd/dkim2ctl/testdata/fixtures/draft-ietf-dkim-dkim2-spec-09/sign.json' \
   'cmd/dkim2-milter/internal/integration/milter_fixture_test.go' \
   'cmd/dkim2-dsn-propagator/internal/integration/generated/server.gen.go'; do

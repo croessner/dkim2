@@ -33,14 +33,14 @@ This spec is governed by:
 - `docs/specs/implementation/dkim2-tag-parsers.md`
 - `docs/specs/implementation/canonicalization-and-hashes.md`
 - `docs/specs/implementation/static-key-signature-verification.md`
-- `lib/internal/rawmsg`
-- `lib/internal/tagvalue`
-- `lib/internal/instance`
-- `lib/internal/signature`
-- `lib/internal/canonical`
-- `lib/internal/verify`
-- `lib/internal/service`
-- `lib/doc.go`
+- `internal/rawmsg`
+- `internal/tagvalue`
+- `internal/instance`
+- `internal/signature`
+- `internal/canonical`
+- `internal/verify`
+- `internal/service`
+- `doc.go`
 - `Makefile`
 - `.gitignore`
 - `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05, especially Sections 3,
@@ -72,7 +72,7 @@ M1 through M4 provide independently tested internal protocol components:
   bounded facts.
 
 The root library package is still documentation-only, and
-`lib/internal/service` is still a package stub. A library consumer cannot make
+`internal/service` is still a package stub. A library consumer cannot make
 one supported verification call without importing internal packages or
 reimplementing result mapping. There is no public draft result type, no public
 scope declaration, no stable mapping from internal facts to the four draft
@@ -127,7 +127,7 @@ The implementation is split into six focused slices and one final proof slice.
    scope, separate historical content/recipe and historical cryptographic
    states, custody-structure coverage, bounded reason codes, immutable
    accessors, limits, and constructor options. Define the static key seam
-   without exposing `lib/internal/verify` types.
+   without exposing `internal/verify` types.
 2. Service coordinator and result mapping:
    Add a cohesive internal service object with internal-only request, result,
    config, and four-state DTOs. It calls the internal verifier and maps all
@@ -320,7 +320,7 @@ The public result contains:
 
 The public API must not expose `verify.Result`, `verify.Error`,
 `signature.Signature`, `instance.MessageInstance`, `rawmsg.Message`, or any
-other `lib/internal` type.
+other `internal` type.
 
 Public check classes are closed to `message`, `protocol`, `body_hash`,
 `header_hash`, `signature`, `key`, `timestamp`, `envelope`,
@@ -475,7 +475,7 @@ link success. No M5 value may be named or documented as full-chain success.
   disabled algorithm is a PERMERROR intermediate decided without a key
   lookup.
 - Draft-09 combination algebra (single owner `verify.CombineSignatureSets`
-  over `lib/internal/combine`): per-set intermediates are PASS, FAIL
+  over `internal/combine`): per-set intermediates are PASS, FAIL
   (signature mismatch), TEMPERROR (key temporarily unavailable), or
   PERMERROR (any permanent key or provider error, unknown or disabled
   algorithm). A `sig-all` (`,`) group is PASS when every set passes, else
@@ -515,23 +515,23 @@ link success. No M5 value may be named or documented as full-chain success.
 
 ## Package Boundaries
 
-- `lib/`:
+- Root library module:
   Owns public request/result/provider/option/error types, the public
   verification entry point, public-to-service DTO mapping, and the public
   provider to internal key-provider adapter. It imports internal service and
   verification seams but no command or adapter dependency.
-- `lib/internal/service`:
+- `internal/service`:
   Owns orchestration, internal-only request/result/config/four-state DTOs, and
   the single mapping from internal M4 facts/errors to the internal draft state
   and coverage model. It never imports the root `dkim2` package and does not
   own parsing, canonicalization, cryptography, or local action policy.
-- `lib/internal/verify`:
+- `internal/verify`:
   Remains the owner of static-key current verification facts. M5 may add only
   narrowly justified accessors or adapter seams, not duplicate verification.
   It must preserve typed temporary-provider state distinctly from permanent or
   contract provider failure through `KeyStatus` and signature-set results so
   service mapping never reconstructs provider class from strings.
-- `lib/internal/rawmsg`, `instance`, `signature`, and `canonical`:
+- `internal/rawmsg`, `instance`, `signature`, and `canonical`:
   Remain authoritative and are not reimplemented in the facade or service.
 - `cmd/dkim2d`, `cmd/dkim2ctl`, `cmd/dkim2-milter`:
   Receive no M5 implementation changes.
@@ -853,7 +853,7 @@ cannot run, record the exact blocker and largest equivalent passing subset.
 
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Scope | Public library-only current verification | Implemented in `lib`; the root Makefile lint target was corrected to analyze each workspace module | done | No DNS, recipes, policy actions, commands, adapters, providers, replay, or exporters |
+| Scope | Public library-only current verification | Implemented in the root library module; the root Makefile lint target was corrected to analyze each workspace module | done | No DNS, recipes, policy actions, commands, adapters, providers, replay, or exporters |
 | Public API | Root request/provider/result types hide internal packages | Immutable bounded public facade and typed provider seam implemented | done | No internal type escapes |
 | Result states | Exactly PASS, FAIL, PERMERROR, TEMPERROR | Closed enums and centralized typed mapping tested | done | Unknown or contradictory facts fail as `internal_contract` |
 | Current verification | Highest/current signature and instance verified | Current-only scope and both historical non-evaluation dimensions are explicit | done | Structural custody is separate |

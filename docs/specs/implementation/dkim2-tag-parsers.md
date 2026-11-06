@@ -24,9 +24,9 @@ This spec is governed by:
   12.5, 13, 14, 15, 16, and 18
 - `docs/specs/spec-and-prompt-template.md`
 - `docs/specs/implementation/raw-message-model.md`
-- `lib/internal/rawmsg/doc.go`
-- `lib/internal/instance/doc.go`
-- `lib/internal/signature/doc.go`
+- `internal/rawmsg/doc.go`
+- `internal/instance/doc.go`
+- `internal/signature/doc.go`
 - `Makefile`
 - `.gitignore`
 - `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05, especially
@@ -40,11 +40,11 @@ artifact before implementation continues.
 ## Original Gap
 
 The repository currently has a completed raw RFC 5322 message model in
-`lib/internal/rawmsg`, but `lib/internal/instance` and
-`lib/internal/signature` are still package stubs:
+`internal/rawmsg`, but `internal/instance` and
+`internal/signature` are still package stubs:
 
-- `lib/internal/instance/doc.go`
-- `lib/internal/signature/doc.go`
+- `internal/instance/doc.go`
+- `internal/signature/doc.go`
 
 There is no parser for `Message-Instance` header fields, no parser for
 `DKIM2-Signature` header fields, no shared tag-value scanner, no strict
@@ -93,7 +93,7 @@ order. Expected prompt count is five implementation prompts plus one final
 closeout prompt.
 
 1. Shared tag-value scanner and error model:
-   Add a small `lib/internal/tagvalue` package, or an equivalently cohesive
+   Add a small `internal/tagvalue` package, or an equivalently cohesive
    internal helper package if implementation evidence shows a better name. It
    owns DKIM2 tag-list tokenization, FWS trimming, duplicate detection,
    extension-tag syntax validation, bounded limits, and secret-safe structured
@@ -105,11 +105,11 @@ closeout prompt.
    preserves a canonical no-FWS encoded form, and exposes decoded bytes through
    immutable accessors.
 3. `Message-Instance` parser:
-   Implement `lib/internal/instance` domain types and parser methods for
+   Implement `internal/instance` domain types and parser methods for
    `m=`, `h=`, optional `r=`, hash sets, unknown hash names, extension tags,
    sequence-number validation, and package documentation.
 4. `DKIM2-Signature` parser:
-   Implement `lib/internal/signature` domain types and parser methods for
+   Implement `internal/signature` domain types and parser methods for
    required `i=`, `m=`, `t=`, `d=`, and `s=`, the mutually exclusive
    envelope forms `nd=` or `mf=` plus `rt=`, optional `n=`, optional `f=`,
    extension tags, algorithm signature sets, flags, nonce limits, and package
@@ -185,9 +185,9 @@ In scope:
 
 - Shared strict DKIM2 tag-value parser behavior for header fields.
 - Shared padded base64string parser behavior needed by M2.
-- `lib/internal/instance` parser types, errors, helpers, tests, fuzz seeds,
+- `internal/instance` parser types, errors, helpers, tests, fuzz seeds,
   and package docs.
-- `lib/internal/signature` parser types, errors, helpers, tests, fuzz seeds,
+- `internal/signature` parser types, errors, helpers, tests, fuzz seeds,
   and package docs.
 - Parser extraction helpers that consume `rawmsg.Message` and
   `rawmsg.HeaderField` without mutating M1-owned message state.
@@ -195,15 +195,15 @@ In scope:
   to `PERMERROR`, `FAIL`, `TEMPERROR`, or local policy findings.
 - Unit tests and malformed input tests for M2.
 - Final Makefile-driven validation evidence.
-- The narrow `lib/internal/canonical` signature-input scanner call and its
+- The narrow `internal/canonical` signature-input scanner call and its
   draft-versioned fixtures, solely so canonical target rendering enforces the
   same header terminator contract.
 
 Out of scope:
 
-- Public `lib` facade APIs, unless a later implementation prompt updates this
+- Public root library facade APIs, unless a later implementation prompt updates this
   spec with a concrete facade need.
-- Raw RFC 5322 parsing changes in `lib/internal/rawmsg`.
+- Raw RFC 5322 parsing changes in `internal/rawmsg`.
 - Header hash, body hash, or DKIM2-Signature canonicalization behavior beyond
   selecting the shared strict header scanner and updating affected fixtures.
 - Message hash calculation or hash comparison.
@@ -310,7 +310,7 @@ syntax that the DNS record format copies from DKIM2.
   `hash-all = hash-set *([FWS] "," [FWS] hash-set)`, and
   `hash-set = hash-name [FWS] ":" header-hash ":" body-hash`. The parser keeps
   the group structure (`MessageInstance.HashLayout`, owned by
-  `lib/internal/combine`) next to the hash sets in field order. Values are
+  `internal/combine`) next to the hash sets in field order. Values are
   already unfolded, so FWS is WSP: it is accepted after `=`, around `,` and
   `|`, around the hash name, and before or inside both base64string hashes; it
   is rejected inside a hash name and between the `=` padding of the header
@@ -327,7 +327,7 @@ syntax that the DNS record format copies from DKIM2.
   group (Section 9.3: an algorithm MUST NOT be present more than once).
 - `r=` is parsed as syntactically valid base64string and stores decoded bytes
   plus canonical encoded form. M2 does not parse the decoded JSON recipe
-  object; recipe semantics remain owned by `lib/internal/recipe`.
+  object; recipe semantics remain owned by `internal/recipe`.
 - Message-Instance extension tags are ignored after syntactic validation and
   duplicate detection.
 
@@ -436,32 +436,32 @@ syntax that the DNS record format copies from DKIM2.
 
 Intended ownership:
 
-- `lib/internal/tagvalue`:
+- `internal/tagvalue`:
   Owns shared DKIM2 tag-list tokenization, tag-name canonicalization, FWS
   handling, duplicate detection, base64string parsing, bounded limits, and
   generic structured tag errors. If implementation evidence favors a different
-  package name, it must remain under `lib/internal/` and must be the single
+  package name, it must remain under `internal/` and must be the single
   owner of shared tag parsing behavior.
-- `lib/internal/instance`:
+- `internal/instance`:
   Owns `Message-Instance` domain types, tag-specific validation, hash-set
   parsing, recipe base64 container parsing, instance collection extraction, and
   contiguous `m=` sequence validation.
-- `lib/internal/signature`:
+- `internal/signature`:
   Owns `DKIM2-Signature` domain types, tag-specific validation, envelope-path
   container parsing, signature-set parsing, flag parsing, nonce validation,
   signature collection extraction, and contiguous `i=` sequence validation.
-- `lib/internal/rawmsg`:
+- `internal/rawmsg`:
   Remains the source of truth for byte-preserving RFC 5322 message
   representation. M2 consumes its accessors and must not alter its parser
   contract except through a separate spec update.
-- `lib/internal/canonical`:
+- `internal/canonical`:
   Does not change in M2. Later consumes M2 parser results and M1 raw message
   state for canonicalization.
-- `lib/internal/recipe`:
+- `internal/recipe`:
   Does not change in M2. Later owns decoded `r=` JSON recipe semantics.
-- `lib/internal/keyresolver`, `lib/internal/datasource`,
-  `lib/internal/policy`, `lib/internal/service`, and
-  `lib/internal/observability`:
+- `internal/keyresolver`, `internal/datasource`,
+  `internal/policy`, `internal/service`, and
+  `internal/observability`:
   Do not change in M2.
 - `cmd/dkim2d`, `cmd/dkim2-milter`, and `cmd/dkim2ctl`:
   No M2 code changes.
@@ -629,10 +629,10 @@ Integration or E2E tests:
 Generated and documentation checks:
 
 - No OpenAPI generated artifacts are touched.
-- Package documentation for `lib/internal/instance` must describe the
+- Package documentation for `internal/instance` must describe the
   `Message-Instance` parser contract, draft baseline, sequence invariants,
   recipe deferral, and secret-safe diagnostics.
-- Package documentation for `lib/internal/signature` must describe the
+- Package documentation for `internal/signature` must describe the
   `DKIM2-Signature` parser contract, draft baseline, sequence invariants,
   envelope-path container parsing, signature deferral, and secret-safe
   diagnostics.
@@ -658,10 +658,10 @@ document the exact blocker.
 - Generic tag-list parsing remains compatible with DKIM2 DNS draft-04 Section
   3.2, while `Message-Instance`, `DKIM2-Signature`, and canonical target
   rendering require every header tag's semicolon terminator.
-- `lib/internal/instance` parses and validates `Message-Instance` fields,
+- `internal/instance` parses and validates `Message-Instance` fields,
   including required tags, hash sets, optional recipe base64, unknown
   extensions, duplicate tags, and contiguous `m=` sequence checks.
-- `lib/internal/signature` parses and validates `DKIM2-Signature` fields,
+- `internal/signature` parses and validates `DKIM2-Signature` fields,
   including required tags, optional nonce and flags including `feedhere`,
   exactly one `nd=` or `mf=` plus `rt=` envelope form, immutable canonical
   next-domain state, signature sets, unknown extensions, duplicate tags, and
@@ -675,7 +675,7 @@ document the exact blocker.
 - M1 `rawmsg` remains the raw RFC 5322 source of truth and is consumed through
   immutable accessors.
 - No daemon, Milter, OpenAPI, CLI, datasource, concrete observability exporter,
-  Valkey, SQL, LDAP, or service-only dependency leaks into `lib`.
+  Valkey, SQL, LDAP, or service-only dependency leaks into the root library module.
 - Unit and malformed input tests cover the M2 behavior named in
   `docs/ARCHITECTURE.md`.
 - Fuzz-smoke coverage exists for shared tag-value parsing and the two DKIM2
@@ -711,17 +711,17 @@ document the exact blocker.
 
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Scope | Work stays inside M2 parser packages, tests, docs, shared internal parser helpers, and the narrow canonical strict-scanner consumer | Changes are limited to `lib/internal/tagvalue`, `lib/internal/instance`, `lib/internal/signature`, M2 docs/testdata, and the canonical signature-input scanner call plus affected fixtures | done | No command modules, OpenAPI contracts, generated artifacts, datasource, DNS lookup, signing, verification behavior, recipe semantics, policy, or concrete observability code changed for the migration. |
+| Scope | Work stays inside M2 parser packages, tests, docs, shared internal parser helpers, and the narrow canonical strict-scanner consumer | Changes are limited to `internal/tagvalue`, `internal/instance`, `internal/signature`, M2 docs/testdata, and the canonical signature-input scanner call plus affected fixtures | done | No command modules, OpenAPI contracts, generated artifacts, datasource, DNS lookup, signing, verification behavior, recipe semantics, policy, or concrete observability code changed for the migration. |
 | Behavior | Message-Instance and DKIM2-Signature parser semantics match draft-04 and architecture M2 | Shared tag parsing, header terminators, strict base64string parsing, required tags, mutually exclusive envelope forms, `feedhere`, unknown extension handling, duplicate rejection, parser limits, sequence validation, and the unreferenced-instance special case are implemented and covered | done | Recipe JSON, cryptography, DNS, current-envelope matching, canonicalization algorithms, and policy remain deferred as specified. |
 | Tests | Unit, malformed input, immutability, and fuzz-smoke coverage exist | Unit suites cover malformed inputs, limits, duplicates, unknowns, immutability, sequence gaps, and secret-safe diagnostics; one fuzz target plus synthetic seed corpus exists for each M2 parser package | done | Final focused tests, all fuzz-smoke commands, and Makefile gates passed. |
 | Security | Fail-closed and secret-safe behavior is preserved | Ambiguous syntax, invalid base64, missing tags, duplicate tags, numeric overflow, sequence gaps, and limit violations fail closed with typed bounded errors | done | Error-string tests and fuzz-smoke marker assertions cover raw field, decoded path, nonce, hash, signature, and secret marker leakage. |
-| Boundaries | Module and generated-code boundaries hold | Parser code remains inside the standalone `lib` module and uses `rawmsg` accessors plus standard-library helpers | done | No service-only dependencies, OpenAPI DTOs, generated files, Milter, datasource, DNS, policy, or observability exporter imports were added. |
+| Boundaries | Module and generated-code boundaries hold | Parser code remains inside the standalone root library module and uses `rawmsg` accessors plus standard-library helpers | done | No service-only dependencies, OpenAPI DTOs, generated files, Milter, datasource, DNS, policy, or observability exporter imports were added. |
 | Observability | Only bounded parser metadata exists; no concrete exporters or high-cardinality labels | M2 exposes typed parser errors and bounded metadata only | done | No logs, metrics, traces, exporters, debug modules, or Prometheus labels were introduced. |
 | Effort | Prompt timings are measured and compared to the 3 to 5 agent-day estimate | Six-prompt wall-clock total is 44m17s versus the 3 to 5 agent-day planning estimate | done | The measured effort is lower because the slice stayed library-only and avoided later milestone surfaces. |
 
 ## Decisions And Open Questions
 
-- Settled: M1 `lib/internal/rawmsg` is a prerequisite and remains the single
+- Settled: M1 `internal/rawmsg` is a prerequisite and remains the single
   source of truth for raw RFC 5322 header occurrence order and byte-preserving
   field values.
 - Settled: M2 parser packages consume M1 accessors and do not rewrite header
@@ -751,7 +751,7 @@ document the exact blocker.
 - Settled: M2 validates syntactic base64, padding, zero pad bits, and stable
   parser-level decoded containers, but defers most cryptographic length and
   key-compatibility checks to later milestones.
-- Settled: Recipe JSON semantics are deferred to `lib/internal/recipe`.
+- Settled: Recipe JSON semantics are deferred to `internal/recipe`.
 - Settled: Current SMTP envelope matching is deferred to verification and
   Milter/service milestones.
 - Settled: Same-algorithm multi-selector `s=` sets are accepted with distinct

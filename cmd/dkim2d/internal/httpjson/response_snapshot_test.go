@@ -318,7 +318,7 @@ type selectedGoldenCorpus struct {
 func loadSelectedGoldenCorpus(t *testing.T) selectedGoldenCorpus {
 	t.Helper()
 
-	corpusBytes, err := os.ReadFile("../../../../lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json")
+	corpusBytes, err := os.ReadFile("../../../../testdata/vectors/draft-ietf-dkim-dkim2-spec-09/public-golden.json")
 	if err != nil {
 		t.Fatal("golden verification corpus unavailable")
 	}

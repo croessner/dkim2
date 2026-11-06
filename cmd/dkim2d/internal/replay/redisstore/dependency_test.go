@@ -88,26 +88,24 @@ func allowedProviderImport(importPath string) bool {
 func requireRedisImportOwnership(t *testing.T, root string) {
 	t.Helper()
 	seen := 0
-	for _, sourceRoot := range []string{filepath.Join(root, "cmd"), filepath.Join(root, "lib"), filepath.Join(root, "tools")} {
-		for _, path := range productionGoFiles(t, sourceRoot) {
-			file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
-			if err != nil {
-				t.Fatalf("parse repository imports %q failed", filepath.Base(path))
+	for _, path := range productionGoFiles(t, root) {
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+		if err != nil {
+			t.Fatalf("parse repository imports %q failed", filepath.Base(path))
+		}
+		relative, err := filepath.Rel(root, filepath.Dir(path))
+		if err != nil {
+			t.Fatal("import owner is not repository-relative")
+		}
+		for _, imported := range file.Imports {
+			value := strings.Trim(imported.Path.Value, `"`)
+			if value != redisClientModule && !strings.HasPrefix(value, redisClientModule+"/") {
+				continue
 			}
-			relative, err := filepath.Rel(root, filepath.Dir(path))
-			if err != nil {
-				t.Fatal("import owner is not repository-relative")
+			if !approvedRedisImportOwner(filepath.ToSlash(relative), value) {
+				t.Fatalf("unapproved go-redis import owner %q", filepath.ToSlash(relative))
 			}
-			for _, imported := range file.Imports {
-				value := strings.Trim(imported.Path.Value, `"`)
-				if value != redisClientModule && !strings.HasPrefix(value, redisClientModule+"/") {
-					continue
-				}
-				if !approvedRedisImportOwner(filepath.ToSlash(relative), value) {
-					t.Fatalf("unapproved go-redis import owner %q", filepath.ToSlash(relative))
-				}
-				seen++
-			}
+			seen++
 		}
 	}
 	if seen == 0 {
@@ -128,7 +126,7 @@ func requireRedisModuleOwnership(t *testing.T, root string) {
 	if err != nil {
 		t.Fatal("module discovery failed")
 	}
-	modulePaths = append(modulePaths, filepath.Join(root, "lib", "go.mod"), filepath.Join(root, "tools", "go.mod"))
+	modulePaths = append(modulePaths, filepath.Join(root, "go.mod"), filepath.Join(root, "tools", "go.mod"))
 	owner := filepath.ToSlash(filepath.Join(root, daemonModuleFile))
 	for _, modulePath := range modulePaths {
 		content := readEvidence(t, modulePath)

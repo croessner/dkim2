@@ -10,7 +10,6 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -38,11 +37,11 @@ type APIBaseline struct {
 
 // GenerateAPIManifest renders the deterministic exported root library surface.
 func GenerateAPIManifest(root string) ([]byte, int, error) {
-	moduleContent, err := artifactpath.ReadFile(root, "lib/go.mod", maxAPIBytes)
+	moduleContent, err := artifactpath.ReadFile(root, "go.mod", maxAPIBytes)
 	if err != nil {
 		return nil, 0, errors.New("api_module")
 	}
-	moduleFile, err := modfile.Parse("lib/go.mod", moduleContent, nil)
+	moduleFile, err := modfile.Parse("go.mod", moduleContent, nil)
 	if err != nil || moduleFile.Module == nil || moduleFile.Go == nil ||
 		moduleFile.Module.Mod.Path != "github.com/croessner/dkim2" {
 		return nil, 0, errors.New("api_module")
@@ -57,7 +56,7 @@ func GenerateAPIManifest(root string) ([]byte, int, error) {
 		}
 	}
 	slices.Sort(directDependencies)
-	entries, err := os.ReadDir(filepath.Join(root, "lib"))
+	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, 0, errors.New("api_directory")
 	}
@@ -66,7 +65,7 @@ func GenerateAPIManifest(root string) ([]byte, int, error) {
 		name := entry.Name()
 		if entry.Type().IsRegular() && strings.HasSuffix(name, ".go") &&
 			!strings.HasSuffix(name, "_test.go") {
-			paths = append(paths, "lib/"+name)
+			paths = append(paths, name)
 		}
 	}
 	slices.Sort(paths)

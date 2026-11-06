@@ -15,7 +15,7 @@ protocol, Milter, Exim, or REST contracts.
 - `cmd/dkim2d/internal/datasource/sqlsnapshot` owns the shared SQL row model,
   immutable-generation loader, mapping, limits, key clearing, and typed
   provider failures used by PostgreSQL and MySQL/MariaDB.
-- `lib/internal/datasource` remains storage-neutral and receives only complete
+- `internal/datasource` remains storage-neutral and receives only complete
   provider datasets and opaque handle identifiers.
 - Private PKCS#8 DER is read only inside the daemon provider, validated against
   the public SPKI and opaque handle context, installed into an in-memory signer

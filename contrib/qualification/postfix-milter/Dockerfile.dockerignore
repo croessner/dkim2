@@ -1,7 +1,14 @@
 **
 !go.work
 !go.work.sum
-!lib/**
+!go.mod
+!go.sum
+!*.go
+!admincontract/**
+!authresults/**
+!headerfold/**
+!internal/**
+!provider/**
 !cmd/dkim2d/**
 !cmd/dkim2-milter/**
 !cmd/dkim2-dsn-propagator/**

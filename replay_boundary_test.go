@@ -24,7 +24,7 @@ const (
 // TestReplayPublicAPIDeclaresNoConstructorOrRawFactEscape guards the root surface.
 func TestReplayPublicAPIDeclaresNoConstructorOrRawFactEscape(t *testing.T) {
 	root := replayRepositoryRoot(t)
-	files := parseProductionGoTree(t, filepath.Join(root, "lib"))
+	files := parseProductionGoTree(t, root)
 	audit := auditReplayPublicAPI(root, files)
 	if audit.violation != "" {
 		t.Fatal(audit.violation)
@@ -73,7 +73,7 @@ var use = (dkim2.UseReplayStorageKey)
 	})
 	t.Run("same package function value", func(t *testing.T) {
 		root := t.TempDir()
-		writeReplayGuardSource(t, root, "lib/escape.go", `package dkim2
+		writeReplayGuardSource(t, root, "escape.go", `package dkim2
 var use = UseReplayStorageKey
 `)
 		audit := auditProtectedReplayReferences(root, parseProductionGoTree(t, root))
@@ -86,7 +86,7 @@ var use = UseReplayStorageKey
 		writeReplayGuardSource(
 			t,
 			root,
-			"lib/internal/replay/escape.go",
+			"internal/replay/escape.go",
 			"package replay\nvar use = "+useStorageKeyFunction+"\n",
 		)
 		audit := auditProtectedReplayReferences(root, parseProductionGoTree(t, root))
@@ -156,8 +156,8 @@ import _ "github.com/croessner/dkim2/internal/replay"
 	for _, test := range publicCases {
 		t.Run("public "+test.name, func(t *testing.T) {
 			root := t.TempDir()
-			writeReplayGuardSource(t, root, "lib/escape.go", test.source)
-			audit := auditReplayPublicAPI(root, parseProductionGoTree(t, filepath.Join(root, "lib")))
+			writeReplayGuardSource(t, root, "escape.go", test.source)
+			audit := auditReplayPublicAPI(root, parseProductionGoTree(t, root))
 			if !strings.Contains(audit.violation, test.want) {
 				t.Fatalf("public %s violation=%q", test.name, audit.violation)
 			}
@@ -165,14 +165,14 @@ import _ "github.com/croessner/dkim2/internal/replay"
 	}
 	t.Run("public replay package", func(t *testing.T) {
 		for _, relative := range []string{
-			"lib/replay/replay.go",
-			"lib/replay/temp/replay.go",
+			"replay/replay.go",
+			"replay/temp/replay.go",
 		} {
 			t.Run(relative, func(t *testing.T) {
 				root := t.TempDir()
 				writeReplayGuardSource(t, root, relative, "package replay\ntype Store interface{}\n")
-				audit := auditReplayPublicAPI(root, parseProductionGoTree(t, filepath.Join(root, "lib")))
-				if !strings.Contains(audit.violation, filepath.Join("lib", "replay")) {
+				audit := auditReplayPublicAPI(root, parseProductionGoTree(t, root))
+				if !strings.Contains(audit.violation, filepath.Join(root, "replay")) {
 					t.Fatalf("public replay package violation=%q", audit.violation)
 				}
 			})
@@ -191,14 +191,14 @@ func TestCommandModulesCannotImportLibraryInternals(t *testing.T) {
 // TestLibraryModuleExcludesValkeyAndRedisFamilies guards exact external module ownership.
 func TestLibraryModuleExcludesValkeyAndRedisFamilies(t *testing.T) {
 	root := replayRepositoryRoot(t)
-	data, err := os.ReadFile(filepath.Join(root, "lib", "go.mod"))
+	data, err := os.ReadFile(filepath.Join(root, "go.mod"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for field := range strings.FieldsSeq(string(data)) {
 		switch field {
 		case "github.com/valkey-io/valkey-go", "github.com/redis/go-redis/v9":
-			t.Fatalf("lib/go.mod contains command-owned dependency %q", field)
+			t.Fatalf("library go.mod contains command-owned dependency %q", field)
 		}
 	}
 }
@@ -208,10 +208,11 @@ type parsedReplayFile struct {
 	syntax *ast.File
 }
 
-// replayRepositoryRoot returns the stable workspace root from the library package.
+// replayRepositoryRoot returns the stable workspace root, which is also the
+// root library package directory.
 func replayRepositoryRoot(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.Abs("..")
+	root, err := filepath.Abs(".")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +254,7 @@ func parseProductionGoTree(t *testing.T, root string) []parsedReplayFile {
 func exactRepositoryIgnoredEvidence(scanRoot, path string) bool {
 	repositoryRoot := filepath.Clean(scanRoot)
 	switch filepath.Base(repositoryRoot) {
-	case "lib", "cmd":
+	case "cmd":
 		repositoryRoot = filepath.Dir(repositoryRoot)
 	}
 	cleaned := filepath.Clean(path)
@@ -335,7 +336,7 @@ func auditReplayPublicAPI(root string, files []parsedReplayFile) replayPublicAPI
 			"ReplayPropagationCommitUnresolved": true, "ReplayPropagationCommitDisabled": true,
 		},
 	}
-	rootPackage := filepath.Join(root, "lib")
+	rootPackage := filepath.Clean(root)
 	publicReplayPackage := filepath.Join(rootPackage, "replay")
 	for _, file := range files {
 		directory := filepath.Dir(file.path)
@@ -497,7 +498,7 @@ func auditProtectedReplayReferences(root string, files []parsedReplayFile) prote
 				switch {
 				case imported == replayCoreImportPath && value.Sel.Name == useStorageKeyFunction:
 					audit.internalReferences++
-					if relative != filepath.Join("lib", "replay_facade.go") {
+					if relative != "replay_facade.go" {
 						audit.violation = "internal protected-key seam referenced by " + relative
 					}
 				case imported == replayModulePath && value.Sel.Name == useReplayStorageKeyFunction:
@@ -512,11 +513,11 @@ func auditProtectedReplayReferences(root string, files []parsedReplayFile) prote
 				}
 				switch value.Name {
 				case useStorageKeyFunction:
-					if filepath.Dir(relative) == filepath.Join("lib", "internal", "replay") {
+					if filepath.Dir(relative) == filepath.Join("internal", "replay") {
 						audit.violation = "unqualified internal protected-key seam referenced by " + relative
 					}
 				case useReplayStorageKeyFunction:
-					if filepath.Dir(relative) == "lib" {
+					if filepath.Dir(relative) == "." {
 						audit.violation = "unqualified public protected-key seam referenced by " + relative
 					}
 				}

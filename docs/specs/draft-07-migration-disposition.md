@@ -218,7 +218,7 @@ Open follow-ups owned by later packages:
   null `mf=` hops were always rejected and `nd=` entry required an exact
   match. Ordinary hops and the exact continuation after `nd=` are unchanged.
   Domain literals never match.
-- IDNA: the new `lib/internal/domainname` package owns U-label to A-label
+- IDNA: the new `internal/domainname` package owns U-label to A-label
   conversion (D4) on `golang.org/x/net/idna`, which is added to the library
   module as a reviewed dependency together with `golang.org/x/text`. Plain
   LDH ASCII names keep their previous handling; `xn--` labels and U-labels are
@@ -241,7 +241,7 @@ Open follow-ups owned by later packages:
 
 ## 10. Package 4 state
 
-- From parser: `lib/internal/mailbox` is the single bounded RFC 5322 author
+- From parser: `internal/mailbox` is the single bounded RFC 5322 author
   parser (RFC 6854 groups, RFC 6532 UTF-8, comments, obsolete dotted phrases
   and local parts). Obsolete route syntax and empty list elements are
   rejected as unsupported. The library no longer uses `net/mail`; the
@@ -264,7 +264,7 @@ Open follow-ups owned by later packages:
   `MAILER-DAEMON@<propagation signing domain>`; `Reporting-MTA` and the
   Message-ID host stay the configured reporting MTA. The DSN propagation
   corpus was regenerated; its Draft-06 version is kept under
-  `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-spec-06/`.
+  `testdata/vectors/history/draft-ietf-dkim-dkim2-spec-06/`.
 - `exploded` (Section 12.5): set only by intermediary purposes (revision,
   `nd=` hop) that fan out to more than one recipient; originator and
   delivery-status signatures (`i=1`) never carry it, and prior flags are not
@@ -510,7 +510,7 @@ Open follow-ups owned by later packages:
   any composite row remains in any generation. Datasource profiles again
   accept at most two credentials, and the default and production record
   ceilings return to 9216 and 229376.
-- Removed with it: the composite crypto owner in `lib/internal/cryptodkim2`,
+- Removed with it: the composite crypto owner in `internal/cryptodkim2`,
   the public composite key, credential, and profile constructors, the
   Stalwart and LAMPS external vectors, and the Rspamd vocabulary entries.
-  `lib/headerfold` and the adapter refolding stay; they are generic.
+  `headerfold` and the adapter refolding stay; they are generic.

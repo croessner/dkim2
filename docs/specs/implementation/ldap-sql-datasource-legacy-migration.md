@@ -55,7 +55,7 @@ This specification is governed by:
 - PostgreSQL documentation for read-only repeatable-read transactions,
   constraints, row locking, and transactional DDL/DML;
 - the existing public DKIM2 provider and signing-store boundaries under
-  `lib/provider` and `cmd/dkim2d/internal/signingstore`;
+  `provider` and `cmd/dkim2d/internal/signingstore`;
 - `Makefile`, CI workflows, module metadata, vendor metadata, and image
   delivery owners.
 
@@ -84,7 +84,7 @@ The following production work is absent:
 - no SQL DDL, transactionally consistent loader, pool lifecycle, or
   configuration exists;
 - no public service-neutral bridge lets `cmd/dkim2d` construct the existing
-  `lib/internal/datasource` values without violating Go's `internal` import
+  `internal/datasource` values without violating Go's `internal` import
   rule;
 - no provider-neutral daemon lifecycle can atomically publish a complete
   datasource snapshot and matching protected signing registry generation;
@@ -96,11 +96,11 @@ The following production work is absent:
 
 The Go import boundary is a concrete architecture implementation gap, not
 permission to duplicate datasource validation in `cmd/dkim2d`. A command
-module cannot import `lib/internal/datasource`. The smallest reconciliation is
+module cannot import `internal/datasource`. The smallest reconciliation is
 a narrow service-neutral public bridge in the library module that delegates to
 the existing internal constructors and signing projection. LDAP and SQL
 drivers, connection types, records, transactions, configuration, and
-publication code remain outside `lib`.
+publication code remain outside the root library module.
 
 ## Goal
 
@@ -242,7 +242,7 @@ Out of scope:
 - changing Draft-04 or historical DNS-04 semantics or identifiers;
 - changing raw RFC 5322, canonicalization, recipe, signature, policy, replay,
   Milter, or Exim behavior except to fix a proven root-cause regression;
-- LDAP or SQL drivers in `lib`;
+- LDAP or SQL drivers in the root library module;
 - private keys, signer callbacks, commands, paths, DNs, or database locators
   in datasource values;
 - runtime reads of historical OpenDKIM objects;
@@ -266,9 +266,9 @@ Out of scope:
 
 ### Library bridge
 
-`lib/internal/datasource` remains the only owner of datasource identifiers,
+`internal/datasource` remains the only owner of datasource identifiers,
 record validation, exact matching, limits, errors, and immutable results.
-Implementation adds only the minimum public bridge under `lib/provider`
+Implementation adds only the minimum public bridge under `provider`
 needed for an external command module to:
 
 - construct provider-neutral records through the internal validators;
@@ -302,7 +302,7 @@ The first SQL implementation is PostgreSQL. It uses a pinned, maintained Go
 driver in `cmd/dkim2d` only and the standard context-aware transaction
 boundary. Dependency selection is reviewed for cancellation behavior, TLS
 control, maintained Go 1.27.3 support, and vulnerability status. No ORM, dynamic
-query builder, schema auto-migrator, or driver abstraction enters `lib`.
+query builder, schema auto-migrator, or driver abstraction enters the root library module.
 
 ### Signing registry and daemon
 
@@ -957,7 +957,7 @@ generated/vendor, license, and vulnerability checks.
 
 Dependency checks prove:
 
-- no LDAP/SQL driver or service dependency enters `lib`;
+- no LDAP/SQL driver or service dependency enters the root library module;
 - datasource core does not import signing;
 - the sole signing projection remains the only datasource/signing bridge;
 - protocol, Milter, Exim, OpenAPI, and replay packages do not import concrete
@@ -997,7 +997,7 @@ OpenLDAP/PostgreSQL and migration gates on the unchanged candidate.
 ## Acceptance Criteria
 
 - The library contains no LDAP or SQL driver and the daemon imports no
-  `lib/internal` package.
+  `internal` package.
 - The public bridge reuses, rather than duplicates, the storage-neutral
   datasource validators and signing projection.
 - `rnsdkim2.schema` contains exactly the 17 reserved attribute OIDs and five
@@ -1074,7 +1074,7 @@ Fill after implementation:
 
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Bridge | Service-owned providers reuse one storage-neutral library owner | Public provider bridge over authoritative datasource constructors | complete | No concrete driver or backend DTO enters `lib` |
+| Bridge | Service-owned providers reuse one storage-neutral library owner | Public provider bridge over authoritative datasource constructors | complete | No concrete driver or backend DTO enters the root library module |
 | LDAP schema | Original 17 attributes and five classes | Superseded by the native v2 18-attribute/six-class schema | historical | Current truth is the native-custody spec and LDAP schema reference |
 | LDAP runtime | Bounded verified paged snapshot and degraded recovery | Verified TLS, fixed projection, exact paging/fence, finite snapshot lifecycle | complete | Referrals, hostile BER lengths, stale and malformed generations fail closed |
 | PostgreSQL DDL | Full-generation constraints, roles, immutability, publication | Transactional DDL, split roles, immutable committed generations, forward-only current | complete | Real role and transition denials included |
@@ -1085,7 +1085,7 @@ Fill after implementation:
 | Migration | Explicit mapping, protected import, fresh DNS proof, no partial activation | Offline safe-default command with exact staging/readback and DNS/SPKI proof | complete | Dry-run and failure steps preserve nonmutation |
 | Rollback | Higher immutable generation and crash/concurrency proof | Shared strictly-forward publication protocol | complete | At most one exact-current publisher wins |
 | Privacy | No protected identity, backend, query, key, or raw error emission | Closed reports, logs, traces, labels, and diagnostics | complete | Toxic fixtures and report schemas covered |
-| Boundaries | No drivers in lib, no replay/OpenAPI/adapter leakage | Concrete providers and compatibility fork remain daemon-owned | complete | OpenAPI wire bytes unchanged |
+| Boundaries | No drivers in the root library module, no replay/OpenAPI/adapter leakage | Concrete providers and compatibility fork remain daemon-owned | complete | OpenAPI wire bytes unchanged |
 | Documentation | Schema/DDL/config/operator/reference claims are current | Design, operator, migration, reference, and supply-chain docs updated | complete | No deferred-only LDAP/SQL claim remains |
 | Gates | Full disposable integration, security, reference, and guardrails pass | Exact outcomes and evidence identities recorded in ignored ledger | complete | Required on one unchanged final snapshot |
 | Effort | Prompt timings and exact evidence identities recorded | Per-prompt timings, findings, fixes, hashes, and approvals in ignored ledger | complete | Durable spec avoids self-referential candidate hash |

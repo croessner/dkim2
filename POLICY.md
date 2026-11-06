@@ -9,8 +9,9 @@ incomplete if any mandatory rule is missed.
   generated code, Docker or packaging files, and documentation.
 - MUST: Build and test without Go experiments. Make targets, scripts,
   Dockerfiles, and CI must not set `GOEXPERIMENT`.
-- MUST: Preserve the multi-module boundary. `lib/` is the standalone DKIM2
-  reference library; service and adapter dependencies belong in command modules.
+- MUST: Preserve the multi-module boundary. The root library module
+  (`github.com/croessner/dkim2`) is the standalone DKIM2 reference library;
+  service and adapter dependencies belong in command modules.
 - MUST: Apply security-by-design and security-by-default. Ambiguous protocol,
   transport, key, datastore, recipe, replay, or message-fidelity state must fail
   closed unless an explicit compatibility policy says otherwise.

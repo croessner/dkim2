@@ -24,11 +24,11 @@ This spec is governed by:
 - `docs/specs/spec-and-prompt-template.md`
 - `docs/specs/implementation/raw-message-model.md`
 - `docs/specs/implementation/dkim2-tag-parsers.md`
-- `lib/internal/rawmsg/doc.go`
-- `lib/internal/tagvalue/doc.go`
-- `lib/internal/instance/doc.go`
-- `lib/internal/signature/doc.go`
-- `lib/internal/canonical/doc.go`
+- `internal/rawmsg/doc.go`
+- `internal/tagvalue/doc.go`
+- `internal/instance/doc.go`
+- `internal/signature/doc.go`
+- `internal/canonical/doc.go`
 - `Makefile`
 - `.gitignore`
 - `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05, especially
@@ -49,18 +49,18 @@ protocol behavior.
 
 The repository currently has completed foundations for M1 and M2:
 
-- `lib/internal/rawmsg` owns byte-preserving RFC 5322 message parsing,
+- `internal/rawmsg` owns byte-preserving RFC 5322 message parsing,
   immutable header/body views, lowercase header names, unfolded header values,
   CRLF policy, and body line indexes.
-- `lib/internal/tagvalue` owns shared DKIM2 tag-list parsing and strict
+- `internal/tagvalue` owns shared DKIM2 tag-list parsing and strict
   base64string parsing.
-- `lib/internal/instance` parses `Message-Instance` fields, hash sets, recipe
+- `internal/instance` parses `Message-Instance` fields, hash sets, recipe
   base64 containers, and contiguous `m=` sequences.
-- `lib/internal/signature` parses `DKIM2-Signature` fields, envelope-path
+- `internal/signature` parses `DKIM2-Signature` fields, envelope-path
   containers, signature sets, flags, nonces, contiguous `i=` sequences, and
   the unreferenced-instance special case.
 
-`lib/internal/canonical` is still a package stub. There is no implementation
+`internal/canonical` is still a package stub. There is no implementation
 contract for DKIM2 canonical header bytes, canonical body bytes, SHA-256 hash
 calculation, signature input construction, null-signature handling, golden
 fixtures, or safe debug output. M4 and M5 cannot safely verify signatures or
@@ -73,7 +73,7 @@ produce plausible but draft-incompatible results.
 
 ## Goal
 
-Implement the M3 canonicalization contract in `lib/internal/canonical` so later
+Implement the M3 canonicalization contract in `internal/canonical` so later
 milestones can consume deterministic bytes and hashes:
 
 - Produce canonical body hash input from M1 body bytes according to
@@ -151,7 +151,7 @@ Risk notes:
 - Low risk: no network calls, no OpenAPI generation, no daemon wiring, no
   datasource provider, no DNS lookup, no concrete observability exporter, and
   no Milter adapter behavior.
-- Medium risk: M3 needs careful API design so `lib/internal/canonical`
+- Medium risk: M3 needs careful API design so `internal/canonical`
   consumes M1/M2 immutable views and does not duplicate raw parsing,
   tag-value parsing, or sequence validation.
 - Medium risk: byte-level debug helpers are useful for golden tests but can
@@ -194,13 +194,13 @@ recorded as an additional estimate, but it does not replace wall-clock time.
 
 In scope:
 
-- `lib/internal/canonical` domain types, package documentation, canonical byte
+- `internal/canonical` domain types, package documentation, canonical byte
   builders, SHA-256 hash helpers, structured errors, debug metadata, tests,
   fuzz smoke, and testdata.
 - Consumption of existing `rawmsg.Message`, `rawmsg.HeaderField`,
   `instance.MessageInstance`, `signature.Signature`, and `tagvalue`
   immutable accessors.
-- Draft-versioned golden fixtures under `lib/internal/canonical/testdata/`
+- Draft-versioned golden fixtures under `internal/canonical/testdata/`
   or another narrow library testdata location if implementation evidence shows
   a better package-local shape.
 - Unit tests and malformed input tests for M3.
@@ -208,11 +208,11 @@ In scope:
 
 Out of scope:
 
-- Public `lib` facade APIs, unless a later implementation prompt updates this
+- Public root library facade APIs, unless a later implementation prompt updates this
   spec with a concrete facade need.
-- Raw RFC 5322 parsing changes in `lib/internal/rawmsg`.
-- DKIM2 tag parser changes in `lib/internal/tagvalue`,
-  `lib/internal/instance`, or `lib/internal/signature`, unless an M3 test
+- Raw RFC 5322 parsing changes in `internal/rawmsg`.
+- DKIM2 tag parser changes in `internal/tagvalue`,
+  `internal/instance`, or `internal/signature`, unless an M3 test
   exposes a root-cause defect in those packages and this spec is updated first.
 - Recipe JSON parsing, recipe application, recipe generation, or previous
   instance reconstruction.
@@ -285,7 +285,7 @@ M3 must implement them as one authoritative transformation path:
    `Auto-Submitted` and `VBR-Info` are signed: Draft-07 Section 4 listed both
    as unsigned, Draft-08 removed them, so a hop that adds or changes either
    field must describe the change in its Recipe. The single authoritative
-   table is `excludedHeaderKindForName` in `lib/internal/canonical/header.go`,
+   table is `excludedHeaderKindForName` in `internal/canonical/header.go`,
    exposed to recipe parsing, recipe generation, signing, verification, and
    the DSN rebuild through `canonical.HeaderRelevance`.
 2. Convert included header field names to lowercase ASCII. M1 already stores
@@ -420,36 +420,36 @@ failures understandable without leaking sensitive data:
 
 Intended ownership:
 
-- `lib/internal/canonical`:
+- `internal/canonical`:
   Owns DKIM2 body hash input, header hash input, signature input
   canonicalization, SHA-256 digest helpers, typed canonicalization errors,
   immutable canonical byte results, golden fixture helpers, and bounded debug
   metadata. It is the only package that implements Section 6.1, Section 6.2,
   and Section 9.6 byte transformations.
-- `lib/internal/rawmsg`:
+- `internal/rawmsg`:
   Remains the source of truth for byte-preserving RFC 5322 message
   representation. M3 consumes `Message`, `HeaderBlock`, `HeaderField`, and
   `Body` accessors and must not alter raw parsing or CRLF policy.
-- `lib/internal/tagvalue`:
+- `internal/tagvalue`:
   Remains the owner of generic DKIM2 tag-list scanning and base64string
   parsing. M3 may consume immutable base64 containers but must not implement
   parallel tag scanning.
-- `lib/internal/instance`:
+- `internal/instance`:
   Remains the owner of `Message-Instance` parsing, hash-set parsing, recipe
   base64 containers, and `m=` sequence validation. M3 invokes that parser and
   validation over fields selected from the authoritative `HeaderBlock`; it
   does not redefine `h=` syntax or trust a caller-supplied parsed slice.
-- `lib/internal/signature`:
+- `internal/signature`:
   Remains the owner of `DKIM2-Signature` parsing, signature-set parsing,
   envelope containers, flags, nonces, and `i=` sequence validation. M3 invokes
   that parser and validation over fields selected from the authoritative
   `HeaderBlock`; it does not redefine `s=` syntax except for a narrow
   null-signature rendering helper needed by Section 9.6.
-- `lib/internal/recipe`:
+- `internal/recipe`:
   Does not change in M3. Previous-state reconstruction remains deferred.
-- `lib/internal/keyresolver`, `lib/internal/datasource`,
-  `lib/internal/policy`, `lib/internal/service`, and
-  `lib/internal/observability`:
+- `internal/keyresolver`, `internal/datasource`,
+  `internal/policy`, `internal/service`, and
+  `internal/observability`:
   Do not change in M3.
 - `cmd/dkim2d`, `cmd/dkim2-milter`, and `cmd/dkim2ctl`:
   No M3 code changes.
@@ -630,7 +630,7 @@ Integration or E2E tests:
 Generated and documentation checks:
 
 - No OpenAPI generated artifacts are touched.
-- Package documentation for `lib/internal/canonical` must describe the DKIM2
+- Package documentation for `internal/canonical` must describe the DKIM2
   canonicalization ownership contract, draft baseline, Section 6.1 body input,
   Section 6.2 header input, Section 9.6 signature input, and secret-safe debug
   policy.
@@ -649,7 +649,7 @@ document the exact blocker.
 
 ## Acceptance Criteria
 
-- `lib/internal/canonical` is the single source of truth for DKIM2
+- `internal/canonical` is the single source of truth for DKIM2
   canonicalization and hash byte inputs.
 - Section 6.1 body hash input is implemented and golden-tested.
 - Section 6.2 header hash input is implemented and golden-tested, including
@@ -666,7 +666,7 @@ document the exact blocker.
   or ambiguous state.
 - Debug helpers and errors are bounded and secret-safe.
 - No daemon, Milter, OpenAPI, CLI, datasource, concrete observability exporter,
-  Valkey, SQL, LDAP, or service-only dependency leaks into `lib`.
+  Valkey, SQL, LDAP, or service-only dependency leaks into the root library module.
 - Unit, malformed input, golden, and fuzz-smoke tests cover the M3 behavior
   named in `docs/ARCHITECTURE.md`.
 - `make guardrails` passes, or skipped portions are explicitly justified with
@@ -685,8 +685,8 @@ document the exact blocker.
   tests, `FuzzSignatureInput`, and `FuzzHeaderHashInput` passed on 2026-07-10.
 - Golden tests:
   included in the focused and final test runs through
-  `lib/internal/canonical/golden_test.go`; fixtures under
-  `lib/internal/canonical/testdata/golden/` name
+  `internal/canonical/golden_test.go`; fixtures under
+  `internal/canonical/testdata/golden/` name
   `draft-ietf-dkim-dkim2-spec-04`.
 - Fuzz-smoke:
   `cd lib && GOCACHE=/private/tmp/dkim2-gocache go test ./internal/canonical/... -run '^$' -fuzz=Fuzz -fuzztime=10s`
@@ -721,17 +721,17 @@ document the exact blocker.
 
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Scope | Work stays inside `lib/internal/canonical`, package-local tests, package-local testdata, and this spec | Implementation changed canonical package code/tests/testdata, package docs, this spec, and the ignored local prompt timing ledger only during final closeout | done | No command modules, OpenAPI contracts, generated artifacts, datasource, DNS lookup, cryptographic verification, recipe, policy, Milter, or concrete observability code changed for M3 closeout. |
+| Scope | Work stays inside `internal/canonical`, package-local tests, package-local testdata, and this spec | Implementation changed canonical package code/tests/testdata, package docs, this spec, and the ignored local prompt timing ledger only during final closeout | done | No command modules, OpenAPI contracts, generated artifacts, datasource, DNS lookup, cryptographic verification, recipe, policy, Milter, or concrete observability code changed for M3 closeout. |
 | Behavior | Body, header, and signature canonicalization match draft-04 Sections 4, 6.1, 6.2, and 9.6 | Body input, header input, Delivered-To exclusion, signature input, deterministic ordering, SHA-256 digest containers, and null signature rendering are implemented and test-covered | done | Section 6.2 WSP compression and Section 9.6 WSP deletion remain separate helpers with focused tests. |
 | Tests | Unit, malformed input, golden, immutability, and fuzz-smoke coverage exist | Unit, limit, immutability, secret-safe error, golden, and three target-specific canonical fuzz-smoke runs passed | done | Golden fixtures name `draft-ietf-dkim-dkim2-spec-04`; aggregate fuzz was split because Go matched multiple targets. |
 | Security | Fail-closed and secret-safe behavior is preserved | Unsupported algorithms, unsafe options, size limits, missing targets, duplicate raw targets, and malformed authoritative fields fail with typed bounded errors; signature-input callers cannot inject foreign parsed protocol objects | done | Error tests and fuzz assertions cover raw body, raw header, DKIM2 field, decoded path, nonce, signature, and secret marker leakage. |
-| Boundaries | Module and generated-code boundaries hold | `lib/internal/canonical` consumes M1/M2 accessors and uses standard-library helpers only | done | No service-only dependencies or generated REST DTOs leaked into `lib`; OpenAPI files were untouched and `check-openapi` ran through `make guardrails`. |
+| Boundaries | Module and generated-code boundaries hold | `internal/canonical` consumes M1/M2 accessors and uses standard-library helpers only | done | No service-only dependencies or generated REST DTOs leaked into the root library module; OpenAPI files were untouched and `check-openapi` ran through `make guardrails`. |
 | Observability | Only bounded metadata exists; no concrete exporters or high-cardinality labels | Canonical result metadata carries kind, draft, safe algorithm names, counts, lengths, excluded-header counters, and body terminal action only | done | No logs, metrics, traces, exporters, debug modules, or Prometheus labels were added. |
 | Effort | Prompt timings are measured and recorded | Six-prompt productive wall-clock total is 36m39s versus the 5 to 9 agent-day planning estimate | done | Separate discarded Prompt 02 wait episode is recorded but excluded from productive M3 effort because it produced no files. |
 
 ## Decisions And Open Questions
 
-- Settled: `lib/internal/canonical` is the single owner for DKIM2
+- Settled: `internal/canonical` is the single owner for DKIM2
   canonicalization byte transformations and SHA-256 hash helpers.
 - Settled: M3 consumes M1 `rawmsg` immutable accessors and invokes the M2
   parsers over the supplied authoritative `HeaderBlock`; it accepts no
@@ -743,7 +743,7 @@ document the exact blocker.
   (see Header Hash Input step 1) plus `Message-Instance` and
   `DKIM2-Signature`. `Auto-Submitted` and `VBR-Info` are signed again under
   Draft-09, as under Draft-04; the Draft-07 golden that excluded them is kept
-  under `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-spec-07/`.
+  under `testdata/vectors/history/draft-ietf-dkim-dkim2-spec-07/`.
 - Settled: Duplicate included header names in header hash input are ordered
   from the last RFC 5322 header occurrence upward.
 - Settled: Body hash input is MIME-agnostic and follows the DKIM1 simple-style

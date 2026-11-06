@@ -250,7 +250,7 @@ func TestPostfixQualificationPinsBuildInputsAndCleanup(t *testing.T) {
 	}
 	ignore := readQualificationFile(t, "Dockerfile.dockerignore", 1<<16)
 	for _, required := range [][]byte{
-		[]byte("**\n"), []byte("!lib/**"), []byte("!cmd/dkim2d/**"),
+		[]byte("**\n"), []byte("!internal/**"), []byte("!cmd/dkim2d/**"),
 		[]byte("!cmd/dkim2-milter/**"),
 		[]byte("!cmd/dkim2-dsn-propagator/**"),
 		[]byte("!cmd/dkim2-exim/go.mod"),

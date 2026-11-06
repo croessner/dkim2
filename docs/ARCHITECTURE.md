@@ -80,18 +80,18 @@
 | 0.1.0-draft | 2026-10-02 | Christian Roessner / Claude | Made SMTP-sized complete-fanout revision configurable: `server.working_set_bytes` (default 8 GiB) bounds every admission permit, and `server.batch_revision.max_aggregate_message_bytes` (default shared sizing, at most 512 MiB) with `server.batch_revision.max_in_flight` gives `/v1/revise/batch` a dedicated working-set sizing and admission pool proven jointly with the shared pool. The capability route now advertises the enforced aggregate and request bounds instead of fixed constants, and the DSN propagator's call deadline accepts up to 180 seconds. |
 | 0.1.0-draft | 2026-10-20 | Christian Roessner / Claude | Advanced the message baseline to `draft-ietf-dkim-dkim2-spec-07` and the DNS companion to `draft-ietf-dkim-dkim2-dns-01`. Draft identifiers, generated contracts, versioned vectors, and section citations move together; behavior changes follow the work packages in `docs/specs/draft-07-migration-disposition.md`. |
 | 0.1.0-draft | 2026-10-21 | Christian Roessner / Claude | Added the optional daemon-owned `signing.policy.delivery_status.reporting_domain`: Draft-07 Section 12.4 requires the From of an MTA-generated DSN (`MAILER-DAEMON@$myhostname`) to be Authentic for its signing domain, so the Postfix DSN route can sign under the reporting MTA domain instead of the embedded `d=`. Embedded verification, RFC 3464 linkage, and outer-recipient/`mf=` binding are unchanged and still precede datasource access; the identity is operator configuration only, absent by default, canonical-only, and refused with a disabled signer. |
-| 0.1.0-draft | 2026-10-21 | Christian Roessner / Claude | Restored the projected fold points of added header fields in the Milter and Exim adapters through the shared `lib/headerfold` package: every TAB after the first value octet becomes LF+TAB, and a field with a physical line over 998 octets fails validation. A composite-algorithm `DKIM2-Signature` was otherwise queued as one multi-kilobyte line, so DSNs returning it failed MIME parsing and SMTP output broke it. |
-| 0.1.0-draft | 2026-10-26 | Christian Roessner / Claude | Removed the post-quantum `mldsa44-ed25519-sha512` composite (ML-DSA-44 plus Ed25519, LAMPS construction) from the library, `dkim2d`, the adapters, `dkim2ctl`, the OpenAPI contract, the Rspamd contrib, and the vectors. The DKIM working group has not settled the DKIM2 post-quantum construction (October 2026 list discussion: separate multiple signatures, LAMPS composite, or plain ML-DSA-44; to be revisited at IETF 127), so the implementation does not ship a construction that may not be standardized. The baseline stays `draft-ietf-dkim-dkim2-spec-07` plus `draft-ietf-dkim-dkim2-dns-01` with this documented deviation (`DKIM2-ISSUE-0019`): composite sets are unknown algorithms ignored with `unsupported_algorithm`, `k=mldsa44-ed25519-sha512` records are unsupported key types, composite credentials fail closed, and forward SQL migration `009_remove_composite_algorithm.sql` restores the two-algorithm constraints and refuses to run while composite rows remain. `lib/headerfold` and the adapter refolding stay. |
-| 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Advanced the message baseline to `draft-ietf-dkim-dkim2-spec-08` and the DNS companion to `draft-ietf-dkim-dkim2-dns-02`. Draft identifiers, generated contracts, versioned vectors (with Draft-07 and DNS-01 copies under `lib/testdata/vectors/history/`), draft-bound goldens, and section citations (new Sections 13.1 and 16.2) move together without a protocol behavior change; behavior changes follow the work packages in `docs/specs/draft-08-migration-disposition.md`. |
+| 0.1.0-draft | 2026-10-21 | Christian Roessner / Claude | Restored the projected fold points of added header fields in the Milter and Exim adapters through the shared `headerfold` package: every TAB after the first value octet becomes LF+TAB, and a field with a physical line over 998 octets fails validation. A composite-algorithm `DKIM2-Signature` was otherwise queued as one multi-kilobyte line, so DSNs returning it failed MIME parsing and SMTP output broke it. |
+| 0.1.0-draft | 2026-10-26 | Christian Roessner / Claude | Removed the post-quantum `mldsa44-ed25519-sha512` composite (ML-DSA-44 plus Ed25519, LAMPS construction) from the library, `dkim2d`, the adapters, `dkim2ctl`, the OpenAPI contract, the Rspamd contrib, and the vectors. The DKIM working group has not settled the DKIM2 post-quantum construction (October 2026 list discussion: separate multiple signatures, LAMPS composite, or plain ML-DSA-44; to be revisited at IETF 127), so the implementation does not ship a construction that may not be standardized. The baseline stays `draft-ietf-dkim-dkim2-spec-07` plus `draft-ietf-dkim-dkim2-dns-01` with this documented deviation (`DKIM2-ISSUE-0019`): composite sets are unknown algorithms ignored with `unsupported_algorithm`, `k=mldsa44-ed25519-sha512` records are unsupported key types, composite credentials fail closed, and forward SQL migration `009_remove_composite_algorithm.sql` restores the two-algorithm constraints and refuses to run while composite rows remain. `headerfold` and the adapter refolding stay. |
+| 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Advanced the message baseline to `draft-ietf-dkim-dkim2-spec-08` and the DNS companion to `draft-ietf-dkim-dkim2-dns-02`. Draft identifiers, generated contracts, versioned vectors (with Draft-07 and DNS-01 copies under `testdata/vectors/history/`), draft-bound goldens, and section citations (new Sections 13.1 and 16.2) move together without a protocol behavior change; behavior changes follow the work packages in `docs/specs/draft-08-migration-disposition.md`. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Remapped verification states to Draft-08 Section 14.1 "Fully Verified DKIM2 Message": timestamp, envelope, MAIL FROM and `d=` alignment, `nd=`, custody adjacency (new `custody_mismatch`), unmet out-of-band, and From-authenticity failures are FAIL; a history with a null body Recipe is FAIL `body_history_unavailable` instead of a PASS with partial history and transit or revision signing refuses it; Recipe schema and application errors are PERMERROR `invalid_recipe`, separate from `invalid_recipe_json`. `policy.ProtocolForVerificationReason` is the single owner of the reason-to-state classification. Policy verdicts, Milter, and Exim SMTP outcomes are unchanged except for the null body Recipe history, which strict mode now rejects. |
-| 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Added Draft-08 Section 3.4 pure ML-DSA-44 (`mldsa44`) for verification and signing. `lib/internal/cryptodkim2` owns each algorithm's message representative (SHA-256 digest for `rsa-sha256` and `ed25519-sha256`, the complete Section 12.8 input for `mldsa44`, signed with hedged `crypto/mldsa` and the context string `DKIM2`), exact 1312/2420-octet key and signature sizes, per-algorithm signature caps, and the ML-DSA runtime guard (the FIPS 140-3 Go Cryptographic Module v1.0.0 fails closed). DNS `k=mldsa44` with a raw `p=` is a local interpretation (`DKIM2-ISSUE-0020`); the signer emits `rsa,ed25519 \| mldsa44`; `PrivateKeySignRequest` carries the message representative; the composite stays unimplemented (`DKIM2-ISSUE-0019` superseded). |
+| 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Added Draft-08 Section 3.4 pure ML-DSA-44 (`mldsa44`) for verification and signing. `internal/cryptodkim2` owns each algorithm's message representative (SHA-256 digest for `rsa-sha256` and `ed25519-sha256`, the complete Section 12.8 input for `mldsa44`, signed with hedged `crypto/mldsa` and the context string `DKIM2`), exact 1312/2420-octet key and signature sizes, per-algorithm signature caps, and the ML-DSA runtime guard (the FIPS 140-3 Go Cryptographic Module v1.0.0 fails closed). DNS `k=mldsa44` with a raw `p=` is a local interpretation (`DKIM2-ISSUE-0020`); the signer emits `rsa,ed25519 \| mldsa44`; `PrivateKeySignRequest` carries the message representative; the composite stays unimplemented (`DKIM2-ISSUE-0019` superseded). |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Added the RSA signing floor: signing credentials, loaded signing profiles, and `dkim2d` custody keys require RSA moduli of at least 2048 bits (Draft-08 Section 3.2 SHOULD made a local MUST, `MinSigningRSABits`); verification keeps 1024 to 8192 bits. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Replaced the DSN signing identity with the Draft-08 Section 16.2 resolver: `Signer.ResolveDSNSigningIdentity` binds only a local `delivery_status` profile domain that relaxed-matches an `rt=` address of the returned original's highest DKIM2-Signature and makes the report From Authentic (Sections 11, 12.4), RFC 3464-linked recipients first, then `reporting_domain` when it matches, then the most specific domain. The derived "embedded highest `d=`" identity and the unconditional reporting identity are removed; `reporting_domain` keeps its stable path with the new meaning "preferred candidate when matching". A report without such a domain leaves unsigned: `/v1/dsn/sign` answers 204 with the closed `X-DKIM2-Unsigned-Reason`, adapters continue without mutation, and `dkim2d_dsn_unsigned_total{unsigned_reason}` counts it. Propagation refuses a completion `d=` that does not relaxed-match the previous hop's `rt=` (`forbidden_identity_misaligned`). |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Moved trace-field placement to the top of the header block (Draft-08 Sections 9 and 10, RFC 5322 Section 3.6 SHOULD): the Milter inserts this hop's `Message-Instance`, `DKIM2-Signature`, and optional `X-DKIM2-Info` with `SMFIR_INSHEADER` index 0 in reverse plan order, which lands above Postfix's own `Received` field, and the Exim transport filter prepends the same block above Exim's `Received` field. The action plan is unchanged and documents the top-down block order. Verification and the Section 16.3 rebuild are placement-independent. Library completed-message outputs still append. The Postfix profile pins the queued top-of-header order. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Moved library completed-message placement to the top of the header block through the single owner `rawmsg.PrependValidatedFields`. The signing completion proof identifies this hop's fields by `m=` and `i=` instead of the last physical `DKIM2-Signature` and still rejects forged, altered, or reordered protocol fields. `/v1/revise/batch` `insertion_offset` is always 0 and its fields are top-down. Propagated DSNs are top-placed and pinned by the Postfix profile. |
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Completed the Draft-08/DNS-02 migration: the Postfix not_local fixture reports a foreign-addressed message as Section 16.2 requires, the datasource hard limits follow the one-handle-per-credential derivation (393216 handles, 1179648 records), `VerifierHop.signature_algorithms` lists only the verified Section 3 algorithms (no `rsa-sha512` or `ed25519-sha512`, at most three), the Rspamd Policy E2E projection bindings follow the producer for Draft-08, `make guardrails` also runs the tools-module runner tests and the Rspamd projection binding lock, the reviewed library API baseline moved to the Draft-08 surface, and the operator guide `docs/operator/draft-08-migration.md` records the upgrade and rollback. |
 | 0.1.0-draft | 2026-10-29 | Christian Roessner / Claude | Replaced the standalone-only `valkey` replay backend (valkey-go, auditor principal, operator attestation, revalidation loop) with the `redis` backend (`cmd/dkim2d/internal/replay/redisstore`, go-redis v9.22.0) for standalone, Sentinel, and cluster Redis 7.0+ or Valkey 7.2+, configured under `replay.redis`. Writes carry a per-operation nonce (`v2:<nonce>`, `pending:<expiry-ms>:<nonce>`) so client retries, failover, and redirects recognize their own commit; the lease takeover is a single-key Lua compare-and-set; legacy `v1` and `pending:<expiry-ms>` values stay readable and key derivation is unchanged. Startup checks the version floor and `noeviction`, a `PING` health probe drives readiness, and `replay.valkey.*`, `replay.revalidate_interval`, and backend `valkey` fail with `config_removed_field` pointing to `docs/operator/replay-redis-migration.md`. Breaking configuration change for release v0.2.0. |
-| 0.1.0-draft | 2026-11-02 | Christian Roessner / Claude | Advanced the message baseline to `draft-ietf-dkim-dkim2-spec-09` (DNS stays `draft-ietf-dkim-dkim2-dns-02`). Verification gains the fifth state NONE (`/v1/process` HTTP 200 with `dkim2=none`), the Section 3.8 Domain Policy Record (`lib/internal/keyresolver` owns parsing and selection, `lib/internal/verify` the two-way Authentic From match and its result algebra, evaluated after every signature proof and before the replay projection), the reasons `from_subdomain_forbidden`, `domain_policy_temporary`, `domain_policy_ambiguous`, and `domain_policy_invalid`, the Section 3.7 version filter before key-record uniqueness with a carry bound of eight TXT records, PERMERROR for a null body Recipe, and the Section 2.14 base64string grammar without leading or trailing FWS. Library verifiers and signers require an explicit subdomain-From choice; `dkim2d` adds `verification.domain_policy.allow_subdomain_from` (default true) and `--domain-policy-strict` on the DNS export. Signers stay downward only. `X-DKIM2-Info` `date=` becomes the behavior date. See `docs/specs/draft-09-migration-disposition.md` and `docs/operator/draft-09-migration.md`. |
+| 0.1.0-draft | 2026-11-02 | Christian Roessner / Claude | Advanced the message baseline to `draft-ietf-dkim-dkim2-spec-09` (DNS stays `draft-ietf-dkim-dkim2-dns-02`). Verification gains the fifth state NONE (`/v1/process` HTTP 200 with `dkim2=none`), the Section 3.8 Domain Policy Record (`internal/keyresolver` owns parsing and selection, `internal/verify` the two-way Authentic From match and its result algebra, evaluated after every signature proof and before the replay projection), the reasons `from_subdomain_forbidden`, `domain_policy_temporary`, `domain_policy_ambiguous`, and `domain_policy_invalid`, the Section 3.7 version filter before key-record uniqueness with a carry bound of eight TXT records, PERMERROR for a null body Recipe, and the Section 2.14 base64string grammar without leading or trailing FWS. Library verifiers and signers require an explicit subdomain-From choice; `dkim2d` adds `verification.domain_policy.allow_subdomain_from` (default true) and `--domain-policy-strict` on the DNS export. Signers stay downward only. `X-DKIM2-Info` `date=` becomes the behavior date. See `docs/specs/draft-09-migration-disposition.md` and `docs/operator/draft-09-migration.md`. |
 
 ## 1. Purpose
 
@@ -129,8 +129,8 @@ implementations.
 
 Initial modules:
 
-- `lib`: the DKIM2 reference library at the canonical module path
-  `github.com/croessner/dkim2`. The public `github.com/go-dkim2/dkim2`
+- Root library module: the DKIM2 reference library at the canonical module
+  path `github.com/croessner/dkim2`, located at the repository root. The public `github.com/go-dkim2/dkim2`
   repository is a source mirror, not an alternative module identity.
 - `cmd/dkim2d`: an HTTP/JSON service module.
 - `cmd/dkim2-milter`: a Milter adapter module.
@@ -193,7 +193,7 @@ The core must preserve:
 - EAI/SMTPUTF8-relevant message values as bytes. Draft-09 Section 18 defines
   the only EAI transformation: SMTP and From domains are mapped from U-labels
   to A-labels before recording and comparison, owned by
-  `lib/internal/domainname`; local parts are never changed.
+  `internal/domainname`; local parts are never changed.
 
 The core must not depend on `net/mail` for canonicalization, signing, recipe
 handling, or verification. Standard library parsers can be useful for optional
@@ -229,10 +229,10 @@ cmd/dkim2-milter module      cmd/dkim2d module      cmd/dkim2ctl module
 
 `go.work` is a development convenience, not the product boundary. Once adapter
 code imports the library, command modules should require the library module in
-their own `go.mod`; the workspace will select the local `lib` module during
-development. Released command modules should depend on tagged library versions.
-Local `replace` directives should only be needed when an adapter is developed
-outside this workspace.
+their own `go.mod`; the workspace will select the local root library module
+during development. Released command modules should depend on tagged library
+versions. Local `replace` directives should only be needed when an adapter is
+developed outside this workspace.
 
 Before candidate preparation, an adapter that imported the unpublished library
 used the non-releasable sentinel `github.com/croessner/dkim2 v0.0.0` and one
@@ -299,13 +299,14 @@ designed so test fixtures can inject:
 
 The Go module boundary is part of the architecture:
 
-- The reference library lives in `lib/`.
+- The reference library is the root module at the repository root (nested
+  `cmd/*`, `tools/`, and `contrib/` helper modules are excluded).
 - Adapter implementations live in separate modules under `cmd/`.
 - Adapter-specific dependencies must not appear in the library module.
 - The library exposes a public facade at its module root. Its current path is
   `github.com/croessner/dkim2`; any future publication-path change requires an
   explicit module migration.
-- Internal implementation packages should remain under `lib/internal`.
+- Internal implementation packages should remain under `internal`.
 - Command modules should normally import only the public library facade.
 - Temporary local development uses `go.work`; releases use tagged module
   versions.
@@ -386,30 +387,29 @@ The first project layout is:
 │           ├── dkim2d.yaml
 │           ├── oapi-codegen.server.yml
 │           └── oapi-codegen.client.yml
-├── lib/
-│   ├── go.mod
-│   ├── doc.go
-│   └── internal/
-│       ├── rawmsg/
-│       │   └── doc.go
-│       ├── canonical/
-│       │   └── doc.go
-│       ├── instance/
-│       │   └── doc.go
-│       ├── signature/
-│       │   └── doc.go
-│       ├── recipe/
-│       │   └── doc.go
-│       ├── keyresolver/
-│       │   └── doc.go
-│       ├── datasource/
-│       │   └── doc.go
-│       ├── observability/
-│       │   └── doc.go
-│       ├── policy/
-│       │   └── doc.go
-│       └── service/
-│           └── doc.go
+├── go.mod
+├── doc.go
+├── internal/
+│   ├── rawmsg/
+│   │   └── doc.go
+│   ├── canonical/
+│   │   └── doc.go
+│   ├── instance/
+│   │   └── doc.go
+│   ├── signature/
+│   │   └── doc.go
+│   ├── recipe/
+│   │   └── doc.go
+│   ├── keyresolver/
+│   │   └── doc.go
+│   ├── datasource/
+│   │   └── doc.go
+│   ├── observability/
+│   │   └── doc.go
+│   ├── policy/
+│   │   └── doc.go
+│   └── service/
+│       └── doc.go
 ├── cmd/
 │   ├── dkim2d/
 │   │   ├── go.mod
@@ -449,7 +449,7 @@ docs/
 ├── specs/openapi/
 └── reference/
 
-lib/internal/
+internal/
 ├── crypto/
 ├── dnskey/
 ├── datasource/
@@ -492,7 +492,7 @@ part is that responsibilities stay separate.
 
 ## 5. Package Responsibilities
 
-### 5.1 `lib` / public library module
+### 5.1 Root library module
 
 Public facade for callers that want to embed the reference implementation.
 
@@ -536,7 +536,7 @@ algorithm like any other unknown token: its set is the Section 14.6 step 4
 PERMERROR intermediate `unsupported_algorithm`, and a
 `k=mldsa44-ed25519-sha512` DNS record is an unsupported key type.
 
-### 5.2 `lib/internal/rawmsg`
+### 5.2 `internal/rawmsg`
 
 Owns the controlled RFC 5322 message representation.
 
@@ -581,7 +581,7 @@ Design notes:
 - Recipe generation may need line-level body indexing, so line indexing belongs
   near raw message handling.
 
-### 5.3 `lib/internal/canonical`
+### 5.3 `internal/canonical`
 
 Implements DKIM2 canonicalization rules.
 
@@ -611,7 +611,7 @@ Design notes:
   implementation satisfies a recipe-owned consumer interface through normal Go
   method-set compatibility; external integration tests prove the wiring.
 
-### 5.4 `lib/internal/instance`
+### 5.4 `internal/instance`
 
 Owns `Message-Instance` parsing, validation, formatting, and relation to message
 hashes.
@@ -642,7 +642,7 @@ Important invariants:
   pass; they pass only through another `|` group.
 - Base64 values must honor the draft's padding requirement.
 
-### 5.5 `lib/internal/recipe`
+### 5.5 `internal/recipe`
 
 Owns recipe generation and application.
 
@@ -664,7 +664,7 @@ Design notes:
   and framing.
 - Generated decoded JSON uses a fixed compact representation and must pass the
   same strict parser and applier limits before success. Padded base64 and
-  Message-Instance formatting remain `lib/internal/instance` and M10 concerns.
+  Message-Instance formatting remain `internal/instance` and M10 concerns.
 - Body unavailability is a closed explicit caller policy for content that is
   unrepresentable or forbidden by copy-only disclosure, never a fallback for
   limits, cancellation, or internal failure. Relevant headers have no
@@ -695,7 +695,7 @@ Design notes:
 - The parser requires a header relevance classifier and rejects recipes for
   header fields that are never signed (Draft-09 Sections 4 and 5.1).
 
-### 5.6 `lib/internal/signature`
+### 5.6 `internal/signature`
 
 Owns `DKIM2-Signature` parsing, validation, formatting, and signature input
 assembly.
@@ -732,7 +732,7 @@ Important invariants:
 - The signature only signs DKIM2 protocol fields, while the message content is
   covered through Message-Instance hashes.
 
-### 5.7 `lib/internal/keyresolver`
+### 5.7 `internal/keyresolver`
 
 Owns DNS key lookup and DKIM2 key record parsing.
 
@@ -776,7 +776,7 @@ Design notes:
   transport returns. No helper goroutine masks an injected transport that
   ignores context.
 
-### 5.8 `lib/internal/datasource`
+### 5.8 `internal/datasource`
 
 Defines storage-facing abstractions and first providers without binding
 protocol code to service frameworks, LDAP, SQL, or a specific secret store.
@@ -802,10 +802,10 @@ Responsibilities:
 
 Design notes:
 
-- `lib/internal/datasource/memory` depends only on datasource core.
-  `lib/internal/datasource/flatfile` additionally composes the immutable memory
+- `internal/datasource/memory` depends only on datasource core.
+  `internal/datasource/flatfile` additionally composes the immutable memory
   provider after strict decoding. Neither imports signing or service
-  dependencies. `lib/internal/datasource/signingprofile` is the sole package
+  dependencies. `internal/datasource/signingprofile` is the sole package
   that imports both datasource and signing.
 - The library signing bridge maps exact provider-neutral handle IDs through an
   immutable registry to inert signing handles. Concrete daemon LDAP and SQL
@@ -822,7 +822,7 @@ Design notes:
 - Datasource failures that affect verification or signing correctness should
   fail closed by default.
 
-### 5.9 `lib/internal/observability`
+### 5.9 `internal/observability`
 
 Defines library-safe observation events and policy helpers without binding the
 library to concrete exporters.
@@ -840,7 +840,7 @@ Non-responsibilities:
 - Prometheus registry ownership.
 - `slog` handler configuration.
 
-### 5.10 `lib/internal/policy`
+### 5.10 `internal/policy`
 
 Owns local policy decisions over verified protocol facts.
 
@@ -871,7 +871,7 @@ verification and therefore has no four-state result to evaluate. This is not a
 permissive override. Partial or malformed DKIM2 protocol state remains
 applicable and reaches normal fail-closed verification and policy.
 
-### 5.11 `lib/internal/service`
+### 5.11 `internal/service`
 
 Coordinates domain packages into use cases.
 
@@ -1905,8 +1905,8 @@ under `cmd/dkim2d/internal/datasource/ldap`, and implements only the existing
 storage-neutral contracts. The migration command belongs to a command/service
 module but remains separate from the read-only provider and from protocol
 packages. LDAP client types, records, controls, DNs, and schema helpers must
-not enter `lib`, signing, verification, OpenAPI DTOs, Milter code, or Exim
-code.
+not enter the root library module, signing, verification, OpenAPI DTOs, Milter
+code, or Exim code.
 
 M22 integration evidence must include:
 
@@ -2377,7 +2377,7 @@ Rules:
   `rsa-sha256`, `ed25519-sha256`, and `mldsa44`. The Draft-07 composite
   `mldsa44-ed25519-sha512` that Draft-08 replaced stays an unknown algorithm
   (`DKIM2-ISSUE-0019`, superseded by the baseline).
-- `lib/internal/cryptodkim2` is the single owner of the message
+- `internal/cryptodkim2` is the single owner of the message
   representative (`MessageRepresentative`: the SHA-256 digest for the
   classical algorithms, the complete input for `mldsa44`), of the
   `mldsa44` context string `DKIM2` (`MLDSA44SignerOptions`), of exact key and
@@ -2609,22 +2609,22 @@ additional supported lane.
 Recommended local gates:
 
 ```text
-go test ./lib/...
+go test ./...
 go test ./cmd/dkim2d/...
 go test ./cmd/dkim2-milter/...
 go test ./cmd/dkim2ctl/...
-go test -race ./lib/...
-go vet ./lib/...
+go test -race ./...
+go vet ./...
 go vet ./cmd/dkim2d/...
 go vet ./cmd/dkim2-milter/...
 go vet ./cmd/dkim2ctl/...
-govulncheck ./lib/...
+govulncheck ./...
 govulncheck ./cmd/dkim2d/...
 govulncheck ./cmd/dkim2-milter/...
 govulncheck ./cmd/dkim2ctl/...
-golangci-lint run ./lib/... ./cmd/dkim2d/... ./cmd/dkim2-milter/... ./cmd/dkim2ctl/...
+golangci-lint run ./... ./cmd/dkim2d/... ./cmd/dkim2-milter/... ./cmd/dkim2ctl/...
 make check-openapi
-gofmt -w lib cmd
+make fmt
 ```
 
 The canonical local command should become:
@@ -3031,9 +3031,9 @@ adding daemon, datasource, observability, Milter, or recipe complexity.
 
 Implementation order:
 
-1. Build `lib/internal/rawmsg`.
-2. Build `lib/internal/instance` and `lib/internal/signature` parsers.
-3. Build `lib/internal/canonical` with golden tests.
+1. Build `internal/rawmsg`.
+2. Build `internal/instance` and `internal/signature` parsers.
+3. Build `internal/canonical` with golden tests.
 4. Build static-key signature verification without DNS.
 5. Build structured verification results and current-message checks.
 6. Add draft-versioned MVP golden vectors.

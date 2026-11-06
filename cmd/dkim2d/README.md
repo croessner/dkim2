@@ -888,7 +888,7 @@ digests, DNS content, provider errors, or key material.
 The protected campaign configuration uses five distinct role credentials:
 snapshot, staging, activation, purge, and the terminal-only closer. All configured limits are finite and
 below compiled maxima. The selected public compatibility contract is
-[`admincontract`](../../lib/admincontract), whose strict synthetic fixture is
+[`admincontract`](../../admincontract), whose strict synthetic fixture is
 checked by `make check-admin-contract` before a consumer binds the owner API.
 
 ### Process-local memory replay

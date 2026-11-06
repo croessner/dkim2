@@ -46,7 +46,7 @@ Message fidelity must state what Exim exposed; it must never claim that a
 `local_scan()` or `transport_filter` representation is the original SMTP DATA
 octet stream.
 
-Milter code reuse, a libmilter dependency, Exim structures in `lib/`, a
+Milter code reuse, a libmilter dependency, Exim structures in the root library module, a
 handwritten REST model, daemon-internal imports, dynamic Exim module loading,
 arbitrary Exim header/recipient mutation, remote daemon transport, LDAP/SQL
 work, next-domain transit and general key management are out of scope.
@@ -214,7 +214,7 @@ Measured effort is filled during closeout:
 
 ## Product And Package Boundaries
 
-`lib/` remains unchanged unless an independently demonstrated core defect
+The root library module remains unchanged unless an independently demonstrated core defect
 requires a reproducer-first fix. It owns all DKIM2 parsing, verification,
 signing, revision and policy behavior. It must not import Exim, C, cgo,
 OpenAPI, command or adapter types.
@@ -243,7 +243,7 @@ codec uses adapter-owned primitive fields, never `header_line`,
 `cmd/dkim2-milter` is not imported and is not copied wholesale. Small
 transport-neutral rules such as strict daemon action admission may be moved to
 a new explicit command-boundary package only if that removes real duplication
-without introducing Milter or Exim models into `lib/`. Otherwise the Exim
+without introducing Milter or Exim models into the root library module. Otherwise the Exim
 module owns an independently tested admission implementation against the same
 OpenAPI contract.
 
@@ -949,7 +949,7 @@ contains the exact post-colon bytes, including required legal leading SP or
 HTAB folding whitespace. Missing or illegal post-colon folding whitespace is a
 contract failure. The value is the daemon-proved canonical-equivalent legal
 unfolding of the library-rendered field, whose frozen grammar emits a TAB only
-directly after a CRLF. `lib/headerfold` therefore restores an LF line break
+directly after a CRLF. `headerfold` therefore restores an LF line break
 before every TAB after the first value octet, so the written field regains the
 library's fold points; a field with a physical line over 998 octets is a
 contract failure. Without this, a long `DKIM2-Signature` (for example an
@@ -1282,7 +1282,7 @@ Generated and documentation checks:
 - workspace/module/vendor metadata includes the new module;
 - C fixtures retain license/provenance and matrix version metadata;
 - compatibility report and operator/build docs match the tested versions;
-- dependency guards prove no Exim/Milter/service imports in `lib/` and no
+- dependency guards prove no Exim/Milter/service imports in the root library module and no
   Milter imports in the Exim module.
 
 Final unchanged-snapshot gates:

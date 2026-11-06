@@ -93,7 +93,7 @@ func TestVerifierProjectionBindingGolden(t *testing.T) {
 // loadVerifierProjectionGolden decodes the shared reference vector strictly.
 func loadVerifierProjectionGolden(t *testing.T) verifierProjectionGolden {
 	t.Helper()
-	data, err := os.ReadFile("../../../testdata/reference/verifier-projection-v1-binding.json")
+	data, err := os.ReadFile("../../testdata/reference/verifier-projection-v1-binding.json")
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}

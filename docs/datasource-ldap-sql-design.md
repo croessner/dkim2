@@ -4,7 +4,7 @@ Status: implemented contract for daemon-owned LDAP, PostgreSQL, MySQL, and Maria
 
 This document defines how LDAP, PostgreSQL, MySQL, and MariaDB readers map persisted
 administrative data into the existing storage-neutral contracts in
-`lib/internal/datasource`. Deployable schema and DDL live in `contrib/schema`;
+`internal/datasource`. Deployable schema and DDL live in `contrib/schema`;
 installation, daemon configuration, and migration procedures live in
 `docs/operator/datasource-backends.md` and
 `docs/operator/opendkim-migration.md`.
@@ -22,12 +22,12 @@ DNS publication, policy, or protocol behavior.
 ## Ownership And Non-Goals
 
 Datasource contracts and validation remain owned by
-`lib/internal/datasource`. A concrete provider belongs in an explicit provider
+`internal/datasource`. A concrete provider belongs in an explicit provider
 package and is wired by a service module. LDAP libraries, SQL drivers,
 connection pools, migration tools, and configuration frameworks must not
 become dependencies of the standalone library or protocol packages.
 
-`lib/internal/datasource/signingprofile` remains the only bridge from a
+`internal/datasource/signingprofile` remains the only bridge from a
 datasource result to the signing profile. A provider returns only an opaque
 `KeyHandleID`; for every network datasource v2 provider, the same immutable generation maps
 that identifier to canonical PKCS#8 DER and an inert in-memory signing handle.

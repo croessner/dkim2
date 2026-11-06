@@ -110,7 +110,7 @@ Three things are missing:
    and the Draft-09 Section 16.4 linkage between the DSN and a message this
    system previously signed are not evaluated. No structured DSN fact reaches
    the Milter, Rspamd, or any policy consumer. The Section 16.4 checks exist
-   as internal machinery in `lib/internal/dsn/evidence.go` but are reachable
+   as internal machinery in `internal/dsn/evidence.go` but are reachable
    only through the outgoing signing facade, which evaluates the outer
    recipient against an *outgoing* envelope.
 2. **DSN rebuild.** Draft-09 Section 16.3 requires a Forwarder that
@@ -118,7 +118,7 @@ Three things are missing:
    undo its own modifications through the authenticated recipe, degrade to
    `text/rfc822-headers` when the body cannot be reconstructed, and neutralize
    destination-specific text. The verifier performs a historical descent for
-   chain verification (`lib/internal/verify/history.go`) and the recipe
+   chain verification (`internal/verify/history.go`) and the recipe
    applier reconstructs previous states, but the descent proves hashes only,
    its public entry point expects a body-known current state, the recipe
    package exports no headers-only state constructor, and no historical
@@ -889,27 +889,27 @@ requirements for other MTAs without Postfix parameter names.
 
 ## Package Boundaries
 
-- `lib/internal/dsn`: gains the received-DSN evaluation stages that differ
+- `internal/dsn`: gains the received-DSN evaluation stages that differ
   from the outgoing path (local authority classification hook, outer signer
   alignment, local-hop identity against an observed outer recipient, local
   hop run detection, failure-class selection), plus the deterministic RFC 6522
   report generator with closed templates. It keeps byte-preserving parsing and
   bounded immutable evidence.
-- `lib/internal/verify`: gains one internal seam for the run descent that
+- `internal/verify`: gains one internal seam for the run descent that
   accepts an already-proven current state with a possibly unavailable body,
   and one historical-target verification seam that verifies a signature over
   a reconstructed state. Both reuse the history coordinator, applier, and
   current-target crypto; neither changes verification semantics for existing
   callers.
-- `lib/internal/recipe`: unchanged in application and generation semantics.
+- `internal/recipe`: unchanged in application and generation semantics.
   It gains an exported headers-only state constructor, because today only a
   body-known state can be built from outside the package, plus any read-only
   accessors the header-only serializer needs; the serializer itself lives in
-  `lib/internal/dsn`.
-- `lib/internal/routeplan` and `lib/internal/signing`: add the
+  `internal/dsn`.
+- `internal/routeplan` and `internal/signing`: add the
   `delivery_status_propagation` route purpose and the propagation signing
   request whose authority is the completion signature's domain.
-- `lib`: owns the public facades `Verifier.EvaluateReceivedDSN`,
+- Root library module: owns the public facades `Verifier.EvaluateReceivedDSN`,
   `Signer.RebuildDSNForPropagation`, and `Signer.SignPropagatedDSN`, the
   immutable `ReceivedDSNEvaluation`, `DSNPropagationEvidence`, and
   `PropagatedDSN` types, a narrow `LocalAuthority` interface that answers
@@ -930,7 +930,7 @@ requirements for other MTAs without Postfix parameter names.
   wrapper, same confinement rules as the Milter), `config`, `securefile`,
   `observability`, and `app` (Fx composition). It depends on the generated
   client, Cobra, Viper, Fx, `slog`, Prometheus, and the standard library. It
-  must not import `lib` protocol packages; it is transport glue.
+  must not import root library protocol packages; it is transport glue.
 - `cmd/dkim2ctl`: gains propagation fixtures and stable projections over the
   generated client only.
 - `cmd/dkim2-milter`: the inbound response validator tolerates the optional
@@ -1188,7 +1188,7 @@ Unit tests, library:
   preserved and invalid status code fallback to `5.0.0`, ENVID copy and
   invalid ENVID drop, conditional `Original-Recipient` copy,
   and byte-exact golden vectors under
-  `lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/`;
+  `testdata/vectors/draft-ietf-dkim-dkim2-spec-09/`;
 - report generation: closed template output, absence of every forbidden field,
   presence of every RFC 3464 required field, deterministic bytes, CRLF
   discipline, and a test proving the status code and ENVID are the only
@@ -1447,7 +1447,7 @@ Final gate:
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
 | Scope | Received-DSN evaluation, rebuild, propagation route, adapter, projections, docs | All slices implemented; the qualification lane passes end to end and the documentation set is complete | done | See "Completion Evidence" |
-| Behavior | Draft-09 Sections 10.7, 12.3, 14.4, 16, 16.3, 16.4 and RFC 6522/3464/3834/2033 semantics are explicit and tested | Covered by unit, golden-vector, and fuzz coverage in `lib` and by daemon and adapter tests; the received-report RFC 3464 profile accepts the Postfix field order and is frozen in the golden corpus; the propagation route applies the outer verdict before the evaluation, so an unreadable outer signature is `reject`, never `tempfail`, and `/v1/process` keeps the outer `permerror` without a daemon error | done | The Milter ordinary-transit envelope inheritance is a documented limitation with a documented alternative |
+| Behavior | Draft-09 Sections 10.7, 12.3, 14.4, 16, 16.3, 16.4 and RFC 6522/3464/3834/2033 semantics are explicit and tested | Covered by unit, golden-vector, and fuzz coverage in the root library module and by daemon and adapter tests; the received-report RFC 3464 profile accepts the Postfix field order and is frozen in the golden corpus; the propagation route applies the outer verdict before the evaluation, so an unreadable outer signature is `reject`, never `tempfail`, and `/v1/process` keeps the outer `permerror` without a daemon error | done | The Milter ordinary-transit envelope inheritance is a documented limitation with a documented alternative |
 | Security | Datasource-defined locality, read-only evaluation, verified previous hop, replay gate, fail-closed rebuild, no destination leakage, secret-safe diagnostics | Preserved; the propagation capability is refused together with the disabled replay backend at configuration load and at lifecycle composition, so the route never composes without a stored coordinate; the qualification stack keeps loopback-only transports, owned Unix sockets, distinct protected capabilities, and content-free diagnostics | done | The outer-identity coordinate (one propagated DSN per distinct aligned notification, no amplification) and the imaginary-hop-below-`nd=` one-hop cost are recorded as accepted limits, not open items |
 | Boundaries | Library, daemon, generated client, adapter, Milter, Rspamd stay purpose-separated | Unchanged; the qualification harness reaches production only through public HTTP routes, the LMTP socket, and the public verifier | done | No protocol logic was duplicated into the harness |
 | Tests | Unit, golden, fuzz, race, privacy, daemon, adapter, client, and real-MTA evidence exist | Present. On real Postfix the propagation lane runs the positive path plus spoofed, terminal origin, `not_local` (foreign completion `d=`, classification proven through `/v1/process`), duplicate after commit, re-injection outage, and in-lease retry. Library-only by design: a foreign signature naming a local address in `mf=` and a null previous sender (golden vectors). The real-Valkey gate carries reservation, expired-lease re-serve, and commit cases that run only where the 9.1.0 binary is present | done | The Rspamd enabled-attribute variant is blocked on the external Nauthilus example policy (`403` evidence); the Valkey propagation cases were not executed on the development host (9.1.1) |

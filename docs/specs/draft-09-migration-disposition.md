@@ -206,7 +206,7 @@ to the maintainer.
   (`DraftIetfDkimDkim2Spec09`).
 - Before the in-place rename, the Draft-08 versions of the vector and golden
   corpora were copied to
-  `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-spec-08/`.
+  `testdata/vectors/history/draft-ietf-dkim-dkim2-spec-08/`.
 - Draft-bound goldens (replay storage keys and propagation key, origin
   declaration digest and frame, verifier-projection binding, the Rspamd Policy
   E2E projection bindings, and the conformance manifest digests) were
@@ -218,14 +218,14 @@ to the maintainer.
 
 ## 9. Implementation state
 
-- Area 2: `lib/internal/tagvalue` rejects leading and trailing FWS on a
+- Area 2: `internal/tagvalue` rejects leading and trailing FWS on a
   strict base64string (`invalid_base64_whitespace`); hash and signature set
   parsing rejects leading FWS on `h=` and `s=` values. The renderer folds
   `rt=` inside the next recipient; the parser keeps accepting FWS after an
   `rt=` comma and rejects FWS before one (`DKIM2-ISSUE-0024`).
 - Area 3: `ProtocolForVerificationReason` maps `body_history_unavailable` to
   PERMERROR.
-- Area 4: `lib/internal/keyresolver` carries up to eight TXT records
+- Area 4: `internal/keyresolver` carries up to eight TXT records
   (`dkim2.MaxCarriedTXTRecords`), ignores records whose leading `v=` is not
   `DKIM1` before the per-record byte bound, and applies uniqueness and the
   byte bound to the rest. Domain Policy Records use the same order.

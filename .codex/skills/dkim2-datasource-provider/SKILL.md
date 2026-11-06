@@ -35,7 +35,7 @@ Read `AGENTS.md`, `POLICY.md`, and `docs/ARCHITECTURE.md`, especially
   the library value grammar and treat a previous value equal to the own value
   as the operation's own commit; keep unprovable outcomes `indeterminate`.
 - Keep the value grammar (`v2:<nonce>`, `pending:<expiry-ms>:<nonce>`,
-  `committed`, legacy `v1` and `pending:<expiry-ms>`) in `lib/internal/replay`.
+  `committed`, legacy `v1` and `pending:<expiry-ms>`) in `internal/replay`.
 - Use single-key commands only, pinned through explicit argument vectors
   (`PX`, never `EX`); no pipelines, transactions, or standalone reads.
 - Use privacy-preserving replay keys with algorithm/version markers.

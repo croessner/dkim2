@@ -144,13 +144,13 @@ This increment does not:
 
 ## Ownership And Repository Layout
 
-Protocol rules remain in `lib/`. The suite may expose no command, OpenAPI,
+Protocol rules remain in the root library module. The suite may expose no command, OpenAPI,
 Milter, Docker, or report dependency from the library module.
 
 Package-owned fixtures stay close to their implementation:
 
 ```text
-lib/testdata/vectors/
+testdata/vectors/
   draft-ietf-dkim-dkim2-spec-04/
   draft-ietf-dkim-dkim2-dns-02/
 

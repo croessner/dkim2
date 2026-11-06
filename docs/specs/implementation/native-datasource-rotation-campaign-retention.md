@@ -429,7 +429,7 @@ partial large generation.
 
 ## Package Boundaries
 
-- `lib/internal/datasource` and `lib/provider`: authoritative datasource
+- `internal/datasource` and `provider`: authoritative datasource
   limits, canonical validation, immutable runtime model, and large-corpus
   complexity fixes; no LDAP/SQL/CLI dependencies.
 - `cmd/dkim2d/internal/datasourceadmin`: provider-neutral protected snapshots,

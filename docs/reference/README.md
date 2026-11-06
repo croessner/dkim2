@@ -5,6 +5,11 @@ remains the pinned drafts and repository architecture; OpenAPI truth remains
 the generated source contract. Reference prose summarizes tested behavior and
 limitations without creating a second protocol model.
 
+Note: historical implementation records and reports written before v0.3.3
+refer to the former `lib/` directory; since v0.3.3 the library module lives at
+the repository root with the unchanged module path
+`github.com/croessner/dkim2`.
+
 - [Administrator guides](../guide/README.md) are the example-driven entry
   point for first-time installers: concepts, tags and flags, `dkim2d`, keys
   and DNS, and step-by-step Postfix and Exim setups.

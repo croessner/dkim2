@@ -21,7 +21,7 @@
 - Increment: DNS key resolution after the public current-verification facade.
 - Protocol baseline: `draft-ietf-dkim-dkim2-spec-04` and
   `draft-ietf-dkim-dkim2-dns-02`.
-- Architecture owner: `lib/internal/keyresolver`, with a public provider
+- Architecture owner: `internal/keyresolver`, with a public provider
   adapter in the root library package.
 - Status: implemented; final unchanged-diff proof and milestone commit pending.
 - Commit: the milestone commit containing this document.
@@ -121,7 +121,7 @@ literally together with the active DKIM2 signature draft:
 
 ## Package And Dependency Boundaries
 
-`lib/internal/keyresolver` owns:
+`internal/keyresolver` owns:
 
 - DNS owner construction and validation.
 - TXT answer and transport contracts.
@@ -137,10 +137,10 @@ The root `dkim2` package owns:
 - Mapping resolver outcomes into the existing closed public provider matrix.
 - Public typed metadata only where later policy must consume it.
 
-`lib/internal/verify` continues to own public-key validation and cryptographic
+`internal/verify` continues to own public-key validation and cryptographic
 verification. The DNS resolver must reuse those rules or a single shared
 domain-owned validator; it must not implement a second signature verifier.
-`lib/internal/service` remains the only four-state result mapper.
+`internal/service` remains the only four-state result mapper.
 
 Internal packages never import the root package. The standalone library gains
 no daemon, OpenAPI, Cobra, Viper, Fx, Prometheus, exporter, LDAP, SQL, Valkey,
@@ -264,7 +264,7 @@ transports may enable caching.
 - The input is the concatenated bytes of one TXT resource record.
 - The parser consumes `tagvalue.Scan` in an exact, case-sensitive DNS-record
   mode for DNS-04 Section 3.2 syntax, duplicate detection, and FWS handling.
-  `lib/internal/tagvalue` remains the single generic scanner owner; any needed
+  `internal/tagvalue` remains the single generic scanner owner; any needed
   DNS lexical option is added there with cross-package contract tests rather
   than forking a scanner in `keyresolver`.
 - Tag names are case-sensitive and the defined tags are lowercase. `V=`,

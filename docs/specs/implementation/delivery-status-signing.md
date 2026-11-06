@@ -214,7 +214,7 @@ originals: the report goes to the `mf=` of the highest DKIM2-Signature, and
 DKIM2-Signature; such a report remains a classic RFC 3464 notification.
 
 The library therefore distinguishes absence from failure. Before verification,
-`lib/internal/dsn` checks the parsed embedded original of both the
+`internal/dsn` checks the parsed embedded original of both the
 `message/rfc822` and the `text/rfc822-headers` representation for a
 DKIM2-Signature header field under any ASCII case. With none present it
 reports `unsigned_embedded_message`, which the public facade maps to the
@@ -267,9 +267,9 @@ parallel REST model.
 
 ## Package Boundaries
 
-- `lib/internal/dsn`: owns byte-preserving DSN framing, bounded immutable
+- `internal/dsn`: owns byte-preserving DSN framing, bounded immutable
   evidence, and typed DSN parse/evidence failures.
-- `lib`: owns narrow public DSN request/result facades and purpose-specific
+- Root library module: owns narrow public DSN request/result facades and purpose-specific
   signing/verification methods. It imports no daemon, OpenAPI, Milter, or
   datasource implementation dependencies.
 - `cmd/dkim2d/internal/app`: owns DSN operation orchestration, verified-domain
@@ -316,7 +316,7 @@ observation does not change the REST result or Milter disposition.
 
 1. Freeze Draft/RFC evidence, local alignment interpretation, contracts,
    limits, typed errors, and public-library seams with reproducer tests.
-2. Implement byte-preserving DSN framing and embedded evidence in `lib`.
+2. Implement byte-preserving DSN framing and embedded evidence in the root library module.
 3. Add daemon policy/identity ownership and separate DSN operations; make
    generic null-path signing unavailable.
 4. Change OpenAPI first, regenerate all server/client artifacts, and map the

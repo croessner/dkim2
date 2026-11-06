@@ -1,10 +1,12 @@
 package datasource
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -249,7 +251,7 @@ func walkDependencySources(
 	for _, entry := range entries {
 		relative := filepath.Join(relativeDirectory, entry.Name())
 		if entry.IsDir() {
-			if entry.Name() == "testdata" || strings.HasPrefix(entry.Name(), ".") {
+			if !dependencyLibraryDirectory(libRoot, relative, entry.Name()) {
 				continue
 			}
 			walkDependencySources(t, libRoot, relative, sources)
@@ -260,6 +262,20 @@ func walkDependencySources(
 		}
 		*sources = append(*sources, parseDependencySource(t, libRoot, relative))
 	}
+}
+
+// dependencyLibraryDirectory reports whether one directory below the
+// repository root belongs to the library module. The library module owns the
+// repository root, so nested modules (directories with their own go.mod), the
+// workspace vendor tree, the ignored root scratch directory, and directories
+// the go command ignores are excluded.
+func dependencyLibraryDirectory(libRoot, relative, name string) bool {
+	if name == "testdata" || name == "vendor" || strings.HasPrefix(name, ".") ||
+		strings.HasPrefix(name, "_") || filepath.ToSlash(relative) == "temp" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(libRoot, relative, "go.mod"))
+	return errors.Is(err, fs.ErrNotExist)
 }
 
 // parseDependencySource extracts package ownership, direct imports, and
@@ -1078,7 +1094,8 @@ replace (
 	}
 }
 
-// dependencyLibRoot resolves the library root from this compiled test without
+// dependencyLibRoot resolves the library module root, which is the repository
+// root, from this compiled test without
 // returning the absolute location to callers or diagnostics.
 func dependencyLibRoot(t *testing.T) string {
 	t.Helper()

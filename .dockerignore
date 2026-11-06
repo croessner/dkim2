@@ -2,7 +2,14 @@
 !go.work
 !go.work.sum
 !LICENSE
-!lib/**
+!go.mod
+!go.sum
+!*.go
+!admincontract/**
+!authresults/**
+!headerfold/**
+!internal/**
+!provider/**
 !cmd/dkim2d/**
 !cmd/dkim2-milter/**
 !cmd/dkim2ctl/**

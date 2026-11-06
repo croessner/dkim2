@@ -53,9 +53,9 @@ longer describe implemented behavior.
   key resolution.
 - Protocol baseline: `draft-ietf-dkim-dkim2-spec-04` plus
   `draft-ietf-dkim-dkim2-dns-02`.
-- Architecture owners: `lib/internal/policy` for decisions and action planning,
-  `lib/internal/verify` for parsed flag candidates, and
-  `lib/internal/service` for authenticated verified-fact sealing.
+- Architecture owners: `internal/policy` for decisions and action planning,
+  `internal/verify` for parsed flag candidates, and
+  `internal/service` for authenticated verified-fact sealing.
 - Status: implemented and final-proof complete under the documented M7-only
   maintainer exception for the external vulnerability database check;
   unchanged-snapshot review and milestone commit pending.
@@ -199,7 +199,7 @@ The following interpretations are explicit and draft-versioned:
 
 ## Package And API Boundaries
 
-`lib/internal/policy` owns:
+`internal/policy` owns:
 
 - Policy modes, policy-facing protocol classes, compliance states, findings,
   verdicts, feedback intent, action-plan validation, and the pure evaluator.
@@ -207,7 +207,7 @@ The following interpretations are explicit and draft-versioned:
 - Closed mapping matrices and deterministic precedence among policy findings.
 - Policy limits and input-coherence validation.
 
-`lib/internal/verify` owns:
+`internal/verify` owns:
 
 - Deriving one bounded target-flag candidate from the already parsed target
   `signature.Signature`; it performs no second parse.
@@ -216,7 +216,7 @@ The following interpretations are explicit and draft-versioned:
 - Exposing a cloned/value candidate accessor to the internal service. The
   candidate is parsed evidence, not yet authenticated policy evidence.
 
-`lib/internal/service` owns:
+`internal/service` owns:
 
 - The single exhaustive mapping from its authoritative four verification
   states into the policy-facing protocol class.
@@ -258,9 +258,9 @@ recipients, selector/domain strings, or caller-asserted "authenticated" facts.
 The zero or internally incoherent `VerifyResult`, invalid option, unknown enum,
 or impossible result/fact combination returns a typed Go error and no decision.
 
-`lib/internal/policy` must not import the root package, command modules,
+`internal/policy` must not import the root package, command modules,
 OpenAPI generated types, Milter types, DNS transports, datasource providers,
-or concrete telemetry. `lib/internal/service` may depend on `policy`; `policy`
+or concrete telemetry. `internal/service` may depend on `policy`; `policy`
 must not depend on `service`, preventing a cycle. The small policy-facing
 protocol class is not a second verification model: only the service maps the
 authoritative state into it, exhaustively, and tests lock one-to-one coherence.
@@ -303,7 +303,7 @@ Because `policy` and `service` are Go `internal` packages, external library
 consumers cannot import the projection type or call the internal service seam.
 Zero-value and manually copied public structs cannot forge a valid projection.
 
-Neither `lib/internal/service`, the root adapter, nor `EvaluatePolicy` calls
+Neither `internal/service`, the root adapter, nor `EvaluatePolicy` calls
 `signature.Parse`, scans `f=`, or imports tag-value parsing to recover flags.
 The single parse remains in the existing verify extraction path.
 
@@ -333,20 +333,20 @@ selected-target projections still flow only from verify through service.
 
 The implementation is expected to touch only these production areas:
 
-- `lib/internal/verify/result.go` and `lib/internal/verify/verifier.go` for the
+- `internal/verify/result.go` and `internal/verify/verifier.go` for the
   target-flag candidate result seam.
-- `lib/internal/policy/` for contracts, errors, evaluator, compliance,
+- `internal/policy/` for contracts, errors, evaluator, compliance,
   feedback, DNS testing, action planning, and package documentation.
-- `lib/internal/service/result.go`, `lib/internal/service/mapping.go`, and a
+- `internal/service/result.go`, `internal/service/mapping.go`, and a
   focused service policy-projection file for authentication, complete
   pre-retention key facts, and sealed projection ownership.
-- `lib/verify_result.go` and `lib/adapters.go` for the unexported facade
+- `verify_result.go` and `adapters.go` for the unexported facade
   projection field and cloning adapter.
 - Focused root-package policy API/options files for public values and
   `EvaluatePolicy`.
 
 Tests live beside those owners. Public synthetic examples may be added under
-`lib/`. No command module, OpenAPI contract/generated file, recipe, replay,
+the root library module. No command module, OpenAPI contract/generated file, recipe, replay,
 datasource, Milter, Exim, or concrete observability file is expected to change.
 
 ## Input Model And Trust Boundary
@@ -575,7 +575,7 @@ actions are unchanged and only the strict primary reason moves from
 `protocol_permerror` to `protocol_fail`. The one deliberate verdict change is
 `body_history_unavailable`: a history with a null body Recipe was a `PASS` with
 partial history and is now a `FAIL` (Draft-09 Section 13), so strict mode
-rejects it. `lib/verification_disposition_test.go` pins the complete reason by
+rejects it. `verification_disposition_test.go` pins the complete reason by
 mode table.
 
 The output retains the original verification state in every cell. Permissive

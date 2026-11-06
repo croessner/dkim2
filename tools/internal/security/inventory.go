@@ -33,7 +33,7 @@ const (
 	moduleExim            = "cmd/dkim2-exim"
 	moduleControl         = "cmd/dkim2ctl"
 	moduleDaemon          = "cmd/dkim2d"
-	moduleLibrary         = "lib"
+	moduleLibrary         = "."
 	moduleTools           = "tools"
 	dimensionEnvelopeByte = "envelope_bytes"
 	dimensionJSONDepth    = "json_depth"
@@ -121,57 +121,57 @@ func Targets() []FuzzTarget {
 		target("cmd/dkim2d/internal/replay/redisstore/fuzz_test.go", "FuzzRedisResultMapping", "Redis-compatible replay response", "local_security_policy", "bounded reply closed taxonomy and own-value recognition"),
 		target("cmd/dkim2d/internal/signingstore/manifest_fuzz_test.go", "FuzzPrivateManifestParsingNeverPanics", "private signing manifest", "local_security_policy", "strict bounded same-generation parsing"),
 		target("cmd/dkim2d/internal/signingstore/registry_test.go", "FuzzImportedPrivateKeyNeverLeaksOrPanics", "protected legacy private-key import", "local_security_policy", "bounded exact PKCS8 algorithm and strength validation"),
-		target("lib/authresults/report_test.go", "FuzzReportRoundTrip", "local authentication report", "adapter_contract", "bounded canonical report roundtrip with closed diagnostic reasons"),
-		target("lib/dns_provider_fuzz_test.go", "FuzzDNSPublicProvider", "public DNS provider", "draft_normative", "bounded typed resolver projection"),
-		target("lib/dns_provider_fuzz_test.go", "FuzzDNSPublicVerifier", "public DNS verification", "draft_normative", "bounded provider and verification composition"),
-		target("lib/internal/canonical/fuzz_test.go", "FuzzBodyHashInput", "body hash input", "draft_normative", "bounded byte-preserving canonicalization"),
-		target("lib/internal/canonical/fuzz_test.go", "FuzzHeaderHashInput", "header hash input", "draft_normative", "bounded occurrence-preserving canonicalization"),
-		target("lib/internal/canonical/fuzz_test.go", "FuzzSignatureInput", "signature input", "draft_normative", "bounded deterministic signature framing"),
-		target("lib/internal/combine/evaluate_test.go", "FuzzSignatureCombination", "Section 14.6 and 14.7 combination", "draft_normative", "decisive set carries the overall result"),
-		target("lib/internal/combine/layout_test.go", "FuzzSplit", "h= and s= group split", "draft_normative", "exact rejoin and non-empty group layout"),
-		target("lib/internal/datasource/flatfile/fuzz_test.go", "FuzzCrossReferences", "flat-file cross references", "local_security_policy", "bounded exact same-generation resolution"),
-		target("lib/internal/datasource/flatfile/fuzz_test.go", "FuzzProviderParity", "flat-file provider parity", "local_security_policy", "closed storage-neutral projection"),
-		target("lib/internal/datasource/flatfile/fuzz_test.go", "FuzzStrictJSON", "flat-file JSON", "local_security_policy", "strict bounded duplicate-free decoding"),
-		target("lib/internal/datasource/fuzz_test.go", "FuzzIdentifierAndLookupFacts", "datasource identifiers", "local_security_policy", "bounded exact lookup facts"),
-		target("lib/internal/datasource/memory/fuzz_test.go", "FuzzSnapshotMapping", "memory datasource snapshot", "local_security_policy", "immutable generation projection"),
-		target("lib/internal/datasource/signingprofile/fuzz_test.go", "FuzzSigningProjection", "signing profile projection", "local_security_policy", "opaque handle and public key coherence"),
-		target("lib/internal/dsn/parser_test.go", "FuzzParse", "delivery status notification parser", "rfc_normative", "bounded multipart parsing without caller-byte mutation"),
-		target("lib/internal/dsn/rebuild_fuzz_test.go", "FuzzRebuild", "delivery status notification rebuild", "draft_normative", "bounded rebuild without output on failure"),
-		target("lib/internal/dsn/received_fuzz_test.go", "FuzzReceivedDSN", "received delivery status notification evaluation", "draft_normative", "bounded staged evaluation with content-free diagnostics"),
-		target("lib/internal/instance/fuzz_test.go", "FuzzParseMessageInstance", "Message-Instance parser", "draft_normative", "bounded strict tag and Base64 parsing"),
-		target("lib/internal/instance/render_fuzz_test.go", "FuzzMessageInstanceRender", "Message-Instance rendering", "draft_normative", "bounded deterministic field rendering"),
-		target("lib/internal/keyresolver/fuzz_test.go", "FuzzDNSKeyRecord", "DNS key record", "draft_normative", "bounded strict DNS-04 tag parsing"),
-		target("lib/internal/keyresolver/fuzz_test.go", "FuzzKeyDecodingCoherence", "DNS public key", "draft_normative", "bounded algorithm and key-shape coherence"),
-		target("lib/internal/keyresolver/fuzz_test.go", "FuzzOwnerConstruction", "DNS owner name", "draft_normative", "label count and owner byte caps"),
-		target("lib/internal/keyresolver/fuzz_test.go", "FuzzTXTLookupTraversal", "DNS TXT response", "local_security_policy", "RR count byte and cancellation caps"),
-		target("lib/internal/mailbox/fuzz_test.go", "FuzzParseAuthor", "From author address list", "draft_normative", "bounded tokens comments and mailbox count"),
-		target("lib/internal/observability/fuzz_test.go", "FuzzObservationEventValidation", "library observation event", "local_security_policy", "closed bounded event vocabulary"),
-		target("lib/internal/policy/fuzz_test.go", "FuzzSealedPolicyEvaluation", "sealed policy evidence", "documented_interpretation", "bounded immutable finding projection"),
-		target("lib/internal/rawmsg/fuzz_test.go", "FuzzParseSmallInputs", "raw RFC 5322 message", "rfc_normative", "total line field and header caps"),
-		target("lib/internal/rawmsg/insertion_fuzz_test.go", "FuzzSignedMessageInsertion", "signed message insertion", "draft_normative", "bounded atomic header insertion"),
-		target("lib/internal/recipe/apply_body_fuzz_test.go", "FuzzApplyBody", "recipe body application", "draft_normative", "bounded lines ranges literals output and work"),
-		target("lib/internal/recipe/apply_header_fuzz_test.go", "FuzzApplyHeader", "recipe header application", "draft_normative", "bounded names occurrences output and work"),
-		target("lib/internal/recipe/generation_fuzz_test.go", "FuzzGenerateRecipe", "recipe generation", "documented_interpretation", "bounded candidates comparisons steps and proof"),
-		target("lib/internal/recipe/generation_fuzz_test.go", "FuzzGeneratedRecipeRoundTrip", "recipe round trip", "documented_interpretation", "bounded generate parse apply self-proof"),
-		target("lib/internal/recipe/parser_fuzz_test.go", "FuzzParseRecipe", "recipe JSON", "draft_normative", "strict depth member string step and byte caps"),
-		target("lib/internal/replay/fuzz_test.go", "FuzzMemoryStateSequence", "memory replay lifecycle", "local_security_policy", "bounded entry and prune accounting"),
-		target("lib/internal/replay/fuzz_test.go", "FuzzReplayIdentityAndKey", "replay identity", "local_security_policy", "framed bounded privacy-preserving derivation"),
-		target("lib/internal/replay/fuzz_test.go", "FuzzReplayResultPair", "replay result pair", "local_security_policy", "closed result error and state combinations"),
-		target("lib/internal/replay/value_test.go", "FuzzReplayValueGrammar", "replay stored value grammar", "local_security_policy", "strict canonical nonce-bearing and legacy value parsing"),
-		target("lib/internal/replay/fuzz_test.go", "FuzzReplayRetention", "replay retention", "local_security_policy", "overflow-safe millisecond retention"),
-		target("lib/internal/signature/fuzz_test.go", "FuzzParseDKIM2Signature", "DKIM2-Signature parser", "draft_normative", "bounded strict tags Base64 and numeric fields"),
-		target("lib/internal/signature/rendering_fuzz_test.go", "FuzzCustodyTransitions", "custody transition", "draft_normative", "closed bounded sequence state machine"),
-		target("lib/internal/signature/rendering_fuzz_test.go", "FuzzDKIM2SignatureRender", "DKIM2-Signature rendering", "draft_normative", "bounded deterministic field rendering"),
-		target("lib/internal/signature/rendering_fuzz_test.go", "FuzzUnsignedSignatureTarget", "unsigned signature target", "draft_normative", "bounded exact empty-signature framing"),
-		target("lib/internal/signing/signing_fuzz_test.go", "FuzzHashGate", "signing hash gate", "draft_normative", "bounded exact previous-instance hash"),
-		target("lib/internal/signing/signing_fuzz_test.go", "FuzzSigningRequest", "signing request", "draft_normative", "bounded immutable signing plan"),
-		target("lib/internal/tagvalue/fuzz_test.go", "FuzzScanTagList", "DKIM2 tag list", "draft_normative", "bounded duplicate-aware lexical scanner"),
-		target("lib/internal/verify/fuzz_test.go", "FuzzVerifyStaticKeyRequest", "static-key verification", "draft_normative", "bounded immutable verification request"),
-		target("lib/internal/verify/history_fuzz_test.go", "FuzzHistoryWalk", "historical reconstruction", "draft_normative", "iterative bounded depth state output and work"),
-		target("lib/internal/verify/verifier_projection_test.go", "FuzzVerifierProjectionBindings", "sealed verifier projection", "local_security_policy", "bounded deterministic framed projection binding"),
-		target("lib/policy_fuzz_test.go", "FuzzEvaluatePolicySealedResults", "public policy facade", "documented_interpretation", "bounded immutable sealed-result projection"),
-		target("lib/signing_fuzz_test.go", "FuzzSigningFacade", "public signing facade", "draft_normative", "bounded immutable signing and revision request"),
-		target("lib/verification_fuzz_test.go", "FuzzPublicVerify", "public verification facade", "draft_normative", "bounded immutable message envelope and provider work"),
+		target("authresults/report_test.go", "FuzzReportRoundTrip", "local authentication report", "adapter_contract", "bounded canonical report roundtrip with closed diagnostic reasons"),
+		target("dns_provider_fuzz_test.go", "FuzzDNSPublicProvider", "public DNS provider", "draft_normative", "bounded typed resolver projection"),
+		target("dns_provider_fuzz_test.go", "FuzzDNSPublicVerifier", "public DNS verification", "draft_normative", "bounded provider and verification composition"),
+		target("internal/canonical/fuzz_test.go", "FuzzBodyHashInput", "body hash input", "draft_normative", "bounded byte-preserving canonicalization"),
+		target("internal/canonical/fuzz_test.go", "FuzzHeaderHashInput", "header hash input", "draft_normative", "bounded occurrence-preserving canonicalization"),
+		target("internal/canonical/fuzz_test.go", "FuzzSignatureInput", "signature input", "draft_normative", "bounded deterministic signature framing"),
+		target("internal/combine/evaluate_test.go", "FuzzSignatureCombination", "Section 14.6 and 14.7 combination", "draft_normative", "decisive set carries the overall result"),
+		target("internal/combine/layout_test.go", "FuzzSplit", "h= and s= group split", "draft_normative", "exact rejoin and non-empty group layout"),
+		target("internal/datasource/flatfile/fuzz_test.go", "FuzzCrossReferences", "flat-file cross references", "local_security_policy", "bounded exact same-generation resolution"),
+		target("internal/datasource/flatfile/fuzz_test.go", "FuzzProviderParity", "flat-file provider parity", "local_security_policy", "closed storage-neutral projection"),
+		target("internal/datasource/flatfile/fuzz_test.go", "FuzzStrictJSON", "flat-file JSON", "local_security_policy", "strict bounded duplicate-free decoding"),
+		target("internal/datasource/fuzz_test.go", "FuzzIdentifierAndLookupFacts", "datasource identifiers", "local_security_policy", "bounded exact lookup facts"),
+		target("internal/datasource/memory/fuzz_test.go", "FuzzSnapshotMapping", "memory datasource snapshot", "local_security_policy", "immutable generation projection"),
+		target("internal/datasource/signingprofile/fuzz_test.go", "FuzzSigningProjection", "signing profile projection", "local_security_policy", "opaque handle and public key coherence"),
+		target("internal/dsn/parser_test.go", "FuzzParse", "delivery status notification parser", "rfc_normative", "bounded multipart parsing without caller-byte mutation"),
+		target("internal/dsn/rebuild_fuzz_test.go", "FuzzRebuild", "delivery status notification rebuild", "draft_normative", "bounded rebuild without output on failure"),
+		target("internal/dsn/received_fuzz_test.go", "FuzzReceivedDSN", "received delivery status notification evaluation", "draft_normative", "bounded staged evaluation with content-free diagnostics"),
+		target("internal/instance/fuzz_test.go", "FuzzParseMessageInstance", "Message-Instance parser", "draft_normative", "bounded strict tag and Base64 parsing"),
+		target("internal/instance/render_fuzz_test.go", "FuzzMessageInstanceRender", "Message-Instance rendering", "draft_normative", "bounded deterministic field rendering"),
+		target("internal/keyresolver/fuzz_test.go", "FuzzDNSKeyRecord", "DNS key record", "draft_normative", "bounded strict DNS-04 tag parsing"),
+		target("internal/keyresolver/fuzz_test.go", "FuzzKeyDecodingCoherence", "DNS public key", "draft_normative", "bounded algorithm and key-shape coherence"),
+		target("internal/keyresolver/fuzz_test.go", "FuzzOwnerConstruction", "DNS owner name", "draft_normative", "label count and owner byte caps"),
+		target("internal/keyresolver/fuzz_test.go", "FuzzTXTLookupTraversal", "DNS TXT response", "local_security_policy", "RR count byte and cancellation caps"),
+		target("internal/mailbox/fuzz_test.go", "FuzzParseAuthor", "From author address list", "draft_normative", "bounded tokens comments and mailbox count"),
+		target("internal/observability/fuzz_test.go", "FuzzObservationEventValidation", "library observation event", "local_security_policy", "closed bounded event vocabulary"),
+		target("internal/policy/fuzz_test.go", "FuzzSealedPolicyEvaluation", "sealed policy evidence", "documented_interpretation", "bounded immutable finding projection"),
+		target("internal/rawmsg/fuzz_test.go", "FuzzParseSmallInputs", "raw RFC 5322 message", "rfc_normative", "total line field and header caps"),
+		target("internal/rawmsg/insertion_fuzz_test.go", "FuzzSignedMessageInsertion", "signed message insertion", "draft_normative", "bounded atomic header insertion"),
+		target("internal/recipe/apply_body_fuzz_test.go", "FuzzApplyBody", "recipe body application", "draft_normative", "bounded lines ranges literals output and work"),
+		target("internal/recipe/apply_header_fuzz_test.go", "FuzzApplyHeader", "recipe header application", "draft_normative", "bounded names occurrences output and work"),
+		target("internal/recipe/generation_fuzz_test.go", "FuzzGenerateRecipe", "recipe generation", "documented_interpretation", "bounded candidates comparisons steps and proof"),
+		target("internal/recipe/generation_fuzz_test.go", "FuzzGeneratedRecipeRoundTrip", "recipe round trip", "documented_interpretation", "bounded generate parse apply self-proof"),
+		target("internal/recipe/parser_fuzz_test.go", "FuzzParseRecipe", "recipe JSON", "draft_normative", "strict depth member string step and byte caps"),
+		target("internal/replay/fuzz_test.go", "FuzzMemoryStateSequence", "memory replay lifecycle", "local_security_policy", "bounded entry and prune accounting"),
+		target("internal/replay/fuzz_test.go", "FuzzReplayIdentityAndKey", "replay identity", "local_security_policy", "framed bounded privacy-preserving derivation"),
+		target("internal/replay/fuzz_test.go", "FuzzReplayResultPair", "replay result pair", "local_security_policy", "closed result error and state combinations"),
+		target("internal/replay/value_test.go", "FuzzReplayValueGrammar", "replay stored value grammar", "local_security_policy", "strict canonical nonce-bearing and legacy value parsing"),
+		target("internal/replay/fuzz_test.go", "FuzzReplayRetention", "replay retention", "local_security_policy", "overflow-safe millisecond retention"),
+		target("internal/signature/fuzz_test.go", "FuzzParseDKIM2Signature", "DKIM2-Signature parser", "draft_normative", "bounded strict tags Base64 and numeric fields"),
+		target("internal/signature/rendering_fuzz_test.go", "FuzzCustodyTransitions", "custody transition", "draft_normative", "closed bounded sequence state machine"),
+		target("internal/signature/rendering_fuzz_test.go", "FuzzDKIM2SignatureRender", "DKIM2-Signature rendering", "draft_normative", "bounded deterministic field rendering"),
+		target("internal/signature/rendering_fuzz_test.go", "FuzzUnsignedSignatureTarget", "unsigned signature target", "draft_normative", "bounded exact empty-signature framing"),
+		target("internal/signing/signing_fuzz_test.go", "FuzzHashGate", "signing hash gate", "draft_normative", "bounded exact previous-instance hash"),
+		target("internal/signing/signing_fuzz_test.go", "FuzzSigningRequest", "signing request", "draft_normative", "bounded immutable signing plan"),
+		target("internal/tagvalue/fuzz_test.go", "FuzzScanTagList", "DKIM2 tag list", "draft_normative", "bounded duplicate-aware lexical scanner"),
+		target("internal/verify/fuzz_test.go", "FuzzVerifyStaticKeyRequest", "static-key verification", "draft_normative", "bounded immutable verification request"),
+		target("internal/verify/history_fuzz_test.go", "FuzzHistoryWalk", "historical reconstruction", "draft_normative", "iterative bounded depth state output and work"),
+		target("internal/verify/verifier_projection_test.go", "FuzzVerifierProjectionBindings", "sealed verifier projection", "local_security_policy", "bounded deterministic framed projection binding"),
+		target("policy_fuzz_test.go", "FuzzEvaluatePolicySealedResults", "public policy facade", "documented_interpretation", "bounded immutable sealed-result projection"),
+		target("signing_fuzz_test.go", "FuzzSigningFacade", "public signing facade", "draft_normative", "bounded immutable signing and revision request"),
+		target("verification_fuzz_test.go", "FuzzPublicVerify", "public verification facade", "draft_normative", "bounded immutable message envelope and provider work"),
 		target("tools/cmd/conformance/main_test.go", "FuzzPostfixQualificationReportDecoding", "Postfix qualification report", "local_security_policy", "strict bounded content-free report decoding"),
 		target("tools/cmd/deploymentfixture/main_test.go", "FuzzDeploymentFixtureDNSNeverPanicsOrChangesClassification", "Postfix deployment DNS fixture", "local_security_policy", "fixed datagram record and label bounds before deterministic response construction"),
 		target("tools/cmd/ocipolicy/main_test.go", "FuzzReadLayoutArchive", "OCI image layout", "local_security_policy", "bounded non-extracting tar and descriptor validation"),
@@ -195,23 +195,23 @@ func ResourceOwners() []ResourceOwner {
 	return []ResourceOwner{
 		resource("config", "cmd/dkim2d/internal/config and cmd/dkim2-milter/internal/config", []string{"file_bytes", "nodes", "depth", "scalars", "placeholders", "path_components", "pem_blocks", "read_attempts"}, "cmd/dkim2d/internal/config/yaml_test.go#TestPreflightYAMLEnforcesResourceBounds", "cmd/dkim2d/internal/config/protected_loader_test.go#TestProtectedRoleSizeMatrix"),
 		resource("conformance", "tools/internal/conformance", []string{"manifest_bytes", "artifacts", "artifact_bytes", "paths", "report_bytes", "captured_output"}, "tools/internal/conformance/conformance_test.go#TestManifestRejectsDuplicateExactArtifactPath", "tools/internal/conformance/conformance_test.go#TestStrictJSONRejectsDuplicateUnknownAndDeepInput"),
-		resource("datasource", "lib/internal/datasource and cmd/dkim2d/internal/datasource and cmd/dkim2d/internal/migration", []string{"identifier_bytes", "records", "profiles", "policies", "handles", "generations", "json_bytes", dimensionJSONDepth, "backend_bytes", "pages", "responses", "connections", "report_bytes"}, "lib/internal/datasource/limits_test.go#TestLimitsAllowNarrowingAndRejectZeroNegativeOrWidenedValues", "lib/internal/datasource/limits_test.go#TestUsageRejectsOneOverNegativeOverflowAndInconsistentValues", "cmd/dkim2d/internal/migration/inventory_test.go#TestDryRunNeverRequestsKeysOrPublishesIdentity"),
+		resource("datasource", "internal/datasource and cmd/dkim2d/internal/datasource and cmd/dkim2d/internal/migration", []string{"identifier_bytes", "records", "profiles", "policies", "handles", "generations", "json_bytes", dimensionJSONDepth, "backend_bytes", "pages", "responses", "connections", "report_bytes"}, "internal/datasource/limits_test.go#TestLimitsAllowNarrowingAndRejectZeroNegativeOrWidenedValues", "internal/datasource/limits_test.go#TestUsageRejectsOneOverNegativeOverflowAndInconsistentValues", "cmd/dkim2d/internal/migration/inventory_test.go#TestDryRunNeverRequestsKeysOrPublishesIdentity"),
 		resource("deployment", "tools/cmd/deploymentfixture", []string{"dns_query_bytes", "dns_labels", "dns_options", "dns_record_bytes", "smtp_reply_bytes", "queue_identifier_bytes", "captured_message_bytes"}, "tools/cmd/deploymentfixture/main_test.go#TestAnswerDNSBoundsQueriesAndReturnsOnlyBoundTXT", "tools/cmd/deploymentfixture/main_test.go#TestSMTPReplyRequiresExactQueuedAcceptance"),
-		resource("dns", "lib/internal/keyresolver", []string{"owner_bytes", "labels", "rr_count", "txt_bytes", "key_bytes", "lookups", "cache_entries", "flights", dimensionWaiters}, "lib/internal/keyresolver/limits_test.go#TestDefaultLimitsMatchClosedDNSBounds", "lib/internal/keyresolver/flight_test.go#TestFlightWaiterLimitAllowsExactAndRejectsOneOver"),
+		resource("dns", "internal/keyresolver", []string{"owner_bytes", "labels", "rr_count", "txt_bytes", "key_bytes", "lookups", "cache_entries", "flights", dimensionWaiters}, "internal/keyresolver/limits_test.go#TestDefaultLimitsMatchClosedDNSBounds", "internal/keyresolver/flight_test.go#TestFlightWaiterLimitAllowsExactAndRejectsOneOver"),
 		resource("exim", "cmd/dkim2-exim", []string{"message_bytes", "header_bytes", "header_fields", "recipients", "envelope_bytes", "ipc_frame_bytes", "evidence_records", "evidence_bytes"}, "cmd/dkim2-exim/internal/filter/input_test.go#TestBuildRequestValidatesMessageBeforeEvidence", "cmd/dkim2-exim/internal/ipc/codec_test.go#TestRequestRejectsHeaderAggregateBeforeNextAllocation"),
 		resource("http", "cmd/dkim2d/internal/httpjson", []string{"request_line_bytes", "header_bytes", "body_bytes", dimensionJSONDepth, "json_tokens", "decoded_message_bytes", dimensionEnvelopeByte, "in_flight", dimensionWaiters, "response_bytes"}, "cmd/dkim2d/internal/httpjson/http_boundary_matrix_test.go#TestHTTPBoundaryRawMethodTargetAndHeadLimits", "cmd/dkim2d/internal/httpjson/body_preflight_test.go#TestReadProcessBodyAcceptsExactLimitAndRejectsOneOver"),
 		resource("interop", "tools/internal/interop", []string{"registry_bytes", "json_depth", "json_tokens", "sources", "response_bytes", "redirects", "files", "file_bytes", "total_bytes", "path_bytes", "tree_depth", "timeout", "candidates", "operations", "comparison_cases"}, "tools/internal/interop/model_test.go#TestRegistryRejectsCommandAuthorityAndUnsafeURLs", "tools/internal/interop/model_test.go#TestDiscoveryOutageCannotBecomeCandidateAbsence"),
 		resource("milter", "cmd/dkim2-milter/internal/milter", []string{"frame_bytes", "connections", "messages", "buffered_bytes", "headers", "recipients", "actions", "daemon_response_bytes", "timeouts"}, "cmd/dkim2-milter/internal/milter/state_matrix_test.go#TestReadFrameEnforcesDefaultAndCommandSpecificCaps", "cmd/dkim2-milter/internal/milter/state_matrix_test.go#TestSessionLimitInvariantsFailAtConstruction"),
-		resource("observability", "lib/internal/observability and cmd/dkim2d/internal/observability", []string{"record_bytes", "attributes", "events", "batch", "queue", "labels", "buckets"}, "cmd/dkim2d/internal/observability/logging_test.go#TestBoundedLoggerRejectsUnknownAndHostileValues", "cmd/dkim2d/internal/observability/metrics_test.go#TestMetricsRejectArbitraryLabels"),
+		resource("observability", "internal/observability and cmd/dkim2d/internal/observability", []string{"record_bytes", "attributes", "events", "batch", "queue", "labels", "buckets"}, "cmd/dkim2d/internal/observability/logging_test.go#TestBoundedLoggerRejectsUnknownAndHostileValues", "cmd/dkim2d/internal/observability/metrics_test.go#TestMetricsRejectArbitraryLabels"),
 		resource("packaging", "tools/cmd/buildmeta tools/cmd/ocipolicy tools/cmd/dbguard and repository scripts", []string{"archive_bytes", "archive_entries", "entry_bytes", "platforms", "manifests", "layers", "filesystem_entries", "labels", "candidate_files", "candidate_bytes", "publication_subjects", "publication_tool_bytes", "scanner_database_bytes", "scanner_database_files", "scanner_database_reads", "scanner_layout_bytes", "scanner_layout_entries", "scanner_snapshot_files", "scanner_output_bytes", "scanner_diagnostic_bytes", "scanner_duration", "scanner_clock_skew", "scanner_database_age"}, "tools/cmd/buildmeta/main_test.go#TestMaterializeCandidateRejectsHardlinksAndWritesExactPrivateBytes", "tools/cmd/ocipolicy/main_test.go#TestReadLayoutRejectsDuplicateAndLinkEntries", "tools/cmd/ocipolicy/main_test.go#TestStrictJSONRejectsTrailingDocuments", "tools/cmd/dbguard/main_test.go#TestBuildSnapshotRejectsOversizeSymlinkAndHardlinkDatabase", "tools/cmd/dbguard/main_test.go#TestGuardDatabaseFilesRejectsConcurrentWrite", "tools/cmd/dbguard/main_test.go#TestAddSnapshotFileSurvivesTransientSourceSwap", "tools/cmd/dbguard/main_test.go#TestBoundedWriterRejectsOversizeOutput", "tools/cmd/dbguard/main_test.go#TestValidateMetadataAtRejectsExpiredStaleAndFutureState", "tools/cmd/dbguard/main_test.go#TestParseScanTimeRejectsCallerClockDrift"),
 		resource("propagator", "cmd/dkim2-dsn-propagator/internal/lmtp and cmd/dkim2-dsn-propagator/internal/config and cmd/dkim2-dsn-propagator/internal/reinject and cmd/dkim2-dsn-propagator/internal/daemon", []string{"message_bytes", "command_bytes", "data_line_bytes", "forward_path_bytes", "recipients", "connections", "in_flight", "daemon_response_bytes", "next_hop_bytes", "reply_line_bytes", "reply_lines", "extension_entries"}, "cmd/dkim2-dsn-propagator/internal/lmtp/lmtp_test.go#TestOversizedDataRefusedAndConnectionSurvives", "cmd/dkim2-dsn-propagator/internal/lmtp/lmtp_test.go#TestSecondRecipientDeferred", "cmd/dkim2-dsn-propagator/internal/lmtp/lmtp_test.go#TestInvalidLimitsRefused", "cmd/dkim2-dsn-propagator/internal/lmtp/runtime_test.go#TestRuntimeConnectionLimit"),
-		resource("raw-message", "lib/internal/rawmsg", []string{"total_bytes", "header_bytes", "header_fields", "line_bytes", "field_bytes", "body_lines"}, "lib/internal/rawmsg/body_test.go#TestBodyLineCountHardLimitAcceptsExactAndRejectsOneOver", "lib/internal/rawmsg/parser_test.go#TestParseRejectsHeaderResourceLimitViolations"),
-		resource("recipe", "lib/internal/recipe", []string{"json_bytes", dimensionJSONDepth, "members", "names", "steps", "ranges", "literals", "state_bytes", "output_bytes", "candidates", "comparisons", "work_units", "history_depth"}, "lib/internal/recipe/limits_test.go#TestEveryRecipeHardMaximumAcceptsExactAndRejectsOneOver", "lib/internal/recipe/generation_limits_test.go#TestEveryGenerationHardMaximumAcceptsExactAndRejectsOneOver"),
-		resource("replay", "lib/internal/replay and cmd/dkim2d/internal/replay/redisstore", []string{"identity_bytes", "key_bytes", "value_bytes", "retention", "entries", "prune_budget", "in_flight", dimensionWaiters, "wire_bytes"}, "lib/internal/replay/retention_test.go#TestRetentionCheckedAdditionPreservesExactExpiry", "cmd/dkim2d/internal/replay/redisstore/store_test.go#TestAdmissionLimitsAndCloseDrain"),
+		resource("raw-message", "internal/rawmsg", []string{"total_bytes", "header_bytes", "header_fields", "line_bytes", "field_bytes", "body_lines"}, "internal/rawmsg/body_test.go#TestBodyLineCountHardLimitAcceptsExactAndRejectsOneOver", "internal/rawmsg/parser_test.go#TestParseRejectsHeaderResourceLimitViolations"),
+		resource("recipe", "internal/recipe", []string{"json_bytes", dimensionJSONDepth, "members", "names", "steps", "ranges", "literals", "state_bytes", "output_bytes", "candidates", "comparisons", "work_units", "history_depth"}, "internal/recipe/limits_test.go#TestEveryRecipeHardMaximumAcceptsExactAndRejectsOneOver", "internal/recipe/generation_limits_test.go#TestEveryGenerationHardMaximumAcceptsExactAndRejectsOneOver"),
+		resource("replay", "internal/replay and cmd/dkim2d/internal/replay/redisstore", []string{"identity_bytes", "key_bytes", "value_bytes", "retention", "entries", "prune_budget", "in_flight", dimensionWaiters, "wire_bytes"}, "internal/replay/retention_test.go#TestRetentionCheckedAdditionPreservesExactExpiry", "cmd/dkim2d/internal/replay/redisstore/store_test.go#TestAdmissionLimitsAndCloseDrain"),
 		resource("rotation", "cmd/dkim2d/internal/rotationadmin", []string{"work_items", "dns_records", "dns_batch_records", "dns_batches", "journal_bytes", "proof_age"}, "cmd/dkim2d/internal/rotationadmin/campaign_test.go#TestNormalCampaignPreparesOneCompleteCandidateOnce", "cmd/dkim2d/internal/rotationadmin/journal_test.go#TestJournalRequiresDeterministicCompleteFreshDNSProgress"),
-		resource("signing", "lib/internal/signing and lib", []string{"message_bytes", dimensionEnvelopeByte, "profiles", "routes", "signatures", "callbacks", "fields", "output_bytes"}, "lib/signing_limits_test.go#TestPublicSigningMessageLimitExactAndOneOver", "lib/signing_limits_test.go#TestSigningLimitsRejectEveryWideningAndAcceptZeroDefaults"),
-		resource("tag-fields", "lib/internal/tagvalue lib/internal/instance lib/internal/signature", []string{"field_bytes", "tags", "base64_encoded_bytes", "base64_decoded_bytes", "numeric_values", "signature_sets"}, "lib/internal/tagvalue/scanner_test.go#TestScanRejectsConfiguredLimitViolations", "lib/internal/tagvalue/base64_test.go#TestParseBase64StringRejectsDecodedLimit"),
-		resource("verification", "lib/internal/verify and lib", []string{"message_bytes", "envelope_bytes", "signatures", "history_depth", "facts", "provider_calls", "output_facts"}, "lib/verification_abuse_test.go#TestPublicHardLimitBoundaries", "lib/facade_limits_test.go#TestFacadeAcceptsExactPublicLimitBoundaries"),
+		resource("signing", "internal/signing and the root library package", []string{"message_bytes", dimensionEnvelopeByte, "profiles", "routes", "signatures", "callbacks", "fields", "output_bytes"}, "signing_limits_test.go#TestPublicSigningMessageLimitExactAndOneOver", "signing_limits_test.go#TestSigningLimitsRejectEveryWideningAndAcceptZeroDefaults"),
+		resource("tag-fields", "internal/tagvalue internal/instance internal/signature", []string{"field_bytes", "tags", "base64_encoded_bytes", "base64_decoded_bytes", "numeric_values", "signature_sets"}, "internal/tagvalue/scanner_test.go#TestScanRejectsConfiguredLimitViolations", "internal/tagvalue/base64_test.go#TestParseBase64StringRejectsDecodedLimit"),
+		resource("verification", "internal/verify and the root library package", []string{"message_bytes", "envelope_bytes", "signatures", "history_depth", "facts", "provider_calls", "output_facts"}, "verification_abuse_test.go#TestPublicHardLimitBoundaries", "facade_limits_test.go#TestFacadeAcceptsExactPublicLimitBoundaries"),
 	}
 }
 
@@ -307,18 +307,50 @@ func resource(id, owner string, dimensions []string, proofs ...string) ResourceO
 }
 
 // moduleAndPackage maps a repository source path to its exact workspace target.
+// Nested modules are matched by directory prefix first; the library module owns
+// the repository root, so it only claims the remaining paths that Go would
+// treat as library packages.
 func moduleAndPackage(source string) (string, string) {
 	for _, module := range workspaceModules() {
+		if module == moduleLibrary {
+			continue
+		}
 		prefix := module + "/"
 		if strings.HasPrefix(source, prefix) {
-			directory := filepath.ToSlash(filepath.Dir(strings.TrimPrefix(source, prefix)))
-			if directory == "." {
-				return module, "."
-			}
-			return module, "./" + directory
+			return module, packagePattern(strings.TrimPrefix(source, prefix))
 		}
 	}
+	if libraryModuleSource(source) {
+		return moduleLibrary, packagePattern(source)
+	}
 	return "", ""
+}
+
+// packagePattern renders the module-relative package pattern for one source file.
+func packagePattern(relative string) string {
+	directory := filepath.ToSlash(filepath.Dir(relative))
+	if directory == "." {
+		return "."
+	}
+	return "./" + directory
+}
+
+// libraryModuleSource reports whether a root-relative source path belongs to a
+// root library package. Directories that Go ignores (testdata, dot- or
+// underscore-prefixed) and contrib/, which holds separately moduled helpers,
+// are never library sources, so unexpected fuzz targets there fail closed.
+func libraryModuleSource(source string) bool {
+	components := strings.Split(filepath.ToSlash(filepath.Dir(source)), "/")
+	if components[0] == "contrib" || components[0] == "vendor" {
+		return false
+	}
+	for _, component := range components {
+		if component == "testdata" || (component != "." &&
+			(strings.HasPrefix(component, ".") || strings.HasPrefix(component, "_"))) {
+			return false
+		}
+	}
+	return true
 }
 
 // workspaceModules returns the fixed ordered workspace module inventory.

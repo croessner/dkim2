@@ -1,8 +1,23 @@
 export GOTOOLCHAIN := go1.27.3
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-PRODUCT_MODULES := ./lib ./cmd/dkim2d ./cmd/dkim2-milter ./cmd/dkim2-exim ./cmd/dkim2ctl ./cmd/dkim2-dsn-propagator
+PRODUCT_MODULES := . ./cmd/dkim2d ./cmd/dkim2-milter ./cmd/dkim2-exim ./cmd/dkim2ctl ./cmd/dkim2-dsn-propagator
 TOOL_MODULES := ./tools
 MODULES := $(PRODUCT_MODULES) $(TOOL_MODULES)
+# The library module owns the repository root, so the go command would claim
+# Go files in the ignored temp/ scratch tree as library packages. A local
+# go.mod there turns the scratch tree into a separate module that root
+# package patterns skip; temp/ is never staged.
+ifneq ($(wildcard $(ROOT)/temp/.),)
+ifeq ($(wildcard $(ROOT)/temp/go.mod),)
+$(shell printf 'module scratch.invalid/temp\n\ngo 1.27\n' > '$(ROOT)/temp/go.mod')
+endif
+endif
+# GO_SOURCE_FILES lists first-party Go sources outside vendor, the ignored
+# scratch tree, and dot directories.
+GO_SOURCE_FILES = find . -type d \( -path ./vendor -o -path ./temp -o -name '.?*' \) -prune -o -type f -name '*.go' -print
+# LIBRARY_GO_FILES lists Go sources of the root library module only: nested
+# modules (directories with their own go.mod) are pruned as well.
+LIBRARY_GO_FILES = find . -mindepth 1 -type d \( -path ./vendor -o -path ./temp -o -name '.?*' -o -exec test -e '{}/go.mod' ';' \) -prune -o -type f -name '*.go' -print
 # Gate tests read fixtures, vectors, schemas, and policy files outside their
 # own module root. The go test result cache does not track files outside the
 # module root, so a cached pass could hide a changed input; gate runs always
@@ -34,7 +49,7 @@ OPENAPI_PROPAGATOR_WIRE := $(ROOT)/cmd/dkim2-dsn-propagator/internal/daemon/wire
 OPENAPI_GO_TOOLCHAIN := go1.27.3
 VENDOR_LF_PATHS := github.com/vmware-labs/yaml-jsonpath/LICENSE github.com/vmware-labs/yaml-jsonpath/NOTICE
 # OTLP's x/net graph makes Go 1.27.3 synchronize dkim2ctl's pruned module sums.
-WORKSPACE_SYNC_FILES := go.work go.work.sum lib/go.mod lib/go.sum cmd/dkim2d/go.mod cmd/dkim2d/go.sum cmd/dkim2-milter/go.mod cmd/dkim2-milter/go.sum cmd/dkim2-exim/go.mod cmd/dkim2-exim/go.sum cmd/dkim2ctl/go.mod cmd/dkim2ctl/go.sum cmd/dkim2-dsn-propagator/go.mod cmd/dkim2-dsn-propagator/go.sum tools/go.mod tools/go.sum
+WORKSPACE_SYNC_FILES := go.work go.work.sum go.mod go.sum cmd/dkim2d/go.mod cmd/dkim2d/go.sum cmd/dkim2-milter/go.mod cmd/dkim2-milter/go.sum cmd/dkim2-exim/go.mod cmd/dkim2-exim/go.sum cmd/dkim2ctl/go.mod cmd/dkim2ctl/go.sum cmd/dkim2-dsn-propagator/go.mod cmd/dkim2-dsn-propagator/go.sum tools/go.mod tools/go.sum
 WORKSPACE_ABSENT_SUM_FILES :=
 EXIM_C_DIR := $(ROOT)/cmd/dkim2-exim/exim
 EXIM_PROBE_CONTRACT := $(EXIM_C_DIR)/generated/probe-contract-v1.txt
@@ -140,12 +155,12 @@ test-opendkim-bootstrap:
 
 .PHONY: fmt
 fmt:
-	@gofmt -w lib cmd tools
+	@gofmt -w $$($(GO_SOURCE_FILES))
 
 .PHONY: fmt-check
 fmt-check:
-	@test -z "$$(gofmt -l lib cmd tools)" || { \
-		gofmt -l lib cmd tools; \
+	@test -z "$$(gofmt -l $$($(GO_SOURCE_FILES)))" || { \
+		gofmt -l $$($(GO_SOURCE_FILES)); \
 		exit 1; \
 	}
 
@@ -166,7 +181,7 @@ test-postfix-qualification-helper:
 # prove that enabling mldsa44 fails closed when built against it.
 .PHONY: test-fips140-mldsa44
 test-fips140-mldsa44:
-	@cd lib && GOFIPS140=v1.0.0 go test -count=1 \
+	@GOFIPS140=v1.0.0 go test -count=1 \
 		-run 'TestMLDSA44AvailabilityFollowsCryptographicModule|TestMLDSA44PolicyFailsClosedWithoutRuntime|TestMLDSA44CredentialFailsClosedWithoutRuntime' \
 		./internal/cryptodkim2/ ./internal/verify/ ./internal/signing/
 
@@ -456,10 +471,11 @@ check-openapi:
 	grep -Eq '^[[:space:]]*(require[[:space:]]+)?github.com/getkin/kin-openapi v0\.151\.0$$' cmd/dkim2d/go.mod; \
 	grep -Eq '^[[:space:]]*github.com/oapi-codegen/oapi-codegen/v2 v2\.8\.0( // indirect)?$$' tools/go.mod; \
 	for module in cmd/dkim2ctl/go.mod cmd/dkim2-milter/go.mod cmd/dkim2-exim/go.mod cmd/dkim2-dsn-propagator/go.mod; do grep -Eq '^[[:space:]]*github.com/oapi-codegen/runtime v1\.7\.0$$' "$$module"; done; \
-	! grep -Eq 'github.com/oapi-codegen/runtime' cmd/dkim2d/go.mod lib/go.mod; \
-	! grep -REq --include='*.go' 'github.com/oapi-codegen/runtime' cmd/dkim2d lib; \
-	! grep -Eq 'oapi-codegen|kin-openapi' lib/go.mod; \
-	! grep -REq --include='*.go' --exclude='*_test.go' 'oapi-codegen|kin-openapi' lib; \
+	! grep -Eq 'github.com/oapi-codegen/runtime' cmd/dkim2d/go.mod go.mod; \
+	! grep -REq --include='*.go' 'github.com/oapi-codegen/runtime' cmd/dkim2d; \
+	! grep -Eq 'github.com/oapi-codegen/runtime' $$($(LIBRARY_GO_FILES)); \
+	! grep -Eq 'oapi-codegen|kin-openapi' go.mod; \
+	! grep -Eq 'oapi-codegen|kin-openapi' $$($(LIBRARY_GO_FILES) | grep -v '_test\.go$$'); \
 	! grep -REq --include='go.mod' 'oapi-codegen/(nethttp|middleware)' .; \
 	go -C tools test ./cmd/wiregen; \
 	go -C cmd/dkim2d test ./internal/httpjson/...; \
@@ -501,7 +517,7 @@ check-workspace:
 .PHONY: check-boundaries
 check-boundaries:
 	@set -eu; \
-	! go list -deps ./lib/... | grep -Eq 'github.com/croessner/dkim2/cmd/|oapi-codegen|cobra|viper|fx|prometheus'; \
+	! go list -deps ./... | grep -Eq 'github.com/croessner/dkim2/cmd/|oapi-codegen|cobra|viper|fx|prometheus'; \
 	! go -C cmd/dkim2-exim list -deps ./... | grep -Eq 'github.com/croessner/dkim2/cmd/dkim2-milter|github.com/croessner/dkim2/cmd/dkim2d/internal'; \
 	! grep -REq --include='*.go' 'cmd/dkim2-milter|cmd/dkim2d/internal|\"C\"' cmd/dkim2-exim; \
 	if go -C cmd/dkim2d list -deps ./internal/datasource/... | grep -Eq 'cmd/dkim2d/internal/(rotationadmin|domainadmin)$$'; then \
@@ -566,7 +582,7 @@ check-platform-builds:
 .PHONY: check-admin-contract
 check-admin-contract:
 	@GOCACHE="$${GOCACHE:-/tmp/dkim2-go-build-cache}" \
-		go -C lib test -count=1 ./admincontract
+		go test -count=1 ./admincontract
 
 .PHONY: check-conformance
 check-conformance: check-admin-contract

@@ -260,7 +260,7 @@ The `Area` columns of Sections 3 and 4 refer to this list.
 - Draft identifiers now name Draft-08 and DNS-02: the six library constants
   (`dkim2.DraftIdentifier`, `canonical.DraftBaseline`, `verify.DraftBaseline`,
   `replay.DraftIdentifier`, `service.DraftIdentifier`,
-  `keyresolver.DNSDraftIdentifier`) with `lib/draft_baseline_test.go`, the
+  `keyresolver.DNSDraftIdentifier`) with `draft_baseline_test.go`, the
   daemon JSON preflight, the `X-DKIM2-Info` interoperability header
   (`draft=ietf-dkim-dkim2-spec-08`), build metadata, conformance, interop,
   reference, security, and qualification tooling, JSON schemas with a draft
@@ -272,8 +272,8 @@ The `Area` columns of Sections 3 and 4 refer to this list.
   Before the rename, the Draft-07 and DNS-01 versions of every corpus whose
   meaning a later change area changes (canonical and recipe goldens, signing,
   public, custody, received-DSN, and DSN propagation vectors, and the DNS
-  golden) were copied to `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-spec-07/`
-  and `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-dns-01/`, so earlier
+  golden) were copied to `testdata/vectors/history/draft-ietf-dkim-dkim2-spec-07/`
+  and `testdata/vectors/history/draft-ietf-dkim-dkim2-dns-01/`, so earlier
   evidence is never silently overwritten.
 - Draft-bound goldens (replay identity and origin-declaration digests, the
   verifier-projection binding, and the conformance manifest digests) were
@@ -295,7 +295,7 @@ The `Area` columns of Sections 3 and 4 refer to this list.
 ## 8. Unsigned header list state
 
 - C4: `Auto-Submitted` and `VBR-Info` are signed. The exact unsigned set in
-  `exactUnsignedHeaderName` (`lib/internal/canonical/header.go`) now holds
+  `exactUnsignedHeaderName` (`internal/canonical/header.go`) now holds
   the six names `Apparently-To`, `DL-Expansion-History`,
   `Original-Recipient`, `SIO-Label-History`, `X400-Received`, and
   `X400-Trace`; together with the `Received`/`Received-*`, `Return-Path`,
@@ -312,7 +312,7 @@ The `Area` columns of Sections 3 and 4 refer to this list.
   `Auto-Submitted` is now a signed field that the local Recipe must undo; the
   rebuild applies that Recipe, independent of the field position, and fails
   closed with `hash_mismatch` when the Recipe omits the addition. No
-  production change was needed in `lib/internal/dsn/rebuild.go`, because the
+  production change was needed in `internal/dsn/rebuild.go`, because the
   rebuild already delegates to the canonical classifier.
 - The propagated DSN writes `Auto-Submitted: auto-replied` before its `m=1`
   header hash is computed; a test proves that the report verifies and that a
@@ -334,14 +334,14 @@ The `Area` columns of Sections 3 and 4 refer to this list.
   the signed report bytes changed, because each report carries the now
   hashed `Auto-Submitted`), and the conformance manifest digests through
   `make generate-conformance-manifest`. The Draft-07 copies stay under
-  `lib/testdata/vectors/history/draft-ietf-dkim-dkim2-spec-07/`.
+  `testdata/vectors/history/draft-ietf-dkim-dkim2-spec-07/`.
 - Qualification and `dkim2ctl` fixtures compute hashes at run time through
   the library and carry no frozen digests over these fields.
 
 ## 9. Combinator syntax state
 
 - C13, C15: the `h=` and `s=` parsers follow the exact Draft-08 Section 9.3
-  and 10.9 ABNF. `lib/internal/combine` owns the group structure (`Layout`:
+  and 10.9 ABNF. `internal/combine` owns the group structure (`Layout`:
   ordered groups of sets in field order) and the separator split shared by
   both parsers; `MessageInstance.HashLayout` and `Signature.SignatureLayout`
   expose it next to the sets in field order. Values are unfolded, so FWS is
@@ -382,7 +382,7 @@ The `Area` columns of Sections 3 and 4 refer to this list.
 
 ## 10. Evaluation algebra state
 
-- C3, C33, C34: `lib/internal/combine` owns the Section 14.6 steps 5 to 7
+- C3, C33, C34: `internal/combine` owns the Section 14.6 steps 5 to 7
   and Section 14.7 steps 3 to 5 algebra (`combine.Signatures`,
   `combine.Hashes`). Signature intermediates are PASS, FAIL (mismatch),
   TEMPERROR (key temporarily unavailable), and PERMERROR (any permanent key
@@ -559,7 +559,7 @@ The `Area` columns of Sections 3 and 4 refer to this list.
   a documentation warning. There is no acceptance knob. The `partial`
   historical content and `indeterminate` feedback coverage values remain in
   the closed vocabularies and OpenAPI but are no longer produced.
-- Disposition proof: `lib/verification_disposition_test.go` derives, for every
+- Disposition proof: `verification_disposition_test.go` derives, for every
   public reason and every policy mode, the only state the sealed result and
   projection invariants admit and the evaluated verdict, policy primary
   reason, and action. Against the table recorded before the change, verdicts
@@ -629,7 +629,7 @@ The `Area` columns of Sections 3 and 4 refer to this list.
   Spec-08 Section 3.4: "the field values are input directly into the
   signature algorithm without being hashed first", and the five octets
   `DKIM2` are the context string for signing and verifying; this matches the
-  plan. `lib/internal/cryptodkim2` is the single owner of the message
+  plan. `internal/cryptodkim2` is the single owner of the message
   representative (`MessageRepresentative`): SHA-256 of the Section 12.8 input
   for `rsa-sha256` and `ed25519-sha256`, the complete input for `mldsa44`.
   Signer (`signing`), verifier (`verify`, including revision and history
@@ -758,8 +758,8 @@ The `Area` columns of Sections 3 and 4 refer to this list.
     the now highest numbered DKIM2-Signature header field. The DSN itself
     MUST have only one DKIM2-Signature field and only one Message-Instance
     header field: i.e. it is a new message."
-- Owner: `Signer.ResolveDSNSigningIdentity` (`lib/delivery_status.go`) over
-  `dsn.Evidence.SigningIdentityCandidates` (`lib/internal/dsn/identity.go`).
+- Owner: `Signer.ResolveDSNSigningIdentity` (`delivery_status.go`) over
+  `dsn.Evidence.SigningIdentityCandidates` (`internal/dsn/identity.go`).
   Candidates are the `rt=` domains of the highest embedded DKIM2-Signature
   and their parents, each admitted by `signature.RelaxedDomainMatch`, the
   existing single owner of Section 7.2 (also used for custody, Section 14.4

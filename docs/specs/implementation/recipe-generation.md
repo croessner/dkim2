@@ -36,7 +36,7 @@ evidence agree.
 
 ## Original Gap And Resolution
 
-`lib/internal/recipe` originally owned the strict draft-04 recipe parser, closed
+`internal/recipe` originally owned the strict draft-04 recipe parser, closed
 immutable recipe model, bounded recipe application, body-unavailable state,
 and reconstruction usage accounting, but did not generate recipes or serialize
 the closed model to deterministic decoded JSON.
@@ -51,7 +51,7 @@ packages do not carry parallel generation rules.
 
 ## Goal
 
-Add a cohesive generator and serializer under `lib/internal/recipe` that:
+Add a cohesive generator and serializer under `internal/recipe` that:
 
 - accepts a previous/before target state and a current/after source state;
 - emits a conservative inverse recipe from current to previous;
@@ -60,7 +60,7 @@ Add a cohesive generator and serializer under `lib/internal/recipe` that:
 - emits correct, deterministic, non-minimal `h` and `b` plans within the same
   limits enforced by the M8 parser and applier;
 - treats header relevance through a narrow injected implementation owned by
-  `lib/internal/canonical`, without copying signed-header exclusions;
+  `internal/canonical`, without copying signed-header exclusions;
 - distinguishes representable output from an explicitly authorized `b:null`;
 - requires an explicit copy-only or bounded-literal disclosure policy;
 - proves generated JSON by parsing and applying it before returning success;
@@ -137,7 +137,7 @@ reconstructed from guesses.
 
 In scope:
 
-- Recipe generation in `lib/internal/recipe` from immutable M8 states.
+- Recipe generation in `internal/recipe` from immutable M8 states.
 - A narrow header-relevance contract implemented by canonical ownership.
 - Deterministic conservative header and body matching.
 - Explicit representation of unchanged, generated, and body-unavailable
@@ -208,7 +208,7 @@ Draft-04 Section 5.1 says recipes should not be emitted for unsigned header
 fields. Local restrictive policy tightens that `SHOULD NOT` into never
 generating an excluded name. The generator must not maintain a second list. It
 receives a narrow immutable signed-header relevance classifier whose production
-implementation is owned by `lib/internal/canonical`.
+implementation is owned by `internal/canonical`.
 
 The classifier covers the Section 4 exclusions plus the additional Section 6.2
 exclusions, notably `Message-Instance` and `DKIM2-Signature`, as well as
@@ -222,8 +222,8 @@ nondeterministic classifiers fail closed. Each distinct sorted name is
 classified for planning and reclassified before return; disagreement is an
 opaque invariant error.
 
-`lib/internal/recipe` owns the narrow consumer interface; it does not import
-`lib/internal/canonical`. The canonical package exposes an immutable type whose
+`internal/recipe` owns the narrow consumer interface; it does not import
+`internal/canonical`. The canonical package exposes an immutable type whose
 method set satisfies that interface without importing recipe. A cross-package
 test proves that production wiring and the full exclusion table remain aligned.
 
@@ -409,7 +409,7 @@ before acceptance; collisions must never change correctness.
 ## Deterministic Decoded JSON
 
 M9 serializes the closed recipe model to decoded JSON only. M10 and
-`lib/internal/instance` retain ownership of padded base64, the `r=` tag,
+`internal/instance` retain ownership of padded base64, the `r=` tag,
 Message-Instance folding, and full field formatting.
 
 The byte representation is fixed:
@@ -522,7 +522,7 @@ must never require relaxed parser or applier limits.
 
 ## Package Boundaries
 
-`lib/internal/recipe` owns:
+`internal/recipe` owns:
 
 - generation request, result, body policy, and usage types;
 - deterministic header and body planning;
@@ -531,20 +531,20 @@ must never require relaxed parser or applier limits.
 - generated-output parse/apply proof;
 - recipe-generation error mapping and resource accounting.
 
-`lib/internal/rawmsg` remains the only owner of:
+`internal/rawmsg` remains the only owner of:
 
 - validated RFC 5322 header bytes and unfolded values;
 - logical body lines and terminator state;
 - header, body, line, and framing limits.
 
-`lib/internal/canonical` remains the only owner of:
+`internal/canonical` remains the only owner of:
 
 - Section 4 plus Section 6.2 signed-header relevance classification;
 - Section 6 canonical input and hash semantics;
 - the immutable production implementation of the recipe-owned relevance
   interface.
 
-`lib/internal/instance` remains the only owner of:
+`internal/instance` remains the only owner of:
 
 - padded base64 encoding and decoding for `r=`;
 - Message-Instance tag ordering, folding, numbering, and formatting.
@@ -552,7 +552,7 @@ must never require relaxed parser or applier limits.
 M10 signing/revision orchestration will own canonical hash comparison, the
 decision to add an instance, `m=` progression, hash-set construction, and
 signature creation. No `cmd/` module, OpenAPI DTO, service type, crypto key, or
-observability runtime enters `lib/internal/recipe`.
+observability runtime enters `internal/recipe`.
 
 Package-direction tests must continue to reject production recipe imports of
 instance, canonical, verify, service, command, OpenAPI, Cobra, Viper, Fx,

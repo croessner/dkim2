@@ -23,8 +23,8 @@ This spec is governed by:
   3.6, 5.1, 5.2, 6.1, 12.1, 12.4, 12.5, 13.1, 13.3, 13.5, 14, 15, 16,
   17, and 19
 - `docs/specs/spec-and-prompt-template.md`
-- `lib/doc.go`
-- `lib/internal/rawmsg/doc.go`
+- `doc.go`
+- `internal/rawmsg/doc.go`
 - `Makefile`
 - `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05, as the active DKIM2
   architecture baseline
@@ -40,8 +40,8 @@ artifact before implementation continues.
 
 The repository currently has only the package stubs:
 
-- `lib/doc.go`
-- `lib/internal/rawmsg/doc.go`
+- `doc.go`
+- `internal/rawmsg/doc.go`
 
 There is no raw message parser, no controlled header/body model, no line ending
 policy, no immutable representation, no structured parser diagnostics, and no
@@ -58,7 +58,7 @@ recipe and signature behavior untrustworthy.
 ## Goal
 
 Implement a controlled raw RFC 5322 message representation in
-`lib/internal/rawmsg` that:
+`internal/rawmsg` that:
 
 - Parses raw message bytes into an immutable `Message`.
 - Preserves header field occurrence order and original field bytes.
@@ -134,7 +134,7 @@ Measured effort is filled during implementation closeout:
 
 Total measured wall-clock for the five-prompt M1 pack is 24m04s. This is far
 below the planning estimate of 3 to 5 agent-days because the implementation
-scope remained tightly bounded to `lib/internal/rawmsg`, used only standard
+scope remained tightly bounded to `internal/rawmsg`, used only standard
 library code, and did not require adapter, OpenAPI, datasource, or
 canonicalization work.
 
@@ -146,9 +146,9 @@ recorded as an additional estimate, but it does not replace wall-clock time.
 
 In scope:
 
-- `lib/internal/rawmsg` domain types, parser, options, structured errors, and
+- `internal/rawmsg` domain types, parser, options, structured errors, and
   package documentation.
-- Unit tests under `lib/internal/rawmsg`.
+- Unit tests under `internal/rawmsg`.
 - Testdata or fuzz seeds needed for raw message parsing, if useful and small.
 - Internal helpers needed to preserve bytes, detect malformed input, and build
   line indexes.
@@ -156,7 +156,7 @@ In scope:
 
 Out of scope:
 
-- Public `lib` facade APIs beyond what is required to keep package docs
+- Public root library facade APIs beyond what is required to keep package docs
   accurate.
 - `Message-Instance` parsing.
 - `DKIM2-Signature` parsing.
@@ -260,7 +260,7 @@ Ambiguities and interpretations:
   without normalization and does not add Unicode semantics.
 - This spec does not define canonicalization whitespace rules beyond the
   minimum unfolding needed to provide a safe header field view. Canonicalization
-  remains owned by `lib/internal/canonical`.
+  remains owned by `internal/canonical`.
 - This spec does not define Milter reconstruction fidelity. The Milter adapter
   may later report fidelity metadata, but `rawmsg` remains the raw RFC 5322
   source of truth.
@@ -269,20 +269,20 @@ Ambiguities and interpretations:
 
 Intended ownership:
 
-- `lib/`:
+- Root library module:
   Owns the standalone DKIM2 library module. M1 may keep the public package
   empty except for documentation unless later implementation evidence requires
   an exported facade.
-- `lib/internal/rawmsg`:
+- `internal/rawmsg`:
   Owns the raw RFC 5322 parser, immutable message representation, header block,
   header fields, body bytes, line indexing, parser options, and parser error
   types.
-- `lib/internal/canonical`:
+- `internal/canonical`:
   Does not change in M1. Later consumes `rawmsg` without owning parser or
   message-fidelity rules.
-- `lib/internal/instance` and `lib/internal/signature`:
+- `internal/instance` and `internal/signature`:
   Do not change in M1. Later consume header fields from `rawmsg`.
-- `lib/internal/recipe`:
+- `internal/recipe`:
   Does not change in M1. Later consumes body line indexes and message
   snapshots from `rawmsg`.
 - `cmd/dkim2d`:
@@ -438,7 +438,7 @@ Integration or E2E tests:
 Generated and documentation checks:
 
 - No OpenAPI generated artifacts are touched.
-- Package documentation for `lib/internal/rawmsg` must describe the raw
+- Package documentation for `internal/rawmsg` must describe the raw
   message ownership contract and strict default policy.
 - All changed or added hand-written named functions and receiver methods must
   have concise English doc comments.
@@ -455,7 +455,7 @@ document the exact blocker.
 
 ## Acceptance Criteria
 
-- `lib/internal/rawmsg` owns a byte-preserving raw RFC 5322 parser and
+- `internal/rawmsg` owns a byte-preserving raw RFC 5322 parser and
   immutable message representation.
 - Default parsing is strict about CRLF and fails closed on ambiguous
   message-fidelity state.
@@ -470,7 +470,7 @@ document the exact blocker.
 - All constructed domain views prove byte consistency instead of trusting
   caller-supplied split representations.
 - No daemon, Milter, OpenAPI, CLI, datasource, concrete observability exporter,
-  or service-only dependency leaks into `lib`.
+  or service-only dependency leaks into the root library module.
 - The implementation does not use `net/mail` as parser truth.
 - Unit and malformed input tests cover the M1 behavior named in
   `docs/ARCHITECTURE.md`.
@@ -508,17 +508,17 @@ this M1 follow-up.
 
 | Area | Soll | Ist | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Scope | Work stays inside `lib/internal/rawmsg`, tests, and package docs | Implementation changed rawmsg code/tests, rawmsg package docs, this spec, and the ignored prompt timing ledger only | done | No command modules, OpenAPI contracts, generated artifacts, datasource, DNS, signing, verification, canonicalization, recipe, or concrete observability code changed. |
+| Scope | Work stays inside `internal/rawmsg`, tests, and package docs | Implementation changed rawmsg code/tests, rawmsg package docs, this spec, and the ignored prompt timing ledger only | done | No command modules, OpenAPI contracts, generated artifacts, datasource, DNS, signing, verification, canonicalization, recipe, or concrete observability code changed. |
 | Behavior | Raw RFC 5322 bytes, headers, body, CRLF policy, and line indexes are implemented | Parser preserves raw message/header/body bytes, accepts header-only syntax, validates RFC 6532 UTF-8 headers, and owns all composed byte invariants | done | Strict CRLF is required; a delimiter is required only when the optional body is present. |
 | Tests | Parser unit tests, malformed input tests, immutability tests, and fuzz-smoke coverage exist | Unit coverage includes header-only messages, duplicate headers, folding, valid and invalid UTF-8, obsolete ASCII controls, body offsets, strict 998/999 boundaries, split-brain constructors, malformed inputs, immutability, secret-safe errors, and fuzz-smoke | done | Focused tests prove RFC framing, line limits, and constructor consistency. |
 | Security | Malformed and ambiguous input fails closed; diagnostics are secret-safe | Bare LF, bare CR, mixed endings, unterminated headers, invalid UTF-8, unavailable normalization, inconsistent constructed views, malformed headers, and resource-limit violations return typed bounded errors | done | Error tests assert raw header/body content is not emitted. |
-| Boundaries | Library remains free of daemon, Milter, OpenAPI, Cobra, Viper, Fx, Prometheus, OTLP, CLI, LDAP, SQL dependencies | `lib/internal/rawmsg` imports only standard library packages and does not use `net/mail` as parser truth | done | `go list -deps ./internal/rawmsg` showed only standard library dependencies plus the rawmsg package. |
+| Boundaries | Library remains free of daemon, Milter, OpenAPI, Cobra, Viper, Fx, Prometheus, OTLP, CLI, LDAP, SQL dependencies | `internal/rawmsg` imports only standard library packages and does not use `net/mail` as parser truth | done | `go list -deps ./internal/rawmsg` showed only standard library dependencies plus the rawmsg package. |
 | Observability | Only bounded parser metadata exists; no concrete exporters or high-cardinality labels | Parser metadata records bounded byte counts, header count, line-ending policy, and normalization flag only | done | No logs, metrics, traces, exporters, or label dimensions were added. |
 | Effort | Prompt timings are measured and compared to the 3 to 5 agent-day estimate | Five-prompt measured wall-clock total is 24m04s versus the 3 to 5 agent-day estimate | done | The estimate variance is explained by the narrow standard-library-only M1 scope and lack of integration/generation work. |
 
 ## Decisions And Open Questions
 
-- Settled: `lib/internal/rawmsg` is the single source of truth for controlled
+- Settled: `internal/rawmsg` is the single source of truth for controlled
   raw RFC 5322 message representation.
 - Settled: strict CRLF parsing is the default policy.
 - Settled: M1 accepts RFC 5322 header-only syntax; the header/body delimiter is

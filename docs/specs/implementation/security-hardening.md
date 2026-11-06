@@ -564,7 +564,7 @@ and removal condition; implementation and review agents cannot invent one.
 
 ## Package And Dependency Boundaries
 
-- `lib/` owns protocol, parser, canonicalization, recipe, verification,
+- The root library module owns protocol, parser, canonicalization, recipe, verification,
   signing, DNS-domain, datasource-domain, replay-domain, and library-safe
   observation fixes. It remains free of daemon, Milter, OpenAPI, Cobra, Viper,
   Fx, Prometheus, OTLP exporter, Valkey-driver, filesystem-provider, and

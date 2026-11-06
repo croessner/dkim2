@@ -719,8 +719,8 @@ func buildCurrentComparison(
 		return ComparisonReport{}, errors.New("comparison_fixture")
 	}
 	parserProducer, err := digestRepositoryFiles(root, []string{
-		"lib/internal/keyresolver/record.go",
-		"lib/internal/signature/parser.go",
+		"internal/keyresolver/record.go",
+		"internal/signature/parser.go",
 	})
 	if err != nil {
 		return ComparisonReport{}, err
@@ -732,13 +732,13 @@ func buildCurrentComparison(
 		return ComparisonReport{}, errors.New("comparison_fixture")
 	}
 	dkim2wgProducer, err := digestRepositoryFiles(root, []string{
-		"lib/internal/instance/hash.go",
-		"lib/internal/instance/parser.go",
-		"lib/internal/service/verifier.go",
-		"lib/internal/signature/cardinality.go",
-		"lib/internal/signature/parser.go",
-		"lib/internal/verify/hash.go",
-		"lib/internal/verify/verifier.go",
+		"internal/instance/hash.go",
+		"internal/instance/parser.go",
+		"internal/service/verifier.go",
+		"internal/signature/cardinality.go",
+		"internal/signature/parser.go",
+		"internal/verify/hash.go",
+		"internal/verify/verifier.go",
 	})
 	if err != nil {
 		return ComparisonReport{}, err

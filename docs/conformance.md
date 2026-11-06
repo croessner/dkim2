@@ -91,7 +91,7 @@ The manifest binds two byte-exact Draft-09 vector families for this path:
 `received-dsn-golden.json` for Section 16.4 evaluation and
 `dsn-propagation-golden.json` for the Section 16.3 rebuild, report
 generation, and propagation signing, both under
-`lib/testdata/vectors/draft-ietf-dkim-dkim2-spec-09/`. Their cases are
+`testdata/vectors/draft-ietf-dkim-dkim2-spec-09/`. Their cases are
 `verification/received-dsn-evaluation` and `signing/dsn-propagation-rebuild`.
 
 No external DKIM2 corpus is authoritative for this Draft-09 implementation.
@@ -162,7 +162,7 @@ Sequence gaps and duplicates stay PERMERROR `sequence_invalid` as structural
 errors. Local policy verdicts for every reason are unchanged except that a
 null body Recipe history, formerly a PASS with partial history, is now
 rejected in strict mode; the reason by mode table is pinned by
-`lib/verification_disposition_test.go`.
+`verification_disposition_test.go`.
 
 Draft-09 Sections 3.8, 7.1 item 3, and 11.1 also make a From header field
 Authentic when `d=` is a subdomain of the From domain (the upward match),

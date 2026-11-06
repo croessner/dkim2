@@ -289,7 +289,7 @@ code change. `make guardrails` is mandatory on the final unchanged candidate.
 - Capability and all mail data remain secret-safe outside explicit requests.
 - Fixtures and output are deterministic, bounded, draft-versioned, and closed.
 - All negative behavior fails closed with stable content-free classes.
-- No service dependency enters `lib/`.
+- No service dependency enters the root library module.
 - Focused tests, all new fuzz targets, race tests, OpenAPI checks, and
   `make guardrails` pass on one unchanged snapshot.
 - An independent reviewer reports no unresolved finding.

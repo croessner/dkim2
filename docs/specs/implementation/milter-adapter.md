@@ -50,7 +50,7 @@ providers, and general operator key management remain out of scope.
 
 ## Product And Dependency Boundaries
 
-`lib/` continues to own protocol parsing, verification, recipe behavior,
+The root library module continues to own protocol parsing, verification, recipe behavior,
 signing, revision, and public domain results. It must not import Milter,
 OpenAPI, Cobra, Viper, Fx, HTTP, Prometheus, OpenTelemetry exporters, or daemon
 packages.
@@ -299,7 +299,7 @@ The daemon projects every added field value without its CRLF line breaks but
 keeps the whitespace that followed them. The library's frozen field grammar
 emits a TAB only directly after such a CRLF, so every TAB after the first
 value octet marks one original fold point. Before serialization the Milter and
-the Exim filter restore those fold points as LF+TAB (`lib/headerfold`), the
+the Exim filter restore those fold points as LF+TAB (`headerfold`), the
 folded form Postfix and Exim store line by line. A plan whose restored field
 still has a physical line over 998 octets fails validation. Without the
 restoration a long `DKIM2-Signature` (several kilobytes, for example an
@@ -365,7 +365,7 @@ key paths, handles, DER, PEM, public-key fingerprints, or protected content.
 A minimal reviewed bridge projects an M11 resolved policy/profile into M10's
 public signing facade. Profile validation, handle mapping, and algorithm/use
 compatibility each have one source of truth. The bridge must not export
-provider-specific structs or move daemon dependencies into `lib/`.
+provider-specific structs or move daemon dependencies into the root library module.
 
 Route authority and recipient authorization are request-scoped or explicitly
 bounded. They may not accumulate long-lived route tickets. The local authorizer

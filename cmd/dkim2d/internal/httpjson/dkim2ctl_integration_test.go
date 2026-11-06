@@ -410,7 +410,6 @@ func newDKIM2ctlInboundProcessor(
 	repository := dkim2ctlRepositoryRoot(t)
 	corpusBytes, err := os.ReadFile(filepath.Join(
 		repository,
-		"lib",
 		"testdata",
 		"vectors",
 		dkim2.DraftIdentifier,

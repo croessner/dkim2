@@ -12,8 +12,8 @@
     "wire_version": {"const": "v1"},
     "planned_tags": {
       "type": "array",
-      "minItems": 7,
-      "maxItems": 7,
+      "minItems": 6,
+      "maxItems": 6,
       "uniqueItems": true,
       "items": {"type": "string", "maxLength": 64}
     },

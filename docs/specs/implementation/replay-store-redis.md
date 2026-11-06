@@ -27,7 +27,7 @@ In scope:
   implementing `dkim2.ManagedReplayStore` and
   `dkim2.ReplayPropagationStore` for standalone, Sentinel, and cluster
   topologies;
-- the nonce-bearing value grammar owned by `lib/internal/replay` and exposed
+- the nonce-bearing value grammar owned by `internal/replay` and exposed
   through the root facade (`NewReplayNonce`, `ReplayFirstSeenValue`,
   `ParseReplayFirstSeenValue`, `ReplayPropagationPendingValue`,
   `ParseReplayPropagationValue`);
@@ -41,7 +41,7 @@ every provider and is not changed by the Redis provider.
 ## Storage-Neutral Contract
 
 Replay detection is local policy outside DKIM2 cryptographic correctness. The
-library (`lib/internal/replay`, exposed through the root facade) owns the
+library (`internal/replay`, exposed through the root facade) owns the
 replay identity, key derivation, retention, closed results and errors, and
 the memory and disabled providers. Providers never see raw message,
 signature, or envelope facts; they see only the protected storage key.
@@ -194,7 +194,7 @@ Raw store errors never reach logs, REST output, or the returned error.
 The provider is the only package that imports `github.com/redis/go-redis/v9`
 (and its `maintnotifications` package, used only to disable the feature). It
 depends on the root `github.com/croessner/dkim2` facade and the standard
-library only; it never imports `lib/internal` or the daemon configuration
+library only; it never imports `internal` or the daemon configuration
 package. The daemon builds a plain `redisstore.Config` and borrows
 `redisstore.Secrets` from the protected generation; `NewStore` copies what it
 retains. `Config`, `Secrets`, `Store`, and the nonce render one constant
@@ -260,7 +260,7 @@ always returns the value it found.
 
 ### Value grammar
 
-`lib/internal/replay` owns the closed grammar; the provider only renders and
+`internal/replay` owns the closed grammar; the provider only renders and
 parses through the facade.
 
 | Family | Written form | Accepted forms |
@@ -462,7 +462,7 @@ configuration) is documented in `docs/replay-store-redis.md`.
 
 ## Required Tests
 
-- lib grammar: rendering, parsing, legacy forms, rejection matrix, and fuzzed
+- Library grammar: rendering, parsing, legacy forms, rejection matrix, and fuzzed
   parsers;
 - provider unit tests against an in-process fake: the full reply and error
   mapping matrix, own-value recognition for all three operations, takeover
