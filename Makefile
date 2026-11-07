@@ -86,7 +86,9 @@ help:
 		'  make qualification-exim      run source-matched Exim version qualification' \
 		'  make container-smoke         build images and run hardened runtime smoke' \
 		'  make guardrails              run normal product quality once' \
-		'  make release-guardrails      run release quality and conformance'
+		'  make release-guardrails      run release quality and conformance' \
+		'  make graphify-update         refresh the graphify knowledge graph (AST only)' \
+		'  make graphify-check          report whether the graphify graph is stale'
 
 .PHONY: check-datasource-schema
 check-datasource-schema:
@@ -812,3 +814,18 @@ release-candidate:
 .PHONY: check-go-toolchain-contract
 check-go-toolchain-contract:
 	@scripts/check-go-toolchain-contract.sh
+
+# The graphify knowledge graph under graphify-out/ is a local, ignored
+# navigation aid for agents. Code refreshes are AST-only and need no LLM;
+# documentation changes need a semantic `/graphify . --update` run.
+GRAPHIFY ?= graphify
+
+.PHONY: graphify-update
+graphify-update:
+	@command -v $(GRAPHIFY) >/dev/null 2>&1 || { echo 'graphify is not installed (pipx install graphifyy)' >&2; exit 1; }
+	$(GRAPHIFY) update .
+
+.PHONY: graphify-check
+graphify-check:
+	@command -v $(GRAPHIFY) >/dev/null 2>&1 || { echo 'graphify is not installed (pipx install graphifyy)' >&2; exit 1; }
+	$(GRAPHIFY) check-update .

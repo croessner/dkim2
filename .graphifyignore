@@ -1,0 +1,14 @@
+# graphify corpus exclusions (in addition to .gitignore).
+# Vendored third-party code and generated/binary fixtures add noise, not
+# project knowledge.
+vendor/
+**/vendor/
+graphify-out/
+temp/
+.artifacts/
+.idea/
+testdata/
+**/testdata/
+*.eml
+*.sum
+go.work.sum
