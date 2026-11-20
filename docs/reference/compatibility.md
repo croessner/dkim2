@@ -212,6 +212,14 @@ DNS-03 baseline (`v0.4.0`; disposition
 - Evidence reports that name DNS-02 no longer validate against the tooling
   of this release.
 
+Dependency and toolchain refresh (`v0.4.1`; reviewed base `b8cc5cb2`, 933
+declarations):
+
+- No exported declaration is added, removed, or changed.
+- Changed: the direct requirement `golang.org/x/net` moves from `v0.61.0` to
+  `v0.62.0` (CVE-2026-78661 in `golang.org/x/net/html`, a package this module
+  does not import). The toolchain is Go 1.27.4 since `v0.4.0`.
+
 `DescribeRecordedChain` parses the CRLF header section with the verifier's
 extraction and collection rules under the default limits and returns what each
 hop recorded, ordered by `i=`: signer domain, Message-Instance, and a
