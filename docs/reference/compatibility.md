@@ -192,6 +192,26 @@ Draft-09 baseline (`v0.3.0`; disposition C4, C5, C7, C9):
   trailing FWS, are rejected (Section 2.14); FWS after an `rt=` comma stays
   accepted (`DKIM2-ISSUE-0024`), FWS before one is rejected.
 
+DNS-03 baseline (`v0.4.0`; disposition
+`docs/specs/dns-03-migration-disposition.md` C2 and C15):
+
+- No exported declaration is added, removed, or changed. `DraftIdentifier`
+  stays `draft-ietf-dkim-dkim2-spec-09`; the DNS draft identifier is not part
+  of the exported API, the HTTP wire contract, or any bound value.
+- Changed behavior without a signature change: `DNSPublicKeyProvider`
+  reports `PublicKeyStatusInvalid` (PERMERROR `invalid_key`) for a key record
+  whose `p=` value omits the trailing `=` characters it needs (DNS-03
+  Section 2.3, `DKIM2-ISSUE-0027`); earlier releases resolved such a record.
+  A Domain Policy Record whose `f=` value is outside the DNS-03 Section 5.2
+  grammar (an empty flag, inner whitespace, a flag that is not a hyphenated
+  word) resolves as `domain_policy_invalid` (PERMERROR); earlier releases
+  ignored the malformed element and read the rest. Unrecognized well-formed
+  flags are still ignored.
+- HTTP: one description text of `VerifierHop.signature_algorithms` changed;
+  no schema, enum, or path changed.
+- Evidence reports that name DNS-02 no longer validate against the tooling
+  of this release.
+
 `DescribeRecordedChain` parses the CRLF header section with the verifier's
 extraction and collection rules under the default limits and returns what each
 hop recorded, ordered by `i=`: signer domain, Message-Instance, and a
