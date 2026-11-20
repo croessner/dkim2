@@ -244,8 +244,8 @@ built from exact candidate bytes proves standalone resolution with
 tests, vet, and builds. Command modules never contain local replace directives.
 
 Since `v0.3.3` the library module is published from the repository root, and
-the command and tools modules require the published library release
-(`github.com/croessner/dkim2 v0.3.3`) with checksums authenticated by the
+the command and tools modules require a published library release (currently
+`github.com/croessner/dkim2 v0.4.1`) with checksums authenticated by the
 checksum database. The private GOPROXY still synthesizes only the unpublished
 `v0.1.0-rc.1` candidate; published library versions are copied from the
 module cache like every other dependency. `make sync-workspace` refreshes the
