@@ -34,7 +34,7 @@ func completedSigningFields(message dkim2.UnrestrictedSignedMessage, interopInfo
 // date on which the DKIM2 behavior this daemon emits last changed. It is a
 // version stamp for the code, not a signing or draft date, and must be bumped
 // with every change to what the daemon signs, verifies, or emits.
-const interopBehaviorDate = "2026-11-02"
+const interopBehaviorDate = "2026-11-20"
 
 // signingInteropField renders one bounded informational field from library-parsed
 // output, preserving canonical domain and algorithm spelling and stamping the

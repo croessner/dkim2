@@ -618,7 +618,7 @@ For example, an RSA signing operation produces:
 
 ```text
 X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-09;
-    repo=github.com/croessner/dkim2; date=2026-11-02; sw=dkim2d;
+    repo=github.com/croessner/dkim2; date=2026-11-20; sw=dkim2d;
     action=sign d=example.test a=rsa-sha256;
 ```
 

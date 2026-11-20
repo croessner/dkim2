@@ -35,7 +35,7 @@ func TestInteropInfoSigningAndRevision(t *testing.T) {
 			t.Fatalf("field count = %d, want %d", len(fields), wantCount)
 		}
 		if enabled {
-			if interopBehaviorDate != "2026-11-02" {
+			if interopBehaviorDate != "2026-11-20" {
 				t.Fatalf("behavior date = %q; bump it together with this pin", interopBehaviorDate)
 			}
 			want := "X-DKIM2-Info: draft=ietf-dkim-dkim2-spec-09;\r\n\trepo=github.com/croessner/dkim2; date=" + interopBehaviorDate + "; sw=dkim2d;\r\n\taction=sign d=origin.example.test a=rsa-sha256,ed25519-sha256;\r\n"

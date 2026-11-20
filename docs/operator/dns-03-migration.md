@@ -30,6 +30,10 @@ check. Two verification behaviors become stricter.
 - Signing is unaffected. `dkim2d datasource domain dns export` already emits
   padded `p=` values and a well-formed `v=DKIM1; f=strict` record.
 - The replay store needs no restart or migration.
+- The optional `X-DKIM2-Info` field keeps its form. Its `date` tag is the
+  behavior stamp of the daemon and reads `2026-11-20` from `v0.4.2` on;
+  `v0.4.0` and `v0.4.1` verify by DNS-03 but still stamp `2026-11-02`. A
+  consumer that matches the stamp exactly has to follow it.
 
 ## Stricter Key Records: Base64 Padding
 

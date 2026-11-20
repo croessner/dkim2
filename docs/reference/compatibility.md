@@ -220,6 +220,15 @@ declarations):
   `v0.62.0` (CVE-2026-78661 in `golang.org/x/net/html`, a package this module
   does not import). The toolchain is Go 1.27.4 since `v0.4.0`.
 
+Interop behavior date (`v0.4.2`):
+
+- No exported declaration is added, removed, or changed, and the library is
+  unchanged.
+- `dkim2d` stamps `date=2026-11-20` in the optional `X-DKIM2-Info` field. The
+  tag names the day the daemon's signing, verification, or emission behavior
+  last changed, and the DNS-03 verification rules changed it. `v0.4.0` and
+  `v0.4.1` already verify by DNS-03 but still stamp `2026-11-02`.
+
 `DescribeRecordedChain` parses the CRLF header section with the verifier's
 extraction and collection rules under the default limits and returns what each
 hop recorded, ordered by `i=`: signer domain, Message-Instance, and a

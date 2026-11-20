@@ -165,6 +165,11 @@ the draft issue log; posting them is left to the maintainer.
   contract, the `X-DKIM2-Info` header, the replay keys, or any signed or
   bound value, so no wire value and no draft-bound golden changes. The
   OpenAPI `DraftVersion` enum is unchanged.
+- The `date` tag of `X-DKIM2-Info` is not a draft date but the daemon's
+  behavior stamp, which moves with every change to what the daemon signs,
+  verifies, or emits. The stricter DNS-03 verification is such a change, so
+  the stamp is `2026-11-20` from `v0.4.2` on. `v0.4.0` and `v0.4.1` shipped
+  the DNS-03 behavior with the earlier stamp `2026-11-02`.
 - The evidence tooling binds every report to the identifier. Conformance,
   Postfix and Exim qualification, interop discovery and comparison,
   reference, and security reports that were produced under DNS-02 no longer
