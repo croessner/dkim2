@@ -1,5 +1,5 @@
 #!/bin/sh
-export GOTOOLCHAIN=go1.27.3
+export GOTOOLCHAIN=go1.27.4
 set -eu
 
 protected_test_tmp=

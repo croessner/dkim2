@@ -5,7 +5,7 @@ incomplete if any mandatory rule is missed.
 
 ## Must Rules
 
-- MUST: Keep the project on Go 1.27.3 across `go.work`, module metadata, CI,
+- MUST: Keep the project on Go 1.27.4 across `go.work`, module metadata, CI,
   generated code, Docker or packaging files, and documentation.
 - MUST: Build and test without Go experiments. Make targets, scripts,
   Dockerfiles, and CI must not set `GOEXPERIMENT`.

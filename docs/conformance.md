@@ -102,7 +102,7 @@ oracles as recorded in the manifest.
 
 ## Reproducing the reports
 
-The portable profile requires exact Go 1.27.3 without Go experiments and `valkey-server` 9.1.2:
+The portable profile requires exact Go 1.27.4 without Go experiments and `valkey-server` 9.1.2:
 
 ```text
 make check-conformance

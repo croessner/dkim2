@@ -1053,7 +1053,7 @@ func testModuleDependencyParser(t *testing.T) {
 	t.Helper()
 	valid := `module github.com/croessner/dkim2
 go 1.27
-toolchain go1.27.3
+toolchain go1.27.4
 require (
 	golang.org/x/sys v0.47.0
 	ldap.example v1.0.0
@@ -1081,7 +1081,7 @@ replace (
 	}
 	invalid := []string{
 		"module github.com/croessner/dkim2\ngo 1.27\ntoolchain go1.26.6\n",
-		"module github.com/croessner/dkim2\ngo 1.27\ntoolchain go1.27.3 extra\n",
+		"module github.com/croessner/dkim2\ngo 1.27\ntoolchain go1.27.4 extra\n",
 		"module github.com/croessner/dkim2\ngo 1.27\nrequire (\nexample.com v1.0.0\n",
 		"module github.com/croessner/dkim2\ngo 1.27\nreplace example.com => ../local\n",
 		"module github.com/croessner/dkim2\ngo 1.27\ntool (\nexample.com v1.0.0\n)\n",
@@ -1463,7 +1463,7 @@ func validModuleMetadataDirective(fields []string) bool {
 	case "go":
 		return fields[1] == "1.27"
 	case "toolchain":
-		return fields[1] == "go1.27.3"
+		return fields[1] == "go1.27.4"
 	default:
 		return false
 	}

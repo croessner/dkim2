@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Exercises the strict fixture-bound real-matrix evidence verifier.
 set -euo pipefail
-export GOTOOLCHAIN=go1.27.3
+export GOTOOLCHAIN=go1.27.4
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 repository_root=$(CDPATH='' cd -- "$script_dir/../../../.." && pwd -P)
@@ -179,7 +179,7 @@ candidate_snapshot_sha256=$(go -C "$repository_root/tools" run ./cmd/candidateid
 build_input="$work/build-input-v1.txt"
 printf '%s\n' \
   'format=dkim2-exim-container-build-input-v1' \
-  'image=golang:1.27.3-trixie@sha256:604106102d33b1084e37ca08adf98ac0813624ae8595bd0d7f3965ecebded09c' \
+  'image=golang:1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d' \
   'platform=linux-amd64' \
   'mta_uid=999' \
   "base_revision=$candidate_base_revision" \

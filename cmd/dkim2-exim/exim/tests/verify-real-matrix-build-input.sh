@@ -35,7 +35,7 @@ fi
 mapfile -t lines <"$manifest"
 [[ ${#lines[@]} -eq 13 ]] || fail
 [[ ${lines[0]} == format=dkim2-exim-container-build-input-v1 ]] || fail
-[[ ${lines[1]} == image=golang:1.27.3-trixie@sha256:604106102d33b1084e37ca08adf98ac0813624ae8595bd0d7f3965ecebded09c ]] || fail
+[[ ${lines[1]} == image=golang:1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d ]] || fail
 [[ ${lines[2]} == platform=linux-amd64 ]] || fail
 [[ ${lines[3]} == mta_uid=999 ]] || fail
 [[ ${lines[4]} == "base_revision=$expected_base_revision" ]] || fail

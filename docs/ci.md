@@ -129,9 +129,9 @@ The workflow publishes the exact stable version only; it does not create
 
 ## Qualification compiler and evidence scope
 
-Postfix and Exim qualification use the digest-pinned Go 1.27.3 Trixie
+Postfix and Exim qualification use the digest-pinned Go 1.27.4 Trixie
 compiler image, with exact toolchain selection and no Go experiments.
-The product image keeps its Go 1.27.3 Bookworm build environment. The toolchain
+The product image keeps its Go 1.27.4 Bookworm build environment. The toolchain
 contract checks both qualification Dockerfiles and their evidence producers
 and consumers. Changing the compiler identity invalidates earlier
 qualification evidence; fresh Postfix and source-matched Exim runs are required
@@ -153,7 +153,9 @@ are classified as product vulnerabilities.
 
 ## Toolchain refresh and generator compatibility
 
-The 2026-10-19 refresh pins Go 1.27.3 (built without Go experiments since 2026-11-03),
+The 2026-10-19 refresh pinned Go 1.27.3 (built without Go experiments since
+2026-11-03); the 2026-11-20 refresh moves to Go 1.27.4, which fixes
+GO-2026-6859 in `net/http`. The refresh pins
 `golangci-lint` 2.15.0, `govulncheck` 1.9.0 and the Valkey 9.1.2 integration
 fixture. `actionlint` 1.7.12 and `oapi-codegen` 2.8.0 remain current for this
 refresh. Container evidence tools are Syft 1.54.1 and Trivy 0.76.0; the

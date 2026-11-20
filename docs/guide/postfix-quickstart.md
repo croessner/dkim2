@@ -52,7 +52,7 @@ flowchart LR
 
 ### Build the programs
 
-You need Go 1.27.3. Build Linux binaries from a checkout of a release tag:
+You need Go 1.27.4. Build Linux binaries from a checkout of a release tag:
 
 ```sh
 git clone https://github.com/croessner/dkim2.git

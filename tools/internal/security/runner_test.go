@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	testGoVersion = "go1.27.3"
+	testGoVersion = "go1.27.4"
 	testGOARCH    = "amd64"
 	testGOOS      = "linux"
 	testScanner   = "govulncheck@v1.3.0"
@@ -443,10 +443,10 @@ func TestClosedGoEnvironmentRejectsCallerToolchainAndDatabaseSelection(t *testin
 // TestRuntimeToolchainVersionRejectsExperiments freezes that evidence is
 // produced only by a plain toolchain without Go experiments.
 func TestRuntimeToolchainVersionRejectsExperiments(t *testing.T) {
-	if version, err := runtimeToolchainVersion("go1.27.3"); err != nil || version != "go1.27.3" {
+	if version, err := runtimeToolchainVersion("go1.27.4"); err != nil || version != "go1.27.4" {
 		t.Fatalf("runtime toolchain version = %q, %v", version, err)
 	}
-	for _, invalid := range []string{"", "go1.27.3 ", "go1.27.3-X:anyexperiment", "go1.27.3-X:"} {
+	for _, invalid := range []string{"", "go1.27.4 ", "go1.27.4-X:anyexperiment", "go1.27.4-X:"} {
 		if _, err := runtimeToolchainVersion(invalid); err == nil {
 			t.Fatalf("invalid runtime version %q accepted", invalid)
 		}

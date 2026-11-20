@@ -2,7 +2,7 @@ module github.com/croessner/dkim2/cmd/dkim2-dsn-propagator
 
 go 1.27
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/croessner/dkim2 v0.3.3

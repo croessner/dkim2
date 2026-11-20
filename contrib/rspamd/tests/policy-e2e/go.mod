@@ -7,4 +7,4 @@ module github.com/croessner/dkim2/contrib/rspamd/tests/policy-e2e
 
 go 1.27
 
-toolchain go1.27.3
+toolchain go1.27.4

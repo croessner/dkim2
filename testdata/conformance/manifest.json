@@ -196,19 +196,19 @@
     {
       "id": "postfix-qualification-dockerfile",
       "path": "contrib/qualification/postfix-milter/Dockerfile",
-      "sha256": "df0a4f06616a97d6b50a821c24ee9bc6087c2eecfb4a1636a6d55d9eab4ffcb3",
+      "sha256": "1c8095a8836be7b6f40fc15b672d5e2d9584f4b960a070e2fd7b9120942458a3",
       "module": "contrib/qualification/postfix-milter"
     },
     {
       "id": "postfix-qualification-policy-source",
       "path": "tools/postfix_qualification_policy_test.go",
-      "sha256": "58fcca346df5fb281b63ff23c22ac0280d8fa5307f2b87275828031be70c0893",
+      "sha256": "d845a88fc4092bff8fe1a66505e1f50b3cb1fb75a0ee1c7b39a16c5ffe105557",
       "module": "tools"
     },
     {
       "id": "postfix-qualification-runner",
       "path": "contrib/qualification/postfix-milter/run.sh",
-      "sha256": "74227a19db8254af4a4a6e054d483ebda0f9a64aede5fb707f6e625f4833d3a0",
+      "sha256": "560239a8591d8e22b8ae12e230f8988a7616533f2639e4c811dd204e055286c6",
       "module": "contrib/qualification/postfix-milter"
     },
     {
@@ -262,7 +262,7 @@
     {
       "id": "redis-harness-script",
       "path": "scripts/test-redis.sh",
-      "sha256": "a11b1bd10f0b1308b29d633173cf704138b94d8c72f66e6f336b0537633b056a",
+      "sha256": "20e179c95dbb40769c2890faacfb719282c0c3fdf500d5516460f363b0e5ce67",
       "module": "scripts"
     },
     {

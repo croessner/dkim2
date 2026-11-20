@@ -1,5 +1,5 @@
 #!/bin/sh
-export GOTOOLCHAIN=go1.27.3
+export GOTOOLCHAIN=go1.27.4
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
