@@ -14,20 +14,12 @@ type Base64String struct {
 }
 
 // ParseBase64String parses a padded RFC 4648 DKIM2 base64string value.
-// Draft-09 Section 2.14 admits FWS only between characters and before
-// padding, so a value that begins or ends with FWS is rejected.
+// Draft-09 Section 2.14 and DNS-03 Section 2.3 share one grammar: the value
+// MUST carry the trailing "=" characters it needs and zero pad bits, and FWS
+// is admitted only between characters and before padding, so a value that
+// begins or ends with FWS is rejected. Header fields and DNS key records
+// therefore use this single parser.
 func ParseBase64String(input []byte, limits Limits) (Base64String, error) {
-	return parseBase64String(input, limits, false)
-}
-
-// ParseOptionalPaddingBase64String parses RFC 4648 Base64 with optional terminal
-// padding for DNS key records, whose DNS-02 grammar keeps its own FWS rules.
-func ParseOptionalPaddingBase64String(input []byte, limits Limits) (Base64String, error) {
-	return parseBase64String(input, limits, true)
-}
-
-// parseBase64String parses strict Base64 under the selected terminal-padding policy.
-func parseBase64String(input []byte, limits Limits, optionalPadding bool) (Base64String, error) {
 	limits = limits.normalize()
 	if err := limits.Validate(); err != nil {
 		return Base64String{}, err
@@ -37,7 +29,7 @@ func parseBase64String(input []byte, limits Limits, optionalPadding bool) (Base6
 	}
 
 	encoded := stripBase64FWS(input)
-	if !optionalPadding && len(encoded) > 0 && (isWSP(input[0]) || isWSP(input[len(input)-1])) {
+	if len(encoded) > 0 && (isWSP(input[0]) || isWSP(input[len(input)-1])) {
 		return Base64String{}, base64Error(ErrorCodeInvalidBase64Whitespace, 0)
 	}
 	padCount, err := validateBase64AlphabetAndPadding(encoded)
@@ -47,13 +39,8 @@ func parseBase64String(input []byte, limits Limits, optionalPadding bool) (Base6
 	if len(encoded) == 0 {
 		return Base64String{}, base64Error(ErrorCodeInvalidBase64Length, 0)
 	}
-	if remainder := len(encoded) % 4; remainder != 0 {
-		if !optionalPadding || padCount != 0 || remainder == 1 {
-			return Base64String{}, base64Error(ErrorCodeInvalidBase64Length, 0)
-		}
-		missingPadding := 4 - remainder
-		encoded = append(encoded, bytesOf('=', missingPadding)...)
-		padCount = missingPadding
+	if len(encoded)%4 != 0 {
+		return Base64String{}, base64Error(ErrorCodeInvalidBase64Length, 0)
 	}
 
 	decodedLen := decodedBase64Length(len(encoded), padCount)
@@ -77,15 +64,6 @@ func parseBase64String(input []byte, limits Limits, optionalPadding bool) (Base6
 		encoded:  copyBytes(encoded),
 		decoded:  copyBytes(decoded),
 	}, nil
-}
-
-// bytesOf returns count copies of value for bounded canonical padding.
-func bytesOf(value byte, count int) []byte {
-	output := make([]byte, count)
-	for index := range output {
-		output[index] = value
-	}
-	return output
 }
 
 // Original returns the parser-owned encoded bytes before FWS stripping.

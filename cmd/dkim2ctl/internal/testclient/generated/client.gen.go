@@ -2157,7 +2157,7 @@ type VerifierHop struct {
 	RecipeMode             VerifierHopRecipeMode        `json:"recipe_mode"`
 	Sequence               CanonicalUint64              `json:"sequence"`
 
-	// SignatureAlgorithms Sorted unique algorithms of the hop's passing signature sets. The vocabulary is exactly the Draft-09 Section 3 signature algorithms this verifier implements; DNS-02 registry entries without a Draft-09 signing definition never verify and are never listed.
+	// SignatureAlgorithms Sorted unique algorithms of the hop's passing signature sets. The vocabulary is exactly the Draft-09 Section 3 signature algorithms this verifier implements; names without a Draft-09 signing definition never verify and are never listed.
 	SignatureAlgorithms []VerifierHopSignatureAlgorithms `json:"signature_algorithms"`
 	SignatureState      VerifierHopSignatureState        `json:"signature_state"`
 	SignerDomain        string                           `json:"signer_domain"`

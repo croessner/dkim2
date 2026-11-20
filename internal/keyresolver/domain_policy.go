@@ -8,7 +8,8 @@ import (
 	"github.com/croessner/dkim2/internal/tagvalue"
 )
 
-// domainPolicyTags lists the Draft-09 Section 3.8 Domain Policy Record tags.
+// domainPolicyTags lists the Domain Policy Record tags (Draft-09 Section 3.8,
+// DNS-03 Section 5).
 // Every other tag, including a p= tag of a co-located DKIM1 key-shaped
 // record, is ignored after generic tag-list validation.
 var domainPolicyTags = tagvalue.MustKnownTags("v", "f")
@@ -36,9 +37,10 @@ const (
 	// v=DKIM1, or a count-only answer that cannot be filtered; PERMERROR.
 	DomainPolicyAmbiguous DomainPolicyStatus = "ambiguous"
 	// DomainPolicyInvalid reports a record that begins with v=DKIM1 but is
-	// not a valid tag-list, an over-bound record, a permanent transport
-	// failure, or contradictory transport state; PERMERROR (local fail-closed
-	// interpretation D1, the draft is silent).
+	// not a valid tag-list or carries an f= value outside the DNS-03 Section
+	// 5.2 grammar, an over-bound record, a permanent transport failure, or
+	// contradictory transport state; PERMERROR (local fail-closed
+	// interpretation, the drafts are silent on a malformed policy record).
 	DomainPolicyInvalid DomainPolicyStatus = "invalid"
 )
 
@@ -122,11 +124,13 @@ func (r DomainPolicyRecord) Strict() bool { return r.initialized && r.strict }
 func (r DomainPolicyRecord) Valid() bool { return r.initialized }
 
 // ParseDomainPolicyRecord parses one already-concatenated TXT payload that
-// begins with v=DKIM1 as a Draft-09 Section 3.8 Domain Policy Record. The
-// tag-list follows Section 8 through the shared scanner; v= must be the first
-// tag with the exact value DKIM1. The optional f= value is split on ':' with
-// surrounding WSP trimmed from every flag (local interpretation D1, the draft
-// gives no ABNF); flags are case-sensitive and unknown flags are ignored.
+// begins with v=DKIM1 as a Domain Policy Record (Draft-09 Section 3.8, DNS-03
+// Section 5). The tag-list follows Draft-09 Section 8 through the shared
+// scanner; v= must be the first tag with the exact value DKIM1. The optional
+// f= value follows the DNS-03 Section 5.2 grammar: flags are case-sensitive
+// and unrecognized flags are ignored, but a flag list that violates the
+// grammar makes the whole record invalid instead of silently authorizing
+// subdomains.
 func ParseDomainPolicyRecord(input []byte, limits Limits) (DomainPolicyRecord, error) {
 	if err := limits.Validate(); err != nil {
 		return DomainPolicyRecord{}, newRecordError(RecordErrorContract)
@@ -147,13 +151,35 @@ func ParseDomainPolicyRecord(input []byte, limits Limits) (DomainPolicyRecord, e
 	}
 	record := DomainPolicyRecord{initialized: true}
 	if flags, ok := field.Get("f"); ok {
-		for flag := range strings.SplitSeq(flags.Value(), ":") {
-			if strings.Trim(flag, " \t") == domainPolicyStrictFlag {
-				record.strict = true
-			}
+		strict, valid := parsedDomainPolicyFlags(flags.Value())
+		if !valid {
+			return DomainPolicyRecord{}, newRecordError(RecordErrorInvalidSyntax)
 		}
+		record.strict = strict
 	}
 	return record, nil
+}
+
+// parsedDomainPolicyFlags applies the DNS-03 Section 5.2 dpr-f-tag grammar to
+// one scanner-trimmed f= value and reports whether the strict flag is present.
+// An empty value lists no flags. Otherwise every ':'-separated element must
+// be a hyphenated-word once the FWS the grammar admits around the separator
+// is removed; the scanner has already reduced that FWS to WSP. An empty,
+// space-containing, or otherwise non-conforming flag fails the whole list.
+func parsedDomainPolicyFlags(value string) (strict, valid bool) {
+	if value == "" {
+		return false, true
+	}
+	for flag := range strings.SplitSeq(value, ":") {
+		flag = strings.Trim(flag, " \t")
+		if !validHyphenatedWord(flag) {
+			return false, false
+		}
+		if flag == domainPolicyStrictFlag {
+			strict = true
+		}
+	}
+	return strict, true
 }
 
 // domainPolicyRecordCandidate reports whether a TXT payload is a purported

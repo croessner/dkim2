@@ -48,9 +48,9 @@
 // when explicitly typed temporary; otherwise it is a provider contract error.
 //
 // NewDNSPublicKeyProvider constructs the DNS-backed provider for the tested
-// draft-ietf-dkim-dkim2-dns-02 behavior baseline. The 2026-09-14 migration
-// from the individual DNS draft changed identifiers, not normative behavior. The
-// provider derives an absolute
+// draft-ietf-dkim-dkim2-dns-03 behavior baseline. The move from DNS-02 made
+// key-record parsing stricter: a p= value must carry its terminal Base64
+// padding. The provider derives an absolute
 // <selector>._domainkey.<signing-domain>. owner from signed values, so transports
 // and callers must treat that name as sensitive diagnostic data. TXTTransport
 // returns already-concatenated bytes for one TXT resource record while retaining
@@ -74,19 +74,19 @@
 //
 // DNS key records use PKCS#1 RSAPublicKey DER for RSA, exactly 32 raw bytes
 // for Ed25519, and exactly the 1312-octet raw FIPS 204 public key for the
-// Draft-09 Section 3.4 post-quantum mldsa44 algorithm. DNS-02 defines no key
-// type for it; k=mldsa44 is the documented local interpretation. The Draft-07
+// Draft-09 Section 3.4 post-quantum mldsa44 algorithm, which DNS-03 Section
+// 4.2 defines as the k=mldsa44 key type. The Draft-07
 // mldsa44-ed25519-sha512 composite is no longer defined: such signature sets
 // are ignored as unsupported algorithms and k=mldsa44-ed25519-sha512 records
 // are unsupported key types, exactly like any other unknown token. Empty p= is
-// revoked. Non-empty p= accepts omitted terminal
-// Base64 padding as DNS-02 specifies while still requiring canonical zero pad
-// bits. The parser recognizes lowercase k= as the DNS-02 grammar requires; the
-// inherited DNS-00 ABNF typo is corrected there. The active DKIM2
+// revoked. Non-empty p= must carry the terminal Base64 padding and the
+// canonical zero pad bits that DNS-03 Section 2.3 requires; a value that
+// omits needed "=" characters is a malformed record. The parser recognizes
+// lowercase k= as the DNS-03 grammar requires. The active DKIM2
 // signature grammar exposes no q= option; DNS TXT is the only lookup binding.
-// The t= tag is retired by DNS-02 Section 3.4.1: it is validated only by the
-// generic tag-list rules and is otherwise ignored, so DNS key records never
-// yield testing or strict-identity semantics. DNSSECStatus is bounded
+// DNS-03 Section 4 deprecates the h=, n=, s=, and t= tags and DKIM2 ignores
+// them: t= is validated only by the generic tag-list rules, so DNS key
+// records never yield testing or strict-identity semantics. DNSSECStatus is bounded
 // transport diagnostic metadata and never changes key acceptance, cache
 // lifetime, or verification facts.
 //

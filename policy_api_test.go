@@ -279,7 +279,7 @@ func TestEvaluatePolicyUsesSealedAuthenticatedFlags(t *testing.T) {
 	}
 }
 
-// TestEvaluatePolicyIgnoresRetiredDNSTestingTag proves DNS-02 Section 3.4.1:
+// TestEvaluatePolicyIgnoresRetiredDNSTestingTag proves DNS-03 Section 4:
 // key records carrying the retired t= tag produce exactly the policy decisions
 // of records without it, so DNS can never relax a local policy verdict.
 func TestEvaluatePolicyIgnoresRetiredDNSTestingTag(t *testing.T) {

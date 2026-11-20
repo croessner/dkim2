@@ -51,31 +51,6 @@ func TestParseBase64StringAcceptsCanonicalValues(t *testing.T) {
 	}
 }
 
-// TestParseOptionalPaddingBase64StringAcceptsDNSValues verifies optional input and canonical output padding.
-func TestParseOptionalPaddingBase64StringAcceptsDNSValues(t *testing.T) {
-	for _, tt := range []struct {
-		input, encoded, decoded string
-	}{
-		{input: "TWE", encoded: encodedMa, decoded: "Ma"},
-		{input: "TQ", encoded: encodedM, decoded: "M"},
-		{input: " T\tW E ", encoded: encodedMa, decoded: "Ma"},
-		{input: encodedMa, encoded: encodedMa, decoded: "Ma"},
-	} {
-		value, err := ParseOptionalPaddingBase64String([]byte(tt.input), Limits{})
-		if err != nil || value.EncodedString() != tt.encoded || string(value.Decoded()) != tt.decoded {
-			t.Fatalf("optional padding parse = %q/%q error=%v", value.EncodedString(), value.Decoded(), err)
-		}
-	}
-	for _, input := range []string{"T", "TR", "TWF", "TQ=", "TWE==", "T=WE", "TWE===", "TW-F"} {
-		if _, err := ParseOptionalPaddingBase64String([]byte(input), Limits{}); err == nil {
-			t.Fatal("malformed optional-padding value accepted")
-		}
-	}
-	if _, err := ParseOptionalPaddingBase64String([]byte("TWE"), Limits{MaxBase64DecodedBytes: 1}); !IsErrorCode(err, ErrorCodeLimitExceeded) {
-		t.Fatalf("unpadded decoded-limit error = %v, want limit exceeded", err)
-	}
-}
-
 // TestParseBase64StringRejectsMalformedInput verifies fail-closed syntax.
 func TestParseBase64StringRejectsMalformedInput(t *testing.T) {
 	tests := []struct {

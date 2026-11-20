@@ -405,7 +405,7 @@ func decodeMilterFixtureSet(input []byte) (milterFixtureSet, error) {
 func validateMilterFixtureSet(fixtures milterFixtureSet) error {
 	if fixtures.Schema != "dkim2.milter-fixtures.v1" ||
 		fixtures.MessageDraft != "draft-ietf-dkim-dkim2-spec-09" ||
-		fixtures.DNSDraft != "draft-ietf-dkim-dkim2-dns-02" ||
+		fixtures.DNSDraft != "draft-ietf-dkim-dkim2-dns-03" ||
 		fixtures.Fidelity != "milter_reconstructed_crlf" ||
 		len(fixtures.Cases) == 0 || len(fixtures.Cases) > milterCaseLimit {
 		return errors.New("fixture_identity")

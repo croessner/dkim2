@@ -26,8 +26,8 @@ and no longer describe implemented behavior.
 
 ## DNS-01 Testing Tag Retirement
 
-`draft-ietf-dkim-dkim2-dns-02` Section 3.4.1 retires the DNS key-record `t=`
-tag and says it SHOULD be ignored; its historical `t=y` (testing) and `t=s`
+`draft-ietf-dkim-dkim2-dns-03` Section 4 deprecates the DNS key-record `t=`
+tag, and DKIM2 ignores it; its historical `t=y` (testing) and `t=s`
 (strict identity) meanings now concern DKIM1 only. The current policy engine
 therefore:
 
@@ -52,7 +52,7 @@ longer describe implemented behavior.
 - Increment: local policy evaluation after current DKIM2 verification and DNS
   key resolution.
 - Protocol baseline: `draft-ietf-dkim-dkim2-spec-04` plus
-  `draft-ietf-dkim-dkim2-dns-02`.
+  `draft-chuang-dkim2-dns-04`.
 - Architecture owners: `internal/policy` for decisions and action planning,
   `internal/verify` for parsed flag candidates, and
   `internal/service` for authenticated verified-fact sealing.
@@ -84,7 +84,7 @@ The binding sources are, in order:
 
 1. `draft-ietf-dkim-dkim2-spec-04`, especially Sections 8.10, 10.4, 11.1,
    and 11.8, for flag meaning, output states, and local-policy separation.
-2. `draft-ietf-dkim-dkim2-dns-02`, Section 3.4.1, for the DNS `t=y` testing
+2. `draft-chuang-dkim2-dns-04`, Section 3.4.1, for the DNS `t=y` testing
    declaration.
 3. RFC 5321 for the distinction between permanent rejection and temporary SMTP
    failure.

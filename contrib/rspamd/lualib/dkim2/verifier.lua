@@ -428,8 +428,8 @@ local function valid_header_name(value)
 end
 
 -- The verifier projection lists only the Draft-09 Section 3 signature
--- algorithms the daemon verifies; DNS-02 registry names without a Draft-09
--- signing definition never appear.
+-- algorithms the daemon verifies; names without a Draft-09 signing
+-- definition never appear.
 local signature_algorithms = {
   ['rsa-sha256'] = true, ['ed25519-sha256'] = true, mldsa44 = true,
 }

@@ -1,7 +1,7 @@
 # DKIM2 Conformance Report
 
 - Message draft: `draft-ietf-dkim-dkim2-spec-09`
-- DNS draft: `draft-ietf-dkim-dkim2-dns-02`
+- DNS draft: `draft-ietf-dkim-dkim2-dns-03`
 - Base revision: `2222222222222222222222222222222222222222`
 - Candidate snapshot: `3333333333333333333333333333333333333333333333333333333333333333`
 - Profile: `portable`

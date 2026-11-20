@@ -3,7 +3,7 @@
 Status: repository qualification, 2026-09-14. This is not a production deployment
 receipt or a claim that every recommendation is implemented. The message
 baseline remains `draft-ietf-dkim-dkim2-spec-09`. The DNS baseline is
-`draft-ietf-dkim-dkim2-dns-02`. The individual Sender Policy
+`draft-ietf-dkim-dkim2-dns-03`. The individual Sender Policy
 proposal is outside this change and supplies no behavior or configuration.
 
 The subsequent [API and mail-flow review](../reports/api-and-mailflow-review-2026-09-14.md)

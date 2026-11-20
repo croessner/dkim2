@@ -43,7 +43,7 @@ This specification is governed by:
 - `docs/specs/openapi/oapi-codegen.server.yml`;
 - `docs/specs/openapi/oapi-codegen.client.yml`;
 - `draft-ietf-dkim-dkim2-spec-04`;
-- `draft-ietf-dkim-dkim2-dns-02`, under the repository's documented historical
+- `draft-chuang-dkim2-dns-04`, under the repository's documented historical
   DNS baseline policy;
 - RFC 4648 for strict canonical padded Base64;
 - RFC 5321 for SMTP reverse-path and forward-path bytes;
@@ -505,7 +505,7 @@ unknown algorithm is `permerror` `unsupported_algorithm` (Draft-09 Section
 14.6 step 4); `reason` uses the
 verification reason enum. The former `key_policy` object
 (`testing_declared`, `strict_identity_declared`, `strict_identity_applicable`)
-and its `KeyPolicyResult` schema were removed: DNS-02 Section 3.4.1 retires
+and its `KeyPolicyResult` schema were removed: DNS-03 Section 4 deprecates
 the DNS key-record `t=` tag, so no DNS testing or strict-identity fact exists.
 
 `PolicyResult` has exactly these required properties:

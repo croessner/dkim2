@@ -14,7 +14,7 @@ and exact protected-file contracts. Component READMEs own configuration schemas;
 do not assemble a configuration from fragments taken from different releases.
 
 The implementation uses `draft-ietf-dkim-dkim2-spec-09` and
-`draft-ietf-dkim-dkim2-dns-02`. Installing newer build dependencies does not
+`draft-ietf-dkim-dkim2-dns-03`. Installing newer build dependencies does not
 change those protocol baselines. DKIM2 is still a draft protocol: retain your
 existing DKIM/SPF/DMARC policy and qualify interoperability independently.
 

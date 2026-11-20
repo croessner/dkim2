@@ -19,6 +19,9 @@ the repository root with the unchanged module path
   configuration, and module compatibility window.
 - [Known limitations](known-limitations.md) states incomplete or unavailable
   capabilities without converting them into passing evidence.
+- [DNS-03 migration](../operator/dns-03-migration.md) lists the two stricter
+  record checks of the DNS-02 to DNS-03 upgrade and how to test a published
+  record.
 - [Draft-09 migration](../operator/draft-09-migration.md) lists the
   configuration, Domain Policy Record, REST, signal, replay, and rollback
   changes of the Draft-08 to Draft-09 upgrade.

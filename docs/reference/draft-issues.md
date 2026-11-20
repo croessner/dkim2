@@ -2,7 +2,7 @@
 
 This log binds the first preview to
 `draft-ietf-dkim-dkim2-spec-09` and
-`draft-ietf-dkim-dkim2-dns-02`. The strict machine source is
+`draft-ietf-dkim-dkim2-dns-03`. The strict machine source is
 `testdata/reference/draft-issues.json`; stable issue IDs are never reused.
 Local implementation status and upstream draft status are intentionally
 separate. No entry records an upstream filing or resolution unless that event
@@ -29,16 +29,18 @@ is independently observed.
 - `DKIM2-ISSUE-0007` through `DKIM2-ISSUE-0010` own the byte model, recipe,
   policy-projection, and restricted-release interpretations exercised by the
   conformance manifest.
-- `DKIM2-ISSUE-0011` and `DKIM2-ISSUE-0012` preserve the DNS ABNF and
-  query-method discrepancies without silently rewriting either pinned draft.
+- `DKIM2-ISSUE-0011` and `DKIM2-ISSUE-0012` are superseded by the baseline:
+  DNS-03 Section 4.2 writes the key-type tag as a case-sensitive lowercase
+  `k`, and DNS-03 Section 3 names the TXT lookup without a query-method
+  option. Both match the existing behavior.
 - `DKIM2-ISSUE-0014` is superseded by the baseline: Draft-09 Section 14.5
   makes more than one key record an error, which matches the existing
   fail-closed `ambiguous_key` PERMERROR. Draft-09 Section 3.7 first ignores
   records whose `v=` is not `DKIM1`; the uniqueness check applies to the
   remaining records only.
 - `DKIM2-ISSUE-0013` (DNS strict-identity flag versus the numeric signature
-  `i=` tag) is superseded by the baseline: DNS-02 Section 3.4.1 retires the
-  key-record `t=` tag, which verifiers SHOULD ignore. The `t=` tag is now
+  `i=` tag) is superseded by the baseline: DNS-03 Section 4 deprecates the
+  key-record `t=` tag, which DKIM2 ignores. The `t=` tag is now
   subject only to the generic tag-list rules and never yields testing or
   strict-identity semantics. The explicitly configured local policy testing
   mode is unrelated and unchanged.
@@ -71,25 +73,40 @@ is independently observed.
   exactly like any other unknown algorithm or key type; signing credentials
   that declare it fail closed.
 
-## DNS-02 and Draft-09 algorithm gaps
+## DNS key types and algorithm names
 
-- `DKIM2-ISSUE-0020` records that DNS-02 defines no key type for pure
-  ML-DSA-44. The implementation reads `k=mldsa44` (a valid hyphenated
-  `x-key-k-tag-type` word equal to the Draft-09 Section 10.9 sig-name, as the
-  key-type and algorithm match requires) with `p=` carrying the raw
-  1312-octet FIPS 204 public key (1752 base64 characters); every other length
-  is a malformed key (`invalid_key`, Draft-09 Section 14.5), and `h=` is
-  ignored. `opendkim-manage-go` publishes exactly this form.
-- `DKIM2-ISSUE-0021` records that DNS-02 Section 3.3 lists `rsa-sha512`,
-  `ed25519-sha512`, and the composite as signing algorithms, while Draft-09
-  defines only `rsa-sha256`, `ed25519-sha256`, and `mldsa44`. Draft-09 is
-  authoritative for `s=` sig-names; the DNS-02-only names are unknown
-  algorithms (a PERMERROR intermediate, no key lookup). They never verify, so
-  the REST verifier projection (`VerifierHop.signature_algorithms`) never
-  lists them, and its closed vocabulary is exactly the three Draft-09 names.
-- `DKIM2-ISSUE-0022` records that DNS-02 names the composite key type
-  `mldsa44-ed25519` in its Section 3.3 table but `mldsa44-ed25519-sha512` in
-  the Section 3.4.1 ABNF. Both spellings are unsupported key types.
+- `DKIM2-ISSUE-0020` is superseded by the baseline. An earlier DNS draft
+  defined no key type for pure ML-DSA-44, so `k=mldsa44` was a local
+  interpretation. DNS-03 Section 4.2 defines exactly that key type: `p=`
+  carries the raw 1312-octet FIPS 204 public key (1752 base64 characters)
+  with no wrapper, and DNS-03 Section 4.3 makes every other length a
+  malformed key (`invalid_key`, Draft-09 Section 14.5). `h=` is ignored.
+- `DKIM2-ISSUE-0021` is superseded by the baseline. An earlier DNS draft
+  listed `rsa-sha512`, `ed25519-sha512`, and the composite as signing
+  algorithms. DNS-03 Section 4 lists key types only, and Draft-09 defines
+  `rsa-sha256`, `ed25519-sha256`, and `mldsa44`. The removed names stay
+  unknown algorithms (a PERMERROR intermediate, no key lookup). They never
+  verify, so the REST verifier projection
+  (`VerifierHop.signature_algorithms`) never lists them, and its closed
+  vocabulary is exactly the three Draft-09 names.
+- `DKIM2-ISSUE-0022` is superseded by the baseline. An earlier DNS draft
+  named the composite key type `mldsa44-ed25519` in a table but
+  `mldsa44-ed25519-sha512` in its ABNF. DNS-03 defines no composite key
+  type; both spellings are unsupported key types.
+
+## DNS-03 Base64 padding
+
+- `DKIM2-ISSUE-0027` records that DNS-03 Section 2.3 says a base64string
+  "MUST be padded with zero bits and trailing = characters provided if
+  needed", while its ABNF keeps the trailing `=` characters optional and
+  RFC 6376 key records could omit them. Draft-09 Section 2.14 states the same
+  rule for header fields. The implementation follows the prose for key
+  records as well: a `p=` value that omits needed `=` characters is a
+  malformed record (`invalid_key`, Draft-09 Section 14.5). Earlier releases
+  accepted such records. A 2048-bit RSA key needs no padding; 3072-bit and
+  4096-bit RSA keys, Ed25519 keys, and ML-DSA-44 keys need it, so a record
+  affected by this change was published without the padding its key
+  generator emitted.
 
 ## Draft-09 grammar and Domain Policy Records
 
@@ -112,12 +129,15 @@ is independently observed.
   `dkim2d` follows the draft by default
   (`verification.domain_policy.allow_subdomain_from: true`); `false` keeps
   the Draft-08 downward-only rule. Signers stay downward only.
-- `DKIM2-ISSUE-0026` records that Draft-09 Section 3.8 says which records are
-  Domain Policy Records but not how a verifier treats more than one record
-  beginning with `v=DKIM1`, an invalid record, or a permanent lookup failure.
-  The implementation fails closed: `domain_policy_ambiguous` and
-  `domain_policy_invalid` are PERMERROR, a temporary failure is TEMPERROR
-  `domain_policy_temporary`, and an unknown flag is ignored.
+- `DKIM2-ISSUE-0026` records that Draft-09 Section 3.8 and DNS-03 Section 5
+  say which records are Domain Policy Records and that more than one is an
+  error, but not how a verifier treats an invalid record or a permanent
+  lookup failure. The implementation fails closed: `domain_policy_ambiguous`
+  and `domain_policy_invalid` are PERMERROR, and a temporary failure is
+  TEMPERROR `domain_policy_temporary`. An unrecognized flag is ignored, as
+  DNS-03 Section 5.2 requires; an `f=` value outside the DNS-03 Section 5.2
+  grammar (an empty flag, a flag that is not a hyphenated word) makes the
+  record invalid rather than authorizing subdomains.
 
 ## Delivery-status identity
 
@@ -145,4 +165,4 @@ part of this release-candidate work.
 `DKIM2-ISSUE-0016`, `DKIM2-ISSUE-0017`, `DKIM2-ISSUE-0018`,
 `DKIM2-ISSUE-0019`, `DKIM2-ISSUE-0020`, `DKIM2-ISSUE-0021`,
 `DKIM2-ISSUE-0022`, `DKIM2-ISSUE-0023`, `DKIM2-ISSUE-0024`,
-`DKIM2-ISSUE-0025`, and `DKIM2-ISSUE-0026`.
+`DKIM2-ISSUE-0025`, `DKIM2-ISSUE-0026`, and `DKIM2-ISSUE-0027`.

@@ -388,7 +388,7 @@ func (p selectedMatrixProvider) LookupPublicKey(_ context.Context, query dkim2.P
 
 // TestMapDomainResultMapsAuthenticSelectedSignatureWithRetiredTag proves end-to-end
 // selected output for a key record carrying the retired DNS t= tag, which
-// DNS-02 Section 3.4.1 ignores.
+// DNS-03 Section 4 ignores.
 func TestMapDomainResultMapsAuthenticSelectedSignatureWithRetiredTag(t *testing.T) {
 	corpus := loadSelectedGoldenCorpus(t)
 	vector, ok := corpus.Vectors["rsa_pass"]

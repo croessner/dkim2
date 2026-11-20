@@ -46,7 +46,7 @@
   "properties": {
     "schema": {"const": "dkim2.external-comparison.v1"},
     "message_draft": {"const": "draft-ietf-dkim-dkim2-spec-09"},
-    "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-02"},
+    "dns_draft": {"const": "draft-ietf-dkim-dkim2-dns-03"},
     "base_revision": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
     "candidate_snapshot_sha256": {"$ref": "#/$defs/sha256"},
     "registry_sha256": {"$ref": "#/$defs/sha256"},

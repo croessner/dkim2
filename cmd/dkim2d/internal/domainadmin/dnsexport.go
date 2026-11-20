@@ -26,7 +26,7 @@ const (
 	txtChunkBytes    = 200
 )
 
-// DNSRecord owns one canonical DNS-02 record derived from staged readback.
+// DNSRecord owns one canonical DNS-03 record derived from staged readback.
 type DNSRecord struct {
 	domain     []byte
 	selector   []byte
@@ -324,7 +324,7 @@ func findStagedCredential(
 	return datasourceadmin.CredentialRow{}, false
 }
 
-// newDNSRecord converts canonical SPKI to the exact DNS-02 public-key representation.
+// newDNSRecord converts canonical SPKI to the exact DNS-03 public-key representation.
 func newDNSRecord(
 	ctx context.Context,
 	domain string,
@@ -358,7 +358,7 @@ func newDNSRecord(
 	return record, nil
 }
 
-// ValidateCanonicalDNSRecord proves one native credential through the production DNS-02 parser path.
+// ValidateCanonicalDNSRecord proves one native credential through the production DNS-03 parser path.
 func ValidateCanonicalDNSRecord(
 	ctx context.Context,
 	domain string,
@@ -393,11 +393,11 @@ func FormatCanonicalDNSRecord(
 	return formatDNSExport([]DNSRecord{record}, nil, ttl, int(DefaultLimits().MaxDocumentBytes))
 }
 
-// dnsKeyValue derives the DNS-02 key-record k= token and raw p= bytes from
+// dnsKeyValue derives the DNS-03 key-record k= token and raw p= bytes from
 // one canonical credential SPKI: PKCS#1 for rsa, the raw 32-byte key for
-// ed25519, and the raw 1312-octet FIPS 204 key for mldsa44 (k=mldsa44, the
-// local interpretation DKIM2-ISSUE-0020 that opendkim-manage-go also
-// publishes). Non-canonical SPKI, a key of another algorithm or ML-DSA
+// ed25519, and the raw 1312-octet FIPS 204 key for mldsa44 (k=mldsa44, DNS-03
+// Section 4.2, the form opendkim-manage-go also publishes). Non-canonical
+// SPKI, a key of another algorithm or ML-DSA
 // parameter set, or any other algorithm fails closed.
 func dnsKeyValue(algorithm provider.Algorithm, publicSPKI []byte) (string, []byte, error) {
 	public, err := x509.ParsePKIXPublicKey(publicSPKI)

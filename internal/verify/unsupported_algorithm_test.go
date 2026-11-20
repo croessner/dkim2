@@ -24,9 +24,10 @@ func TestAlgorithmPolicyRejectsPostQuantumComposite(t *testing.T) {
 	}
 }
 
-// TestVerifierNeverPassesRSASHA1OnlySignatures reproduces DNS-02 Section 3.3:
-// rsa-sha1 MUST NOT be validated, so a signature set holding only rsa-sha1 is
-// an ignored unknown algorithm and cannot yield PASS.
+// TestVerifierNeverPassesRSASHA1OnlySignatures pins that rsa-sha1 is not a
+// Draft-09 Section 10.9 sig-name (DNS-03 Section 4.4 notes that RFC 8301
+// forbids it for DKIM1), so a signature set holding only rsa-sha1 is an
+// ignored unknown algorithm and cannot yield PASS.
 func TestVerifierNeverPassesRSASHA1OnlySignatures(t *testing.T) {
 	fixture := newRSAVerificationFixture(t)
 	raw := strings.Replace(fixture.raw, ":"+string(AlgorithmRSASHA256)+":", ":rsa-sha1:", 1)

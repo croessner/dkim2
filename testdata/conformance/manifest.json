@@ -1,7 +1,7 @@
 {
   "schema": "dkim2.conformance-manifest.v1",
   "message_draft": "draft-ietf-dkim-dkim2-spec-09",
-  "dns_draft": "draft-ietf-dkim-dkim2-dns-02",
+  "dns_draft": "draft-ietf-dkim-dkim2-dns-03",
   "suite_version": "1",
   "suites": [
     "canonical",
@@ -70,13 +70,13 @@
     {
       "id": "dns-negative-source",
       "path": "dns_provider_test.go",
-      "sha256": "bd46653baa9c874fea593ca8a464e00c655dd95a9ee89b9b76d1dde22515efc8",
+      "sha256": "9ad18f5cdc01fe04eebc17e96b5fce006837211a8819d62afb78c446fb28f86d",
       "module": "."
     },
     {
       "id": "dns-records",
-      "path": "testdata/vectors/draft-ietf-dkim-dkim2-dns-02/dns-golden.json",
-      "sha256": "9c3a8bce6d44f0b8aced14475ba890d9d0a049a75f4ac65153cea90ccf6d21a4",
+      "path": "testdata/vectors/draft-ietf-dkim-dkim2-dns-03/dns-golden.json",
+      "sha256": "45b71dc70ec6c252f122b465b13176d55cbd73908d76b841566722f3c07c9ba1",
       "module": "."
     },
     {
@@ -88,13 +88,13 @@
     {
       "id": "milter-fixture-data",
       "path": "testdata/conformance/milter/draft-ietf-dkim-dkim2-spec-09/portable-fixtures.json",
-      "sha256": "8301af30c4b30b61eb898ebbab8558610ccfdd5cc32560178a7206f169763e76",
+      "sha256": "762f94fcee309e4946e29b9d5df08c5bb28470a392659e7e1b20147cb1a31905",
       "module": "testdata/conformance"
     },
     {
       "id": "milter-fixture-source",
       "path": "cmd/dkim2-milter/internal/integration/milter_fixture_test.go",
-      "sha256": "795afa3ce048f481fb4009581292a10d2a85f6aeec297ca346552c022a20bc42",
+      "sha256": "5a69d187a444b0c8eece6afd44f49a196e0682d660a36cce0b8e6ad526d594f6",
       "module": "cmd/dkim2-milter"
     },
     {
@@ -184,7 +184,7 @@
     {
       "id": "policy-positive-source",
       "path": "policy_api_test.go",
-      "sha256": "d25496d48a486897ffc445a6183163fca23fabfee4574c2af4296faa7317b124",
+      "sha256": "197c85163ff168c92f1588b5e401283746b573365fd99619acb308fd5b59f400",
       "module": "."
     },
     {
@@ -208,7 +208,7 @@
     {
       "id": "postfix-qualification-runner",
       "path": "contrib/qualification/postfix-milter/run.sh",
-      "sha256": "f0c39ea3bfbafd6fb4ceb94dcef6dc20e485697114b577d85b608662e194013d",
+      "sha256": "74227a19db8254af4a4a6e054d483ebda0f9a64aede5fb707f6e625f4833d3a0",
       "module": "contrib/qualification/postfix-milter"
     },
     {
@@ -376,7 +376,7 @@
     {
       "id": "verification-composite-unsupported-source",
       "path": "unsupported_composite_test.go",
-      "sha256": "668d02f407804361f567067d3d88c51edb9f9d658c3fc280692fe9c2c1d919f7",
+      "sha256": "bd9d9e458c64919cc4b55cd18dc28823887b96ef912923b244babab1f97837eb",
       "module": "."
     },
     {
@@ -534,7 +534,7 @@
       "case_id": "dns-negative-record-states",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-dns-02 Sections 3.2 through 3.4.2"
+        "draft-ietf-dkim-dkim2-dns-03 Sections 2.4 through 4.7"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -550,7 +550,7 @@
       "case_id": "dns-records",
       "class": "draft_normative",
       "authority": [
-        "draft-ietf-dkim-dkim2-dns-02 Sections 3.2 through 3.4.2"
+        "draft-ietf-dkim-dkim2-dns-03 Sections 2.4 through 4.7"
       ],
       "provenance": "manual_derivation",
       "runner": "portable_vector",
@@ -1892,7 +1892,7 @@
       "class": "documented_interpretation",
       "authority": [
         "draft-ietf-dkim-dkim2-spec-09 Section 3.4",
-        "draft-ietf-dkim-dkim2-dns-02 Section 3.3"
+        "draft-ietf-dkim-dkim2-dns-03 Section 4"
       ],
       "provenance": "regression_reproducer",
       "runner": "portable_vector",
@@ -2037,7 +2037,7 @@
       "class": "draft_normative",
       "authority": [
         "draft-ietf-dkim-dkim2-spec-09 Sections 3, 13, 14.5, and 14.6",
-        "draft-ietf-dkim-dkim2-dns-02 Sections 3.3 through 3.4.2"
+        "draft-ietf-dkim-dkim2-dns-03 Sections 3 through 4.7"
       ],
       "provenance": "cross_primitive",
       "runner": "portable_vector",

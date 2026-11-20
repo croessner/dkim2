@@ -3,7 +3,7 @@
 This guide deploys the implemented daemon and Milter with Postfix while
 preserving the existing trust boundaries. Protocol behavior remains pinned to
 `draft-ietf-dkim-dkim2-spec-09` and the tested
-`draft-ietf-dkim-dkim2-dns-02` behavior. The authoritative HTTP contract remains
+`draft-ietf-dkim-dkim2-dns-03` behavior. The authoritative HTTP contract remains
 [`docs/specs/openapi/dkim2d.yaml`](../specs/openapi/dkim2d.yaml).
 
 ## Reference map

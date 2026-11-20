@@ -79,6 +79,7 @@ for document in \
   docs/operator/opendkim-migration.md \
   docs/operator/draft-08-migration.md \
   docs/operator/draft-09-migration.md \
+  docs/operator/dns-03-migration.md \
   docs/operator/examples/dkim2d-signing-ldap.yaml \
   docs/operator/examples/dkim2d-signing-postgresql.yaml \
   docs/operator/examples/dkim2d-signing-mysql.yaml \
@@ -284,13 +285,30 @@ for required in \
   'Rollback'; do
   grep -Fq "$required" "$draft09_guide"
 done
+
+# The DNS-03 operator migration guide is linked from the entry points and the
+# preceding guide, and names both stricter record checks and the rollback.
+dns03_guide=docs/operator/dns-03-migration.md
+grep -Fq "$dns03_guide" README.md
+grep -Fq 'dns-03-migration.md' docs/reference/README.md
+grep -Fq 'dns-03-migration.md' "$draft09_guide"
+for required in \
+  'draft-ietf-dkim-dkim2-dns-03' \
+  'draft-ietf-dkim-dkim2-spec-09' \
+  'invalid_key' \
+  'domain_policy_invalid' \
+  'f=strict' \
+  'k=mldsa44' \
+  'Rollback'; do
+  grep -Fq "$required" "$dns03_guide"
+done
 for reference in draft-issues.md compatibility.md known-limitations.md; do
   grep -Fq "$reference" docs/reference/README.md
 done
 
 for required in \
   'draft-ietf-dkim-dkim2-spec-09' \
-  'draft-ietf-dkim-dkim2-dns-02' \
+  'draft-ietf-dkim-dkim2-dns-03' \
   '127.0.0.1:2525' \
   'milter_protocol = 6' \
   'milter_default_action = tempfail' \
@@ -315,7 +333,7 @@ for reference in README.md docs/reference/README.md; do
 done
 for required in \
   'draft-ietf-dkim-dkim2-spec-09' \
-  'draft-ietf-dkim-dkim2-dns-02' \
+  'draft-ietf-dkim-dkim2-dns-03' \
   'postfix-compose.md' \
   'unqualified_draft09' \
   'milter_reconstructed_crlf' \
@@ -353,7 +371,7 @@ grep -Fq 'docs/guide/README.md' README.md
 grep -Fq 'guide/README.md' docs/reference/README.md
 for required in \
   'draft-ietf-dkim-dkim2-spec-09' \
-  'draft-ietf-dkim-dkim2-dns-02'; do
+  'draft-ietf-dkim-dkim2-dns-03'; do
   grep -Fq "$required" docs/guide/README.md
 done
 grep -Fq 'unqualified_draft09' docs/guide/exim-quickstart.md
@@ -603,5 +621,5 @@ refute_pattern \
   --include='*.md' --include='*.yaml' --include='*.cf'
 
 # Current companion authority is separate from immutable historical reports.
-grep -Fq draft-ietf-dkim-dkim2-dns-02 docs/specs/companion-conformance.md
-grep -Fq draft-ietf-dkim-dkim2-dns-02 docs/ARCHITECTURE.md
+grep -Fq draft-ietf-dkim-dkim2-dns-03 docs/specs/companion-conformance.md
+grep -Fq draft-ietf-dkim-dkim2-dns-03 docs/ARCHITECTURE.md

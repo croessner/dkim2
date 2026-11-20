@@ -1,7 +1,7 @@
 # Preview Release Candidate
 
 The prepared product candidate is exactly `v0.1.0-rc.1`. It is a local,
-non-publishing candidate for the pinned Draft-09 and DNS-02
+non-publishing candidate for the pinned Draft-09 and DNS-03
 behavior. It is not a stable release and it does not make either draft final.
 The Exim implementation is `unqualified_draft09`; the completed five-row,
 43-case-per-row source-linked matrix remains historical Draft-04 evidence. The

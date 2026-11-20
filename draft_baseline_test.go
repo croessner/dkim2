@@ -16,7 +16,7 @@ import (
 func TestDraftBaselineDeclarationsAgree(t *testing.T) {
 	const (
 		messageDraft = "draft-ietf-dkim-dkim2-spec-09"
-		dnsDraft     = "draft-ietf-dkim-dkim2-dns-02"
+		dnsDraft     = "draft-ietf-dkim-dkim2-dns-03"
 	)
 	for name, value := range map[string]string{
 		"dkim2.DraftIdentifier":   DraftIdentifier,

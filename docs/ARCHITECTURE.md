@@ -13,8 +13,8 @@
 | Language | English |
 | Classification | Public living design document |
 | Baseline specification | `draft-ietf-dkim-dkim2-spec-09`, dated 2026-11-01 |
-| Related specification | `draft-ietf-dkim-dkim2-dns-02`, dated 2026-10-21 |
-| Baseline status check | IETF archive sources checked 2026-11-02. Message baseline: `draft-ietf-dkim-dkim2-spec-09`; DNS baseline: `draft-ietf-dkim-dkim2-dns-02`. See `docs/specs/companion-conformance.md` for companion coverage and reporting exceptions. |
+| Related specification | `draft-ietf-dkim-dkim2-dns-03`, dated 2026-11-02 |
+| Baseline status check | IETF archive sources checked 2026-11-20. Message baseline: `draft-ietf-dkim-dkim2-spec-09`; DNS baseline: `draft-ietf-dkim-dkim2-dns-03`. See `docs/specs/companion-conformance.md` for companion coverage and reporting exceptions. |
 | Change control | While this document is still `0.1.0-draft`, startup decisions may be added without a version bump; after the first committed planning baseline, material architecture changes require a revision-history entry and may require a new version |
 | Supersedes | None |
 | Next planned revision | When the DKIM2 draft or a material architecture decision changes |
@@ -92,6 +92,7 @@
 | 0.1.0-draft | 2026-10-28 | Christian Roessner / Claude | Completed the Draft-08/DNS-02 migration: the Postfix not_local fixture reports a foreign-addressed message as Section 16.2 requires, the datasource hard limits follow the one-handle-per-credential derivation (393216 handles, 1179648 records), `VerifierHop.signature_algorithms` lists only the verified Section 3 algorithms (no `rsa-sha512` or `ed25519-sha512`, at most three), the Rspamd Policy E2E projection bindings follow the producer for Draft-08, `make guardrails` also runs the tools-module runner tests and the Rspamd projection binding lock, the reviewed library API baseline moved to the Draft-08 surface, and the operator guide `docs/operator/draft-08-migration.md` records the upgrade and rollback. |
 | 0.1.0-draft | 2026-10-29 | Christian Roessner / Claude | Replaced the standalone-only `valkey` replay backend (valkey-go, auditor principal, operator attestation, revalidation loop) with the `redis` backend (`cmd/dkim2d/internal/replay/redisstore`, go-redis v9.22.0) for standalone, Sentinel, and cluster Redis 7.0+ or Valkey 7.2+, configured under `replay.redis`. Writes carry a per-operation nonce (`v2:<nonce>`, `pending:<expiry-ms>:<nonce>`) so client retries, failover, and redirects recognize their own commit; the lease takeover is a single-key Lua compare-and-set; legacy `v1` and `pending:<expiry-ms>` values stay readable and key derivation is unchanged. Startup checks the version floor and `noeviction`, a `PING` health probe drives readiness, and `replay.valkey.*`, `replay.revalidate_interval`, and backend `valkey` fail with `config_removed_field` pointing to `docs/operator/replay-redis-migration.md`. Breaking configuration change for release v0.2.0. |
 | 0.1.0-draft | 2026-11-02 | Christian Roessner / Claude | Advanced the message baseline to `draft-ietf-dkim-dkim2-spec-09` (DNS stays `draft-ietf-dkim-dkim2-dns-02`). Verification gains the fifth state NONE (`/v1/process` HTTP 200 with `dkim2=none`), the Section 3.8 Domain Policy Record (`internal/keyresolver` owns parsing and selection, `internal/verify` the two-way Authentic From match and its result algebra, evaluated after every signature proof and before the replay projection), the reasons `from_subdomain_forbidden`, `domain_policy_temporary`, `domain_policy_ambiguous`, and `domain_policy_invalid`, the Section 3.7 version filter before key-record uniqueness with a carry bound of eight TXT records, PERMERROR for a null body Recipe, and the Section 2.14 base64string grammar without leading or trailing FWS. Library verifiers and signers require an explicit subdomain-From choice; `dkim2d` adds `verification.domain_policy.allow_subdomain_from` (default true) and `--domain-policy-strict` on the DNS export. Signers stay downward only. `X-DKIM2-Info` `date=` becomes the behavior date. See `docs/specs/draft-09-migration-disposition.md` and `docs/operator/draft-09-migration.md`. |
+| 0.1.0-draft | 2026-11-20 | Christian Roessner / Claude | Advanced the DNS companion to `draft-ietf-dkim-dkim2-dns-03` (message baseline stays `draft-ietf-dkim-dkim2-spec-09`). DNS-03 defines the `k=mldsa44` key type and the Domain Policy Record that the implementation already read, deprecates `h=`, `n=`, `s=`, and `t=`, and drops the composite and SHA-512 algorithm names. Two behaviors change: a key-record `p=` value must carry the terminal Base64 padding it needs (DNS-03 Section 2.3; header fields and key records now share `tagvalue.ParseBase64String`), and a Domain Policy Record whose `f=` value is outside the DNS-03 Section 5.2 grammar is `domain_policy_invalid` instead of being read leniently. The DNS vector corpus moved to `testdata/vectors/draft-ietf-dkim-dkim2-dns-03/` with the DNS-02 corpus kept under `history/`. The disposition is `docs/specs/dns-03-migration-disposition.md`. |
 
 ## 1. Purpose
 
@@ -103,14 +104,13 @@ is written.
 The design uses these reviewed behavior baselines as its source of truth:
 
 - `draft-ietf-dkim-dkim2-spec-09`
-- `draft-ietf-dkim-dkim2-dns-02` for the implemented DNS behavior and vectors.
+- `draft-ietf-dkim-dkim2-dns-03` for the implemented DNS behavior and vectors.
 
-The Draft-09 and DNS-02 migration disposition, including every behavior change and
-local interpretation, is recorded in
-`docs/specs/draft-08-migration-disposition.md`; the migration is complete.
-The preceding Draft-07 and DNS-01 disposition remains in
-`docs/specs/draft-07-migration-disposition.md`. Historical audit records retain
-their original identifiers.
+The DNS-03 migration disposition, including every behavior change and local
+interpretation, is recorded in `docs/specs/dns-03-migration-disposition.md`;
+the Draft-09 disposition is `docs/specs/draft-09-migration-disposition.md`.
+Both migrations are complete. Earlier dispositions remain under `docs/specs/`.
+Historical audit records retain their original identifiers.
 
 The repository does not silently rename baselines: durable identifiers and
 versioned vectors migrate together in a separately reviewed update.
@@ -751,15 +751,17 @@ Responsibilities:
   `selector._domainkey.domain.` owner while preserving dotted selector labels.
 - Consume one already-concatenated TXT RR payload while retaining RR boundaries
   and failing closed on a multi-record RRset.
-- Parse DNS-02 records through `internal/tagvalue`, including revocation,
-  ignored extension/retired tags, and DNS-optional terminal Base64 padding with
-  canonical pad bits. The `t=` tag is retired by DNS-02 Section 3.4.1: it is
-  checked only by the generic tag-list rules (duplicates, control bytes,
-  framing, size limits) and is otherwise ignored like any unknown tag.
+- Parse DNS-03 records through `internal/tagvalue`, including revocation,
+  ignored extension/deprecated tags, and the DNS-03 Section 2.3 base64string
+  with mandatory terminal padding and canonical pad bits; header fields and
+  key records share one Base64 parser. DNS-03 Section 4 deprecates `h=`,
+  `n=`, `s=`, and `t=`: `t=` is checked only by the generic tag-list rules
+  (duplicates, control bytes, framing, size limits) and is otherwise ignored
+  like any unknown tag.
 - Decode RSA public DER as either PKCS#1 `RSAPublicKey` or X.509
   `SubjectPublicKeyInfo`, raw 32-byte Ed25519 public keys, and raw 1312-byte
-  ML-DSA-44 public keys for `k=mldsa44` (a local interpretation,
-  `DKIM2-ISSUE-0020`), while reusing `internal/cryptodkim2` as the
+  ML-DSA-44 public keys for `k=mldsa44` (DNS-03 Section 4.2), while reusing
+  `internal/cryptodkim2` as the
   authoritative crypto/key-validation owner. Every other `k=` value,
   including the removed Draft-07 composite `mldsa44-ed25519-sha512`, is an
   unsupported key type.
@@ -776,7 +778,7 @@ Design notes:
 - The root package owns public transport/provider adapters; keyresolver does not
   import the root package or own four-state verification mapping.
 - Derived qnames and cache keys are sensitive and never enter errors or results.
-- DNS-02 lowercase `k=` follows the corrected DNS-02 grammar; no signature
+- Lowercase `k=` follows the DNS-03 Section 4.2 grammar; no signature
   `q=` API is invented for the active DKIM2 grammar.
 - DNSSEC is diagnostic-only. DNS key records never yield testing or
   strict-identity semantics; their historical `t=y`/`t=s` meanings concern
@@ -868,8 +870,8 @@ Design notes:
 - A message can be cryptographically valid and still fail local policy.
 - A message can be cryptographically invalid but still be accepted by a
   permissive deployment policy.
-- DNS key records carry no policy input: the retired `t=` tag is ignored
-  (DNS-02 Section 3.4.1). Only the explicitly configured local `testing`
+- DNS key records carry no policy input: the deprecated `t=` tag is ignored
+  (DNS-03 Section 4). Only the explicitly configured local `testing`
   policy mode relaxes a verdict to `continue`, and the authoritative
   verification state remains unchanged.
 - The result model must preserve that distinction.
@@ -1543,7 +1545,7 @@ Every operation also binds a protected deployment-unique `authority_id` and
 canonical provider authority descriptor; every command rejects same-class
 backend substitution before I/O.
 DNS mutation is outside the initial native onboarding contract. The tool
-exports deterministic DNS-02 records through a create-only protected-document
+exports deterministic DNS-03 records through a create-only protected-document
 primitive: exact existing bytes are idempotent, foreign existing bytes are a
 conflict, and no export path is ever replaced. A racing create is accepted only
 after an exact descriptor-native readback proves the installed artifact;
@@ -2986,7 +2988,7 @@ interpretation choices in code.
 16. Native domain onboarding:
     M23 adds an offline privileged workflow that clones one complete native
     generation, adds one exact domain with freshly generated RSA and/or
-    Ed25519 credentials, exports DNS-02 records, proves the configured fresh
+    Ed25519 credentials, exports DNS-03 records, proves the configured fresh
     recursive resolver path against staged SPKI, and activates only through
     exact current, state, readback, and
     candidate-content-digest fences. Publication state is fenced separately

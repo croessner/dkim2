@@ -299,7 +299,7 @@ run_once() {
       schema: "dkim2.postfix-qualification-report.v1",
       lane: $lane,
       message_draft: "draft-ietf-dkim-dkim2-spec-09",
-      dns_draft: "draft-ietf-dkim-dkim2-dns-02",
+      dns_draft: "draft-ietf-dkim-dkim2-dns-03",
       base_revision: $base_revision,
       candidate_snapshot_sha256: $candidate,
       manifest_sha256: $manifest,

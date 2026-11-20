@@ -4,9 +4,10 @@
 > below are preserved; current Draft-09 authority is the migration disposition
 > and current durable architecture.
 >
-> Current behavior: `draft-ietf-dkim-dkim2-dns-02` Section 3.4.1 retires the
-> key-record `t=` tag ("SHOULD be ignored"); its historical `t=y` (testing)
-> and `t=s` (strict identity) meanings now concern DKIM1 only. The resolver no
+> Current behavior: `draft-ietf-dkim-dkim2-dns-03` Section 4 deprecates the
+> key-record `h=`, `n=`, `s=`, and `t=` tags ("DKIM2 ignores them if they are
+> present"); the historical `t=y` (testing) and `t=s` (strict identity)
+> meanings now concern DKIM1 only. The resolver no
 > longer parses `t=` flags and no longer exposes testing or strict-identity
 > metadata (`KeyPolicyMetadata`, `testing_declared`,
 > `strict_identity_declared`, `strict_identity_applicable` were removed). `t=`
@@ -15,12 +16,19 @@
 > including a formerly malformed flag list, decodes to the same key as a
 > record without `t=` on cache miss and cache hit. Statements below about `t=`
 > metadata describe the superseded Draft-04 increment only.
+>
+> DNS-03 Section 2.3 requires the trailing `=` characters a base64string
+> needs. A non-empty `p=` is therefore parsed by the same strict
+> `tagvalue.ParseBase64String` as header fields, and a value that omits
+> needed padding is a malformed record (`DKIM2-ISSUE-0027`). The optional
+> padding path described below was removed with the DNS-03 migration
+> (`docs/specs/dns-03-migration-disposition.md`).
 
 ## Status
 
 - Increment: DNS key resolution after the public current-verification facade.
 - Protocol baseline: `draft-ietf-dkim-dkim2-spec-04` and
-  `draft-ietf-dkim-dkim2-dns-02`.
+  `draft-chuang-dkim2-dns-04`.
 - Architecture owner: `internal/keyresolver`, with a public provider
   adapter in the root library package.
 - Status: implemented; final unchanged-diff proof and milestone commit pending.
@@ -48,7 +56,7 @@ The binding sources are, in order:
 
 1. `draft-ietf-dkim-dkim2-spec-04` for current DKIM2 signature algorithms and
    the numeric `i=` sequence model.
-2. `draft-ietf-dkim-dkim2-dns-02` for selectors, textual key records, and the DNS
+2. `draft-chuang-dkim2-dns-04` for selectors, textual key records, and the DNS
    TXT binding.
 3. RFC 1034 and RFC 1035 for DNS names and resource-record behavior.
 4. RFC 6376 where DNS-04 incorporates DKIM key semantics.
@@ -292,11 +300,10 @@ transports may enable caching.
 `k=`:
 
 - Optional; omission means `rsa`.
-- `rsa`, `ed25519`, and `mldsa44` are recognized case-sensitive values.
-  DNS-02 defines no key type for pure ML-DSA-44; `mldsa44` is the local
-  interpretation that equals the Draft-09 sig-name (`DKIM2-ISSUE-0020`).
-  Both composite spellings, `mldsa44-ed25519` and `mldsa44-ed25519-sha512`,
-  are unsupported key types (`DKIM2-ISSUE-0022`).
+- `rsa`, `ed25519`, and `mldsa44` are recognized case-sensitive values, the
+  three key types of DNS-03 Section 4.2. Both former composite spellings,
+  `mldsa44-ed25519` and `mldsa44-ed25519-sha512`, are unsupported key types
+  (`DKIM2-ISSUE-0022`).
 - An unrecognized key type is a typed unsupported-key record. It is not
   silently reinterpreted as RSA, and its `p=` bytes are never passed to a
   decoder.
@@ -305,12 +312,12 @@ transports may enable caching.
 
 - Required.
 - Empty `p=` is a distinct revoked-key permanent state.
-- Non-empty `p=` uses a DNS-specific optional-padding path beside the existing
-  strict `tagvalue.ParseBase64String`, after scanner-owned FWS unfolding and
-  permitted WSP removal. DNS-04 inherits optional trailing `=` padding;
-  unpadded and padded standard-alphabet forms are accepted only with canonical
-  zero pad bits. The strict Message-Instance/DKIM2-Signature parser behavior is
-  unchanged.
+- Superseded: non-empty `p=` used a DNS-specific optional-padding path beside
+  the strict `tagvalue.ParseBase64String`, because DNS-04 inherited optional
+  trailing `=` padding. DNS-03 Section 2.3 requires the padding, so `p=` now
+  goes through `tagvalue.ParseBase64String` after scanner-owned FWS unfolding;
+  only the padded standard-alphabet form with canonical zero pad bits is
+  accepted.
 - Decoded length is checked before key decoding and copying.
 - Even for an unsupported but syntactically valid `k=`, non-empty `p=` must
   satisfy Base64 syntax, pad-bit, and decoded-size limits before the decoded
@@ -325,7 +332,7 @@ transports may enable caching.
 - They do not constrain hashes, service type, or policy.
 - Their presence and values are not retained or exposed.
 
-`t=` (superseded; retired by DNS-02 Section 3.4.1 and now ignored after
+`t=` (superseded; deprecated by DNS-03 Section 4 and now ignored after
 generic tag-list validation):
 
 - Optional colon-separated flags.
@@ -386,8 +393,8 @@ error, Base64 text, or private material.
 - `k=mldsa44` requires `p=` to decode to exactly 1312 octets, the raw FIPS
   204 ML-DSA-44 public-key encoding (1752 base64 characters, Draft-09
   Section 14.5). Every other length, an SPKI wrapper, and an encoding
-  `crypto/mldsa` rejects are invalid keys. `h=` is ignored (DNS-02 retired
-  it).
+  `crypto/mldsa` rejects are invalid keys. `h=` is ignored (DNS-03 Section 4
+  deprecates it).
 - The decoded `*mldsa.PublicKey` is immutable and shared; it is constructed
   only through `cryptodkim2.ParseMLDSA44PublicKey`.
 
@@ -854,10 +861,10 @@ tracked.
 - Settled: multiple TXT records are a typed ambiguous permanent state.
 - Settled: `k=` follows DNS-04 prose despite the `%x76` ABNF defect.
 - Settled: `q=` is not invented for the active DKIM2 signature grammar.
-- Superseded: `t=y` and `t=s` were bounded metadata in this increment; DNS-02
-  retires `t=`, which is now ignored.
+- Superseded: `t=y` and `t=s` were bounded metadata in this increment; DNS-03
+  deprecates `t=`, which is now ignored.
 - Settled: DNSSEC cannot alter conformance results.
 - Settled: transport calls use absolute names.
-- Resolved: DNS-02 retires `t=`, removing the `t=s` conflict with the numeric
+- Resolved: DNS-03 deprecates `t=`, removing the `t=s` conflict with the numeric
   signature sequence `i=` (`DKIM2-ISSUE-0013`).
 - Open: later draft text may define DNSSEC or additional lookup bindings.

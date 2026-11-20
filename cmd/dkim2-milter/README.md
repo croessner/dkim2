@@ -13,7 +13,7 @@ The adapter is operational glue. DKIM2 parsing, verification, signing,
 revision, recipe, replay, and datasource rules remain in the library and
 daemon. The implemented behavior is pinned to
 `draft-ietf-dkim-dkim2-spec-09` and the repository's historical
-`draft-ietf-dkim-dkim2-dns-02` baseline.
+`draft-ietf-dkim-dkim2-dns-03` baseline.
 
 ## Runtime requirements
 

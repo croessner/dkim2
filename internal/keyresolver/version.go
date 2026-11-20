@@ -1,7 +1,7 @@
 package keyresolver
 
-// dkim1Version is the exact v= value of DNS key records (DNS-02) and Domain
-// Policy Records (Draft-09 Section 3.8).
+// dkim1Version is the exact v= value of DNS key records (DNS-03 Section 4.1) and Domain
+// Policy Records (Draft-09 Section 3.8, DNS-03 Section 5.1).
 const dkim1Version = "DKIM1"
 
 // leadingVersion reports the value of the first tag-spec of one TXT payload

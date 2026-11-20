@@ -7,9 +7,8 @@ certification, or universal interoperability claim.
   and Security Considerations still contain `TBA` text. The implementation
   does not invent normative behavior for those sections.
 - Pure ML-DSA-44 (`mldsa44`, Draft-09 Section 3.4) is implemented for
-  verification and signing. DNS-02 defines no key type for it; the
-  implementation reads `k=mldsa44` with a raw 1312-octet `p=` (local
-  interpretation, `DKIM2-ISSUE-0020`). The Draft-07 composite
+  verification and signing. DNS-03 Section 4.2 defines its key type
+  `k=mldsa44` with a raw 1312-octet `p=`. The Draft-07 composite
   `mldsa44-ed25519-sha512` stays unimplemented; see
   [Post-Quantum Algorithms](#post-quantum-algorithms) (`DKIM2-ISSUE-0019`).
 - External discovery found runnable parser overlap with MailAuthLens and
@@ -181,12 +180,14 @@ implement it; the implementation verifies and signs it.
   characters) and a 2420-octet signature (3228 base64 characters). Any other
   key length is `invalid_key`; any other signature length is a malformed
   DKIM2-Signature field.
-- DNS-02 defines no key type for pure ML-DSA-44. `k=mldsa44` with the raw
-  FIPS 204 public key in `p=` is a local interpretation that matches the
-  Draft-09 sig-name and the records `opendkim-manage-go` publishes
-  (`DKIM2-ISSUE-0020`). DNS-02 also lists `rsa-sha512`, `ed25519-sha512`, and
-  the composite, which Draft-09 does not define; they stay unknown algorithms
+- DNS-03 Section 4.2 defines `k=mldsa44` with the raw FIPS 204 public key in
+  `p=`, the form this implementation and `opendkim-manage-go` already used.
+  `rsa-sha512`, `ed25519-sha512`, and the composite, which an earlier DNS
+  draft listed and Draft-09 does not define, stay unknown algorithms
   (`DKIM2-ISSUE-0021`, `DKIM2-ISSUE-0022`).
+- A key record whose `p=` value omits the trailing `=` characters it needs is
+  malformed (DNS-03 Section 2.3, `DKIM2-ISSUE-0027`). Earlier releases
+  accepted such records.
 - The signer emits a fixed layout: the classical credentials form one
   `sig-all` group and an `mldsa44` credential is a separate `sig-any`
   alternative (`rsa,ed25519 | mldsa44`). A verifier without ML-DSA still

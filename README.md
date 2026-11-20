@@ -2,9 +2,11 @@
 
 This repository contains an actively developed Go reference implementation of
 DKIM2 based on `draft-ietf-dkim-dkim2-spec-09` with the DNS companion
-`draft-ietf-dkim-dkim2-dns-02`. The migration from Draft-08 is recorded in
+`draft-ietf-dkim-dkim2-dns-03`. The migration from Draft-08 is recorded in
 `docs/specs/draft-09-migration-disposition.md`; the operator upgrade steps are
-in `docs/operator/draft-09-migration.md`. The
+in `docs/operator/draft-09-migration.md`. The migration from DNS-02 is
+recorded in `docs/specs/dns-03-migration-disposition.md`, with operator notes
+in `docs/operator/dns-03-migration.md`. The
 baseline is not an external conformance claim until the real Exim matrix and
 external interoperability peers are requalified against Draft-09.
 
@@ -132,6 +134,8 @@ Current contents:
   activation, retirement, and rollback runbook.
 - `docs/operator/opendkim-migration.md`: protected dry-run, apply, publication,
   and higher-generation rollback workflow.
+- `docs/operator/dns-03-migration.md`: DNS-03 upgrade, mandatory Base64
+  padding in key records, the Domain Policy Record flag syntax, and rollback.
 - `docs/operator/draft-09-migration.md`: Draft-09 upgrade, the NONE state,
   Domain Policy Records and `f=strict`, REST and signal changes, the replay
   restart, the consumers that move together, and rollback.

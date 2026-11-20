@@ -24,7 +24,7 @@ func TestSigningAlgorithmOrderIsDetached(t *testing.T) {
 
 // TestPostQuantumCompositeIsOutsideTheAlgorithmVocabulary pins that the
 // Draft-07 composite mldsa44-ed25519-sha512, which Draft-08 replaced by pure
-// mldsa44 and DNS-02 still lists, is neither known nor signable, so it is
+// mldsa44 and DNS-03 no longer lists, is neither known nor signable, so it is
 // handled like any extension token.
 func TestPostQuantumCompositeIsOutsideTheAlgorithmVocabulary(t *testing.T) {
 	composite := Algorithm("mldsa44-ed25519-sha512")
@@ -36,12 +36,13 @@ func TestPostQuantumCompositeIsOutsideTheAlgorithmVocabulary(t *testing.T) {
 	}
 }
 
-// TestDNS02OnlyAlgorithmNamesAreUnknownSigNames pins DKIM2-ISSUE-0021:
-// DNS-02 Section 3.3 lists rsa-sha512, ed25519-sha512, and the composite,
-// but Draft-09 Section 10.9 defines only rsa-sha256, ed25519-sha256, and
-// mldsa44 as sig-names. The DNS-02-only names stay unknown, unsignable
-// extension tokens (a PERMERROR intermediate in verification).
-func TestDNS02OnlyAlgorithmNamesAreUnknownSigNames(t *testing.T) {
+// TestRemovedDNSAlgorithmNamesAreUnknownSigNames pins DKIM2-ISSUE-0021:
+// an earlier DNS draft listed rsa-sha512, ed25519-sha512, and the composite.
+// DNS-03 Section 4 lists key types only, and Draft-09 Section 10.9 defines
+// only rsa-sha256, ed25519-sha256, and mldsa44 as sig-names. The removed
+// names stay unknown, unsignable extension tokens (a PERMERROR intermediate
+// in verification).
+func TestRemovedDNSAlgorithmNamesAreUnknownSigNames(t *testing.T) {
 	for _, name := range []Algorithm{"rsa-sha512", "ed25519-sha512", "mldsa44-ed25519-sha512", "MLDSA44"} {
 		if name.Known() || name.Signable() {
 			t.Fatalf("%s known=%t signable=%t", name, name.Known(), name.Signable())

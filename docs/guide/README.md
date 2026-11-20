@@ -7,7 +7,7 @@ means, how `dkim2d` works, how to create keys and DNS records, and how to wire
 everything into Postfix or Exim, one use case at a time.
 
 Everything here describes this repository's implementation of
-`draft-ietf-dkim-dkim2-spec-09` with `draft-ietf-dkim-dkim2-dns-02`. DKIM2 is
+`draft-ietf-dkim-dkim2-spec-09` with `draft-ietf-dkim-dkim2-dns-03`. DKIM2 is
 still a draft: keep your existing DKIM, SPF, and DMARC setup running next to
 it. All names in the examples are reserved `.test` domains; replace them with
 your own.

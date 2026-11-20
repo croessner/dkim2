@@ -190,7 +190,7 @@ YAML scalar typing; quoted placeholders remain strings. Missing or malformed
 variables fail closed, map keys are never expanded, and secret bytes remain in
 their protected files.
 
-`dns export` produces DNS-02 records for operator publication. With the
+`dns export` produces DNS-03 records for operator publication. With the
 explicit per-invocation flag `--domain-policy-strict` it also exports, after
 the key records, the Draft-09 Section 3.8 Domain Policy Record
 `_domainkey.<domain>. TXT "v=DKIM1; f=strict"` of the onboarded domain, proven
@@ -820,12 +820,12 @@ The command creates the PEM file with mode `0600` and never replaces an
 existing path. Standard output carries only public material: the
 `public_key_spki` value for the datasource credential, the
 `public_spki_sha256` value for the manifest entry, and the zone-file TXT
-record from the same record owner and DNS-02 parser round trip as the domain
+record from the same record owner and DNS-03 parser round trip as the domain
 DNS export. `--algorithm` accepts `rsa-sha256`, `ed25519-sha256`, or
 `mldsa44`; `--rsa-bits` selects 2048, 3072, or 4096 for `rsa-sha256`. An
 `mldsa44` record is `v=DKIM1; k=mldsa44; p=<raw 1312-octet key>` without
-`h=` (local interpretation `DKIM2-ISSUE-0020`, the same form
-`opendkim-manage-go` publishes); its 1752-character `p=` value is split into
+`h=` (DNS-03 Section 4.2, the same form `opendkim-manage-go` publishes);
+its 1752-character `p=` value is split into
 TXT strings of at most 255 octets. The OpenDKIM
 bootstrap imports only legacy `rsa` and `ed25519` keys. RSA signing keys
 below 2048 bits are rejected everywhere (signing floor). Unknown fields, duplicate

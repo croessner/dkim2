@@ -272,9 +272,8 @@ ml-2026a._domainkey.example.test. 3600 IN TXT "v=DKIM1; k=mldsa44; p=nbKwMBIuW1U
 The output lines go to the same places as for RSA and Ed25519. The
 `public_key_spki` value starts with `MIIFMj`; the DNS `p=` value is the raw
 1,312-byte key in Base64 (1,752 characters) and has no common prefix. The
-private key file holds only the 32-byte seed. DNS-02 defines no key type for
-ML-DSA-44 yet; `k=mldsa44` is the form this implementation and
-`opendkim-manage-go` use (see
+private key file holds only the 32-byte seed. DNS-03 defines `k=mldsa44` as
+the key type for this raw key (see
 [Known limitations](../reference/known-limitations.md#post-quantum-algorithms)).
 
 Publish the DNS record before the generation uses it:

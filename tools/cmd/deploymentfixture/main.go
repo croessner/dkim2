@@ -1339,7 +1339,7 @@ func newStaticProvider(set publicKeySet) (*staticProvider, error) {
 	return provider, nil
 }
 
-// parseDNSRSAPublicKey decodes the exact synthetic DNS-02 RSA binding.
+// parseDNSRSAPublicKey decodes the exact synthetic DNS-03 RSA binding.
 func parseDNSRSAPublicKey(record string) (*rsa.PublicKey, error) {
 	const prefix = "v=DKIM1; k=rsa; p="
 	if !strings.HasPrefix(record, prefix) || len(record) <= len(prefix) {

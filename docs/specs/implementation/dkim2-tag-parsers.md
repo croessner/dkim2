@@ -31,7 +31,7 @@ This spec is governed by:
 - `.gitignore`
 - `draft-ietf-dkim-dkim2-spec-04`, dated 2026-07-05, especially
   Sections 2.8, 2.12, 2.14, 7, 8, 9.6, 10, 11.2, and 11.4
-- `draft-ietf-dkim-dkim2-dns-02`, dated 2026-03-18, especially
+- `draft-chuang-dkim2-dns-04`, dated 2026-03-18, especially
   Section 3.2 for the shared DKIM2 tag-value syntax used by DNS records
 
 If this spec conflicts with a source document, stop and reconcile the durable
@@ -224,7 +224,7 @@ Out of scope:
 ## Protocol, Runtime Or Domain Semantics
 
 M2 is bound to `draft-ietf-dkim-dkim2-spec-04`, with
-`draft-ietf-dkim-dkim2-dns-02` used only for the shared DKIM2 tag-value list
+`draft-chuang-dkim2-dns-04` used only for the shared DKIM2 tag-value list
 syntax that the DNS record format copies from DKIM2.
 
 ### Shared Tag-Value Semantics
@@ -247,7 +247,7 @@ syntax that the DNS record format copies from DKIM2.
   error before semantic dispatch, so `M=1` is invalid rather than an ignored
   tag plus a missing `m=`. A lenient reading of Section 8 would ignore such
   tags; this repository follows the fail-closed reading. DNS key-record tag
-  lists keep the generic case-sensitive rule of DNS-02 Section 3.2.
+  lists keep the generic case-sensitive rule of DNS-03 Section 2.4.
 - Tag values after `=` are case-sensitive unless a tag-specific draft rule
   explicitly says otherwise.
 - WSP and FWS around tag names, `=`, tag values, commas, and colons is handled
@@ -397,7 +397,7 @@ syntax that the DNS record format copies from DKIM2.
   to reduce to the same bytes.
 - Known signature algorithm names are `rsa-sha256`, `ed25519-sha256`, and
   `mldsa44` (Draft-09 Section 10.9). Unknown algorithm names, including the
-  DNS-02-only `rsa-sha512`, `ed25519-sha512`, and the removed composite, are
+  `rsa-sha512` and `ed25519-sha512` names of an earlier DNS draft and the removed composite, are
   represented but cannot create verification success.
 - Fixed-length algorithms are enforced after base64 decoding: exactly 64
   octets for `ed25519-sha256` and exactly 2420 octets (3228 base64

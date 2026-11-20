@@ -17,7 +17,7 @@ const (
 	// MessageDraft is the exact DKIM2 behavior baseline.
 	MessageDraft = "draft-ietf-dkim-dkim2-spec-09"
 	// DNSDraft is the exact DNS behavior baseline.
-	DNSDraft = "draft-ietf-dkim-dkim2-dns-02"
+	DNSDraft = "draft-ietf-dkim-dkim2-dns-03"
 	// ManifestSchema identifies the repository manifest format.
 	ManifestSchema = "dkim2.conformance-manifest.v1"
 	// ReportSchema identifies the machine report format.

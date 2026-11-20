@@ -20,8 +20,8 @@ func mldsa44RecordKey(t *testing.T) *mldsa.PublicKey {
 	return key.PublicKey()
 }
 
-// TestDecodeKeyAcceptsRawMLDSA44Record proves the local k=mldsa44
-// interpretation (DKIM2-ISSUE-0020): an exact 1312-octet raw FIPS 204 key
+// TestDecodeKeyAcceptsRawMLDSA44Record proves the DNS-03 Section 4.2
+// k=mldsa44 key type (DKIM2-ISSUE-0020): an exact 1312-octet raw FIPS 204 key
 // (1752 base64 characters, with or without h=) is found for mldsa44.
 func TestDecodeKeyAcceptsRawMLDSA44Record(t *testing.T) {
 	public := mldsa44RecordKey(t)

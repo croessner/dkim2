@@ -1,4 +1,4 @@
-// Package keyresolver owns bounded DNS-02 query, TXT transport, key-record,
+// Package keyresolver owns bounded DNS-03 query, TXT transport, key-record,
 // decoding, cache, and coalesced-flight semantics.
 //
 // Queries validate ASCII selectors and signing domains, preserve dotted
@@ -16,15 +16,16 @@
 // provenance. DNSSECStatus is a closed diagnostic value with no verdict or TTL
 // effect.
 //
-// ParseRecord implements draft-ietf-dkim-dkim2-dns-02 using the shared tagvalue
-// scanner. Lowercase k= is recognized according to the draft prose and RFC 6376
-// Erratum 5137 despite the inherited ABNF typo. DNS TXT is the sole lookup
-// binding because the active signature grammar has no q=. Unknown and retired
-// tags are ignored after generic validation, duplicate tags fail closed, and
-// empty p= is revoked. The t= tag is retired by DNS-02 Section 3.4.1: it is
-// subject only to the generic tag-list rules and never yields testing or
-// strict-identity semantics. Non-empty p= permits omitted terminal Base64
-// padding as DNS-02 specifies, but canonical zero pad bits remain mandatory.
+// ParseRecord implements draft-ietf-dkim-dkim2-dns-03 using the shared tagvalue
+// scanner. Lowercase k= is recognized as the DNS-03 Section 4.2 grammar and
+// RFC 6376 Erratum 5137 require. DNS TXT is the sole lookup binding because
+// the active signature grammar has no q=. Unknown and deprecated tags are
+// ignored after generic validation, duplicate tags fail closed, and empty p=
+// is revoked. DNS-03 Section 4 deprecates h=, n=, s=, and t= and DKIM2 ignores
+// them: t= is subject only to the generic tag-list rules and never yields
+// testing or strict-identity semantics. Non-empty p= must carry the terminal
+// Base64 padding and canonical zero pad bits that DNS-03 Section 2.3
+// requires; omitted padding is a malformed record.
 //
 // DecodeKey accepts PKCS#1 RSAPublicKey DER and X.509 SubjectPublicKeyInfo DER
 // containing RSA, or exactly 32 raw Ed25519 public-key bytes, and keeps

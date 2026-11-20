@@ -2160,8 +2160,8 @@ components:
           description: >-
             Sorted unique algorithms of the hop's passing signature sets. The
             vocabulary is exactly the Draft-09 Section 3 signature algorithms
-            this verifier implements; DNS-02 registry entries without a
-            Draft-09 signing definition never verify and are never listed.
+            this verifier implements; names without a Draft-09 signing
+            definition never verify and are never listed.
           type: array
           minItems: 1
           maxItems: 3

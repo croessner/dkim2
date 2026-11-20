@@ -10,9 +10,8 @@
 // It also owns DKIM2 base64string parsing: space and tab FWS are stripped,
 // non-canonical pad bits fail, and encoded plus decoded byte views remain
 // immutable after parsing. ParseBase64String requires standard RFC 4648
-// padding for protocol header fields. ParseOptionalPaddingBase64String is the
-// DNS-02 mode; it accepts omitted terminal padding and returns canonical padded
-// encoded bytes without relaxing alphabet, pad-bit, or resource limits.
+// padding for protocol header fields and for DNS key records alike: Draft-09
+// Section 2.14 and DNS-03 Section 2.3 state the same base64string rule.
 //
 // Errors from this package are structured and bounded. They expose stable
 // codes, operational classes, safe location and limit metadata, and only

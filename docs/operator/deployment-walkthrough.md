@@ -11,7 +11,7 @@ repeating it. For a gentler, example-driven introduction start with the
 [administrator guides](../guide/README.md).
 
 Protocol behavior is pinned to `draft-ietf-dkim-dkim2-spec-09` with the
-tested `draft-ietf-dkim-dkim2-dns-02` DNS behavior. Where the draft leaves a
+tested `draft-ietf-dkim-dkim2-dns-03` DNS behavior. Where the draft leaves a
 choice to local policy, this page says so. Where this implementation makes a
 recorded interpretation, it is named as one. The authoritative HTTP contract
 is [`docs/specs/openapi/dkim2d.yaml`](../specs/openapi/dkim2d.yaml), and the

@@ -1,7 +1,7 @@
 # Compatibility Statement
 
 The preview baseline implements `draft-ietf-dkim-dkim2-spec-09` with the
-`draft-ietf-dkim-dkim2-dns-02` DNS behavior identifier. A later draft
+`draft-ietf-dkim-dkim2-dns-03` DNS behavior identifier. A later draft
 is a reviewed behavior migration, not an automatic compatibility update.
 
 ## Public surfaces

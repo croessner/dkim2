@@ -90,7 +90,7 @@ and a configuration key that still mentions them is refused at startup.
 | `mt=` | Not a Draft-09 tag. You probably mean `m=` (message instance) or `mf=` (MAIL FROM). |
 | `i=` in DKIM2 vs DKIM | In DKIM, `i=` is the agent identity. In DKIM2 it is the hop number. |
 | `h=` in DKIM2 vs DKIM | In DKIM, `h=` lists signed header names. In DKIM2 `Message-Instance`, it carries the hashes. |
-| `t=` in DNS | Retired. DNS-02 ignores the old DKIM testing flag `t=y`; use `policy.mode: testing` on the receiving side instead. |
+| `t=` in DNS | Deprecated. DKIM2 ignores the old DKIM testing flag `t=y` (DNS-03); use `policy.mode: testing` on the receiving side instead. |
 
 ## DNS key record
 

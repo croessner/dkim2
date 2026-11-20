@@ -9,9 +9,11 @@ import (
 
 const policyTestOwner = "_domainkey.example.test."
 
-// TestParseDomainPolicyRecordFlags pins the Section 3.8 flag grammar: the
-// strict flag is case-sensitive, flags split on ':' with WSP trimmed, unknown
-// flags and a p= tag are ignored, and v=DKIM1 must be the first tag.
+// TestParseDomainPolicyRecordFlags pins the DNS-03 Section 5.2 flag grammar:
+// the strict flag is case-sensitive, flags are separated by ':' with optional
+// FWS around it, every flag is a hyphenated-word, unrecognized flags and a p=
+// tag are ignored, an empty f= value lists no flags, and v=DKIM1 must be the
+// first tag.
 func TestParseDomainPolicyRecordFlags(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -26,6 +28,18 @@ func TestParseDomainPolicyRecordFlags(t *testing.T) {
 		{name: "wsp around flags", payload: "v=DKIM1; f= foo : strict ;", strict: true},
 		{name: "unknown only", payload: "v=DKIM1; f=foo:bar"},
 		{name: "empty f", payload: "v=DKIM1; f="},
+		{name: "empty f with wsp", payload: "v=DKIM1; f= \t;"},
+		{name: "folded flags", payload: "v=DKIM1; f=foo\r\n :\r\n\tstrict", strict: true},
+		{name: "hyphenated unknown flag", payload: "v=DKIM1; f=no-such-flag2:strict", strict: true},
+		{name: "strict prefix is unknown", payload: "v=DKIM1; f=strict-mode"},
+		{name: "trailing separator invalid", payload: "v=DKIM1; f=strict:", wantErr: RecordErrorInvalidSyntax},
+		{name: "leading separator invalid", payload: "v=DKIM1; f=:strict", wantErr: RecordErrorInvalidSyntax},
+		{name: "doubled separator invalid", payload: "v=DKIM1; f=strict::foo", wantErr: RecordErrorInvalidSyntax},
+		{name: "flag with inner wsp invalid", payload: "v=DKIM1; f=str ict", wantErr: RecordErrorInvalidSyntax},
+		{name: "flag with leading digit invalid", payload: "v=DKIM1; f=1strict", wantErr: RecordErrorInvalidSyntax},
+		{name: "flag with trailing hyphen invalid", payload: "v=DKIM1; f=strict-", wantErr: RecordErrorInvalidSyntax},
+		{name: "flag with punctuation invalid", payload: "v=DKIM1; f=strict:fo_o", wantErr: RecordErrorInvalidSyntax},
+		{name: "comma is not a separator", payload: "v=DKIM1; f=foo,strict", wantErr: RecordErrorInvalidSyntax},
 		{name: "p tag irrelevant", payload: "v=DKIM1; p=; f=strict", strict: true},
 		{name: "unknown tag ignored", payload: "v=DKIM1; o=-; f=strict", strict: true},
 		{name: "duplicate f invalid", payload: "v=DKIM1; f=strict; f=foo", wantErr: RecordErrorInvalidSyntax},
@@ -76,6 +90,8 @@ func TestResolveDomainPolicyClosedOutcomes(t *testing.T) {
 		{name: "oversized ignored record", result: mustFoundLookups(t, oversizedForeignTXT(), []byte("v=DKIM1; f=strict")), want: DomainPolicyStrict},
 		{name: "oversized policy record invalid", result: mustFoundLookup(t, append([]byte("v=DKIM1; f=strict; x="), oversizedForeignTXT()...)), want: DomainPolicyInvalid},
 		{name: "invalid tag-list", result: mustFoundLookup(t, []byte("v=DKIM1; f=strict; f=strict")), want: DomainPolicyInvalid},
+		{name: "malformed flag list", result: mustFoundLookup(t, []byte("v=DKIM1; f=str ict")), want: DomainPolicyInvalid},
+		{name: "malformed flag beside strict", result: mustFoundLookup(t, []byte("v=DKIM1; f=strict:")), want: DomainPolicyInvalid},
 		{name: "temporary transport", err: NewTransportError(TransportErrorTemporary), want: DomainPolicyTemporary},
 		{name: "permanent transport", err: NewTransportError(TransportErrorPermanent), want: DomainPolicyInvalid},
 		{name: "unclassified transport", err: context.DeadlineExceeded, want: DomainPolicyInvalid},

@@ -9,12 +9,15 @@ import (
 	"encoding/base64"
 	"errors"
 	"math/big"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-// TestDNSPublicKeyProviderMapsResolverOutcomes verifies exact declared public result states.
+// TestDNSPublicKeyProviderMapsResolverOutcomes verifies exact declared public
+// result states, including the DNS-03 Section 2.3 rule that a p= value
+// without its terminal Base64 padding is an invalid key record.
 func TestDNSPublicKeyProviderMapsResolverOutcomes(t *testing.T) {
 	edKey := base64.StdEncoding.EncodeToString(make([]byte, ed25519.PublicKeySize))
 	tests := []struct {
@@ -26,6 +29,7 @@ func TestDNSPublicKeyProviderMapsResolverOutcomes(t *testing.T) {
 		{name: "missing", lookup: mustPublicAbsentLookup(t), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusMissing},
 		{name: testNameAmbiguous, lookup: mustPublicAmbiguousLookup(t), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusAmbiguous},
 		{name: testNameInvalid, lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; p=%%%")), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusInvalid},
+		{name: "invalid unpadded key data", lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; k=ed25519; p="+strings.TrimRight(edKey, "="))), algorithm: AlgorithmEd25519SHA256, status: PublicKeyStatusInvalid},
 		{name: testNameRevoked, lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; p=; t=y:s")), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusRevoked},
 		{name: testNameUnsupported, lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; k=future; p=QQ==; t=y:s")), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusUnsupportedKeyType},
 		{name: testNameMismatch, lookup: mustPublicFoundLookup(t, []byte("v=DKIM1; k=ed25519; p="+edKey+"; t=y:s")), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusAlgorithmMismatch},
@@ -199,7 +203,11 @@ func dnsPolicyBoundaryRSAKey(bits, exponent int) *rsa.PublicKey {
 	return &rsa.PublicKey{N: modulus, E: exponent}
 }
 
-// TestDNSPublicKeyProviderAcceptsDNSCompatibleKeyRepresentations verifies DNS-02 padding and RSA container compatibility.
+// TestDNSPublicKeyProviderAcceptsDNSCompatibleKeyRepresentations verifies the
+// DNS-03 Section 4.2 key representations: an RSA key is a PKCS#1 RSAPublicKey
+// or a SubjectPublicKeyInfo containing one, and an Ed25519 key is the raw
+// 32-octet key. DNS-03 Section 2.3 requires the trailing "=" characters a
+// base64string needs, so the same key data without them is a malformed record.
 func TestDNSPublicKeyProviderAcceptsDNSCompatibleKeyRepresentations(t *testing.T) {
 	rsaModulus := new(big.Int).Lsh(big.NewInt(1), 1023)
 	rsaModulus.SetBit(rsaModulus, 0, 1)
@@ -210,14 +218,20 @@ func TestDNSPublicKeyProviderAcceptsDNSCompatibleKeyRepresentations(t *testing.T
 		t.Fatalf("MarshalPKIXPublicKey() error = %v", err)
 	}
 	edKey := bytes.Repeat([]byte{0x42}, ed25519.PublicKeySize)
+	if len(rsaPKCS1)%3 == 0 || len(edKey)%3 == 0 {
+		t.Fatal("fixture keys must need terminal padding")
+	}
 	for _, tt := range []struct {
 		name      string
 		record    string
 		algorithm Algorithm
+		status    PublicKeyStatus
 	}{
-		{name: "unpadded PKCS#1 RSA", record: "p=" + base64.RawStdEncoding.EncodeToString(rsaPKCS1), algorithm: AlgorithmRSASHA256},
-		{name: "unpadded SPKI RSA", record: "p=" + base64.RawStdEncoding.EncodeToString(rsaSPKI), algorithm: AlgorithmRSASHA256},
-		{name: "unpadded raw Ed25519", record: "k=ed25519; p=" + base64.RawStdEncoding.EncodeToString(edKey), algorithm: AlgorithmEd25519SHA256},
+		{name: "padded PKCS#1 RSA", record: "p=" + base64.StdEncoding.EncodeToString(rsaPKCS1), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusFound},
+		{name: "padded SPKI RSA", record: "p=" + base64.StdEncoding.EncodeToString(rsaSPKI), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusFound},
+		{name: "padded raw Ed25519", record: "k=ed25519; p=" + base64.StdEncoding.EncodeToString(edKey), algorithm: AlgorithmEd25519SHA256, status: PublicKeyStatusFound},
+		{name: "unpadded PKCS#1 RSA", record: "p=" + base64.RawStdEncoding.EncodeToString(rsaPKCS1), algorithm: AlgorithmRSASHA256, status: PublicKeyStatusInvalid},
+		{name: "unpadded raw Ed25519", record: "k=ed25519; p=" + base64.RawStdEncoding.EncodeToString(edKey), algorithm: AlgorithmEd25519SHA256, status: PublicKeyStatusInvalid},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			provider, constructErr := NewDNSPublicKeyProvider(txtTransportFunc(func(context.Context, string) (TXTLookupResult, error) {
@@ -227,8 +241,8 @@ func TestDNSPublicKeyProviderAcceptsDNSCompatibleKeyRepresentations(t *testing.T
 				t.Fatal(constructErr)
 			}
 			result, lookupErr := provider.LookupPublicKey(context.Background(), newPublicKeyQuery("example.test", "selector", tt.algorithm))
-			if lookupErr != nil || result.Status() != PublicKeyStatusFound {
-				t.Fatalf("DNS key = %q error=%v", result.Status(), lookupErr)
+			if lookupErr != nil || result.Status() != tt.status {
+				t.Fatalf("DNS key = %q error=%v, want %q", result.Status(), lookupErr, tt.status)
 			}
 		})
 	}

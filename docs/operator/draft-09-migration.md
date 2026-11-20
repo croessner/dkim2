@@ -6,7 +6,9 @@ baseline stays `draft-ietf-dkim-dkim2-dns-02`. The change-by-change record is
 [`docs/specs/draft-09-migration-disposition.md`](../specs/draft-09-migration-disposition.md);
 library API changes are listed in
 [`docs/reference/compatibility.md`](../reference/compatibility.md). The
-previous step is described in [`draft-08-migration.md`](draft-08-migration.md).
+previous step is described in [`draft-08-migration.md`](draft-08-migration.md);
+the next step, the DNS-03 companion, in
+[`dns-03-migration.md`](dns-03-migration.md).
 
 Draft-09 adds a fifth verification state, NONE (neither a Message-Instance nor a
 DKIM2-Signature header field present),

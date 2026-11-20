@@ -33,8 +33,9 @@ func TestParseRecordAcceptsClosedLegalMatrix(t *testing.T) {
 		{name: "unsupported ed case", record: "k=Ed25519; p=" + validDNSKeyData, status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported},
 		{name: "unsupported with retired t", record: "k=future-key2; p=" + validDNSKeyData + "; t=y:s", status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported},
 		{name: "post-quantum composite stays unsupported", record: "v=DKIM1; k=mldsa44-ed25519-sha512; p=" + validDNSKeyData, status: RecordStatusUnsupportedKeyType, keyType: KeyTypeUnsupported},
-		{name: "unpadded one character", record: "p=QUI", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: "AB"},
-		{name: "unpadded two characters", record: "p=QQ", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: "A"},
+		{name: "padded one character", record: "p=QUI=", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: "AB"},
+		{name: "padded two characters", record: "p=QQ==", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: "A"},
+		{name: "folded before padding", record: "p=QUI\r\n =", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: "AB"},
 		{name: "retired testing flag", record: "p=" + validDNSKeyData + "; t=y", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
 		{name: "retired strict flag", record: "p=" + validDNSKeyData + "; t=s", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
 		{name: "retired combined flags", record: "p=" + validDNSKeyData + "; t=y : s : y : future-flag", status: RecordStatusKeyData, keyType: KeyTypeRSA, keyData: decodedDNSKeyData},
@@ -86,7 +87,7 @@ func TestParseRecordRejectsVersionAndRequiredTagContradictions(t *testing.T) {
 	}
 }
 
-// TestParseRecordRejectsMalformedKeyTypes verifies DNS-02 hyphenated-word syntax.
+// TestParseRecordRejectsMalformedKeyTypes verifies DNS-03 hyphenated-word syntax.
 func TestParseRecordRejectsMalformedKeyTypes(t *testing.T) {
 	for _, keyType := range []string{"", "_future", "-future", "future-", "future_key", "future key", "1future"} {
 		record := "k=" + keyType + "; p=" + validDNSKeyData
@@ -96,8 +97,10 @@ func TestParseRecordRejectsMalformedKeyTypes(t *testing.T) {
 	}
 }
 
-// TestParseRecordUsesLowercaseKDespiteDraftABNFDefect verifies the recorded Erratum 5137 interpretation.
-func TestParseRecordUsesLowercaseKDespiteDraftABNFDefect(t *testing.T) {
+// TestParseRecordRecognizesOnlyLowercaseKeyTypeTag verifies the DNS-03 Section
+// 4.2 case-sensitive k= tag name (RFC 6376 Erratum 5137): an uppercase tag
+// name is an unknown tag and leaves the default key type in place.
+func TestParseRecordRecognizesOnlyLowercaseKeyTypeTag(t *testing.T) {
 	parsed, err := ParseRecord([]byte("v=DKIM1; k=ed25519; p="+validDNSKeyData), DefaultLimits())
 	if err != nil || parsed.KeyType() != KeyTypeEd25519 {
 		t.Fatalf("lowercase k parse type=%q error=%v", parsed.KeyType(), err)
@@ -121,7 +124,7 @@ func TestParseRecordRejectsDuplicateDefinedRetiredAndUnknownTags(t *testing.T) {
 	}
 }
 
-// TestParseRecordIgnoresRetiredTestingTag verifies DNS-02 Section 3.4.1:
+// TestParseRecordIgnoresRetiredTestingTag verifies DNS-03 Section 4:
 // any syntactically valid t= value, including formerly malformed flag lists,
 // leaves the parsed record identical to one without t=.
 func TestParseRecordIgnoresRetiredTestingTag(t *testing.T) {
@@ -136,6 +139,26 @@ func TestParseRecordIgnoresRetiredTestingTag(t *testing.T) {
 		}
 		if !reflect.DeepEqual(parsed, baseline) {
 			t.Fatalf("t=%q changed parsed record: %#v", flags, parsed)
+		}
+	}
+}
+
+// TestParseRecordRequiresTerminalBase64Padding verifies DNS-03 Section 2.3:
+// a base64string MUST carry the trailing "=" characters it needs, so a p=
+// value that omits them is malformed for every key type, including a key type
+// this implementation does not support.
+func TestParseRecordRequiresTerminalBase64Padding(t *testing.T) {
+	for _, record := range []string{
+		"p=QUI",
+		"p=QQ",
+		"v=DKIM1; k=rsa; p=QUI",
+		"k=ed25519; p=QQ",
+		"k=mldsa44; p=QUI",
+		"k=future-key; p=QQ",
+		"p=QU\r\n I",
+	} {
+		if _, err := ParseRecord([]byte(record), DefaultLimits()); !IsRecordErrorCode(err, RecordErrorInvalidPublicKeyData) {
+			t.Fatalf("record %q error = %v, want %q", record, err, RecordErrorInvalidPublicKeyData)
 		}
 	}
 }
@@ -269,7 +292,7 @@ func TestRecordErrorsAreBoundedAndSecretSafe(t *testing.T) {
 	}
 }
 
-// TestParseRecordRejectsBareCRLF pins the DNS-02 Section 2.9 whitespace
+// TestParseRecordRejectsBareCRLF pins the DNS-03 Section 2.1 whitespace
 // tokens after the informational LWSP token was removed: folding is FWS, so a
 // CRLF must be followed by WSP, while folded whitespace between tags and
 // inside base64 stays legal.
